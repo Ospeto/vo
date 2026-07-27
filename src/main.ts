@@ -577,7 +577,7 @@ function setupIpcHandlers() {
         try {
           if (Notification.isSupported()) {
             new Notification({
-              title: "💳 Paid Gemini Key Used",
+              title: "Paid Gemini Key Used",
               body: "Primary free keys were rate-limited or exhausted. Fallback paid key was used.",
             }).show();
           }
@@ -595,7 +595,7 @@ function setupIpcHandlers() {
         const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
       }
-      setState("idle", usedPaidKey ? `💳 Paid Key: "${text}"` : `Dictated: "${text}"`);
+      setState("idle", usedPaidKey ? `Paid Key: "${text}"` : `Dictated: "${text}"`);
     } catch (err: any) {
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);
