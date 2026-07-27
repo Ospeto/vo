@@ -601,7 +601,7 @@ async function transcribeGemini(
       }
 
       logger.info({ model, preferredModel, activeApp, customTermsCount: allCustomTerms.length, dictationPreset, text, byteLength: audioBuffer.length, dynamicTimeoutMs }, "Gemini STT transcribed successfully");
-      return { rawText: text, activeApp };
+      return { rawText: text, activeApp, usedPaidKey: false };
     } catch (err: any) {
       logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Failed Gemini model transcription, attempting fallback key");
       try {
@@ -628,7 +628,7 @@ async function transcribeGemini(
           const fbText = fbResponse.text?.trim() ?? "";
           if (fbText) {
             logger.info({ model, text: fbText }, "Gemini STT transcribed successfully using Fallback Paid API Key");
-            return { rawText: fbText, activeApp };
+            return { rawText: fbText, activeApp, usedPaidKey: true };
           }
         }
       } catch (fbErr: any) {
@@ -704,11 +704,18 @@ async function transcribeLocal(audioData: ArrayBuffer): Promise<string> {
   }
 }
 
-export async function transcribe(
+export interface TranscriptionResult {
+  text: string;
+  usedPaidKey: boolean;
+  modelUsed: string;
+}
+
+export async function transcribeDetailed(
   audioData: ArrayBuffer,
-  providerOrOptions: SpeechProvider | TranscribeOptions = "gemini",
-): Promise<string> {
+  providerOrOptions: SpeechProvider | TranscribeOptions = "gemini"
+): Promise<TranscriptionResult> {
   let rawText = "";
+  let usedPaidKey = false;
   const activeApp = getActiveAppName();
 
   const provider = typeof providerOrOptions === "string" ? providerOrOptions : (providerOrOptions.provider ?? "gemini");
@@ -725,20 +732,31 @@ export async function transcribe(
       break;
     case "openai":
       rawText = await transcribeOpenAI(Buffer.from(audioData));
+      usedPaidKey = true;
       break;
     case "elevenlabs":
       rawText = await transcribeElevenLabs(Buffer.from(audioData));
+      usedPaidKey = true;
       break;
     case "gemini":
     default: {
       const res = await transcribeGemini(Buffer.from(audioData), geminiModel, dictationPreset, customVocabulary, presetVocabulary, symbolScannerEnabled, workspacePath);
       rawText = res.rawText;
+      usedPaidKey = res.usedPaidKey ?? false;
       break;
     }
   }
 
   const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp);
   const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset);
-  logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawText, sanitized }, "Transcribed and sanitized");
-  return sanitized;
+  logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawText, sanitized, usedPaidKey }, "Transcribed detailed and sanitized");
+  return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
+}
+
+export async function transcribe(
+  audioData: ArrayBuffer,
+  providerOrOptions: SpeechProvider | TranscribeOptions = "gemini"
+): Promise<string> {
+  const res = await transcribeDetailed(audioData, providerOrOptions);
+  return res.text;
 }

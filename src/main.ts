@@ -1,10 +1,10 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, clipboard, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, clipboard, Notification, type IpcMainInvokeEvent } from "electron";
 import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig, updateConfig, ConfigError, type PiVoiceConfig } from "./services/config.js";
-import { transcribe, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
+import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
 import { IPC, type AppState, type StatePayload } from "./shared/types.js";
@@ -548,7 +548,7 @@ function setupIpcHandlers() {
 
     try {
       setState("transcribing", "Transcribing...");
-      const text = await transcribe(data, {
+      const { text, usedPaidKey, modelUsed } = await transcribeDetailed(data, {
         provider: currentConfig.provider,
         geminiModel: currentConfig.geminiModel,
         dictationPreset: currentConfig.dictationPreset,
@@ -562,7 +562,19 @@ function setupIpcHandlers() {
         return;
       }
 
-      logger.info({ text }, "STT transcription successful");
+      if (usedPaidKey) {
+        logger.warn({ modelUsed }, "STT transcription executed via Paid Fallback Key!");
+        try {
+          if (Notification.isSupported()) {
+            new Notification({
+              title: "💳 Paid Gemini Key Used",
+              body: "Primary free keys were rate-limited or exhausted. Fallback paid key was used.",
+            }).show();
+          }
+        } catch {}
+      }
+
+      logger.info({ text, usedPaidKey }, "STT transcription successful");
 
       const isUndo = handleVoiceUndoCheck(text);
       if (!isUndo) {
@@ -570,10 +582,10 @@ function setupIpcHandlers() {
         const activeApp = getActiveAppName();
         const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
         const isEnglish = currentConfig.dictationPreset !== "burmese_written" && currentConfig.dictationPreset !== "fast";
-        const cost = calculateDictationCost(audioDurationSec, text.length, currentConfig.geminiModel, isEnglish);
-        addHistoryEntry(text, activeApp, cost, audioDurationSec, currentConfig.geminiModel);
+        const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
+        addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
       }
-      setState("idle", `Dictated: "${text}"`);
+      setState("idle", usedPaidKey ? `💳 Paid Key: "${text}"` : `Dictated: "${text}"`);
     } catch (err: any) {
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);

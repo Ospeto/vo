@@ -11,6 +11,7 @@ export interface HistoryEntry {
   cost?: number;
   audioDurationSec?: number;
   modelUsed?: string;
+  usedPaidKey?: boolean;
 }
 
 export interface CostLedger {
@@ -171,7 +172,8 @@ export function addHistoryEntry(
   activeApp: string = "Unknown",
   cost?: number,
   audioDurationSec?: number,
-  modelUsed?: string
+  modelUsed?: string,
+  usedPaidKey?: boolean
 ): HistoryEntry[] {
   const trimmed = text.trim();
   if (!trimmed) return getHistoryEntries();
@@ -198,6 +200,7 @@ export function addHistoryEntry(
     cost: computedCost,
     audioDurationSec: audioDurationSec || 5,
     modelUsed: modelUsed || "gemini-3.1-flash-lite",
+    usedPaidKey: usedPaidKey ?? false,
   };
 
   recordCostInLedger(computedCost);
