@@ -554,7 +554,7 @@ async function transcribeGemini(
         logger.info({ model, rawTextWithBurmese: text }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
         try {
           const translateRes = await client.models.generateContent({
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-3.1-flash-lite",
             contents: `You are a Senior Software Engineer. Translate the following Burmese dictation into a clean, precise English technical specification for an AI coding assistant. Output ONLY pure English text without any Burmese script:\n\n${text}`,
             config: {
               temperature: 0.0,
