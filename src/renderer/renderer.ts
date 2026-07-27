@@ -588,6 +588,20 @@ async function renderHistory() {
 
     metaEl.innerHTML = `${timeStr} · ${item.activeApp || "App"}${itemCostStr} ${keyBadge}`;
 
+    el.title = "Click to copy text to clipboard";
+    el.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(item.text);
+        const originalMeta = metaEl.innerHTML;
+        metaEl.innerHTML = `<span style="color: #34d399; font-weight: 600;">✓ Copied to clipboard!</span>`;
+        setTimeout(() => {
+          metaEl.innerHTML = originalMeta;
+        }, 1200);
+      } catch (err) {
+        console.error("Failed to copy history item:", err);
+      }
+    });
+
     el.appendChild(textEl);
     el.appendChild(metaEl);
     fragment.appendChild(el);
