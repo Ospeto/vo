@@ -56,8 +56,8 @@ export async function captureActiveSelection(timeoutMs = 200): Promise<Selection
       finish(latestText);
     }, timeoutMs);
 
-    // Trigger AppleScript keystroke "c" using command down
-    exec(`osascript -e 'tell application "System Events" to keystroke "c" using command down'`, (err) => {
+    // Trigger explicit key code 8 (c) using command down to avoid physical modifier conflict
+    exec(`osascript -e 'tell application "System Events" to key code 8 using {command down}'`, (err) => {
       if (resolved) return;
 
       if (err) {
