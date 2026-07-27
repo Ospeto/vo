@@ -200,53 +200,42 @@ function startWaveAnimationLoop() {
     spectrumCtx.clearRect(0, 0, width, height);
 
     if (activeAmp > 0.05) {
-      // Layer 1: Background Soft Cyan Wave
-      spectrumCtx.save();
-      spectrumCtx.beginPath();
-      for (let x = 0; x <= width; x += 3) {
-        const progress = x / width;
-        const envelope = Math.sin(progress * Math.PI);
-        const y = centerY + Math.sin(progress * Math.PI * 3 + wavePhase + 1.2) * activeAmp * 0.6 * envelope;
-        if (x === 0) spectrumCtx.moveTo(x, y);
-        else spectrumCtx.lineTo(x, y);
+      // 3D Organic Dotted Particle Wave Ribbon (7 Layered Strands)
+      const step = 4; // Dot spacing along X
+      for (let k = -3; k <= 3; k++) {
+        const offsetPhase = k * 0.22;
+        const verticalShift = k * 1.5;
+        const strandAlpha = 1 - Math.abs(k) * 0.22;
+        const dotRadius = Math.max(0.7, 1.25 - Math.abs(k) * 0.15);
+
+        for (let x = 0; x <= width; x += step) {
+          const progress = x / width;
+          const envelope = Math.sin(progress * Math.PI); // Envelope fade at edges
+          const waveY = centerY + verticalShift + Math.sin(progress * Math.PI * 3.5 + wavePhase + offsetPhase) * activeAmp * envelope;
+
+          spectrumCtx.beginPath();
+          spectrumCtx.arc(x, waveY, dotRadius, 0, Math.PI * 2);
+
+          const alpha = (0.35 + 0.65 * envelope) * strandAlpha;
+          spectrumCtx.fillStyle = k === 0 
+            ? `rgba(52, 211, 153, ${alpha})`
+            : `rgba(96, 165, 250, ${alpha * 0.8})`;
+
+          spectrumCtx.fill();
+        }
       }
-      spectrumCtx.strokeStyle = "rgba(147, 197, 253, 0.45)";
-      spectrumCtx.lineWidth = 1.5;
-      spectrumCtx.stroke();
-      spectrumCtx.restore();
-
-      // Layer 2: Foreground High-Definition Ribbon (Emerald & Blue Gradient)
-      spectrumCtx.save();
-      spectrumCtx.beginPath();
-      for (let x = 0; x <= width; x += 2) {
-        const progress = x / width;
-        const envelope = Math.sin(progress * Math.PI);
-        const y = centerY + Math.sin(progress * Math.PI * 4 + wavePhase) * activeAmp * envelope;
-        if (x === 0) spectrumCtx.moveTo(x, y);
-        else spectrumCtx.lineTo(x, y);
-      }
-
-      const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
-      gradient.addColorStop(0, "rgba(59, 130, 246, 0.95)");
-      gradient.addColorStop(0.5, "rgba(52, 211, 153, 1.0)");
-      gradient.addColorStop(1, "rgba(59, 130, 246, 0.95)");
-
-      spectrumCtx.strokeStyle = gradient;
-      spectrumCtx.lineWidth = Math.min(3.5, 1.8 + rawRatio * 2.2); // Dynamic line thickness
-      spectrumCtx.lineCap = "round";
-      spectrumCtx.lineJoin = "round";
-      spectrumCtx.stroke();
-      spectrumCtx.restore();
     } else {
-      // Complete Silence / Mic Gain 0: Clean stationary baseline
-      spectrumCtx.save();
-      spectrumCtx.beginPath();
-      spectrumCtx.moveTo(0, centerY);
-      spectrumCtx.lineTo(width, centerY);
-      spectrumCtx.strokeStyle = "rgba(161, 161, 170, 0.22)";
-      spectrumCtx.lineWidth = 1;
-      spectrumCtx.stroke();
-      spectrumCtx.restore();
+      // Complete Silence / Mic Gain 0: Clean stationary dotted particle baseline
+      const step = 5;
+      for (let x = 0; x <= width; x += step) {
+        const progress = x / width;
+        const envelope = Math.sin(progress * Math.PI);
+        const alpha = 0.15 + 0.25 * envelope;
+        spectrumCtx.beginPath();
+        spectrumCtx.arc(x, centerY, 0.9, 0, Math.PI * 2);
+        spectrumCtx.fillStyle = `rgba(161, 161, 170, ${alpha})`;
+        spectrumCtx.fill();
+      }
     }
 
     animationFrameId = requestAnimationFrame(renderWave);
