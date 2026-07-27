@@ -107,8 +107,8 @@ Configuration settings are stored atomically at `~/.config/pi-voice/config.json`
 
 ```bash
 # Clone repository
-git clone https://github.com/Ospeto/pi-voice.git
-cd pi-voice
+git clone https://github.com/Ospeto/vo.git
+cd vo
 
 # Install dependencies
 bun install
