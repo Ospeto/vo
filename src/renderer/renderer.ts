@@ -167,6 +167,48 @@ function playBassyEndChime() {
   } catch {}
 }
 
+function playMechanicalClickSound() {
+  if (!audioChimesEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    // 1. High-frequency tactile click transient (rapid pitch drop)
+    const clickOsc = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+
+    clickOsc.type = "triangle";
+    clickOsc.frequency.setValueAtTime(1400, now);
+    clickOsc.frequency.exponentialRampToValueAtTime(350, now + 0.015);
+
+    clickGain.gain.setValueAtTime(0.18, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.018);
+
+    clickOsc.connect(clickGain);
+    clickGain.connect(ctx.destination);
+
+    clickOsc.start(now);
+    clickOsc.stop(now + 0.02);
+
+    // 2. Mechanical switch housing bottom-out thock resonance
+    const thockOsc = ctx.createOscillator();
+    const thockGain = ctx.createGain();
+
+    thockOsc.type = "sine";
+    thockOsc.frequency.setValueAtTime(750, now + 0.003);
+    thockOsc.frequency.exponentialRampToValueAtTime(220, now + 0.035);
+
+    thockGain.gain.setValueAtTime(0.12, now + 0.003);
+    thockGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+    thockOsc.connect(thockGain);
+    thockGain.connect(ctx.destination);
+
+    thockOsc.start(now + 0.003);
+    thockOsc.stop(now + 0.045);
+  } catch {}
+}
+
 let animationFrameId: number | null = null;
 let currentTargetAmp = 0;
 let smoothedAmp = 0;
@@ -693,6 +735,7 @@ function enableControls(enabled: boolean) {
 
 document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
+    playMechanicalClickSound();
     const selectedPreset = btn.getAttribute("data-preset") as DictationPreset;
     if (!selectedPreset) return;
     updatePresetPills(selectedPreset);
@@ -703,6 +746,7 @@ document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
 
 document.querySelectorAll(".model-pill-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
+    playMechanicalClickSound();
     const selectedModel = btn.getAttribute("data-model");
     if (!selectedModel) return;
     updateModelPills(selectedModel);
