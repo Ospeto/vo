@@ -222,6 +222,8 @@ let currentTargetAmp = 0;
 let smoothedAmp = 0;
 let wavePhase = 0;
 
+let idleFrameCount = 0;
+
 function startWaveAnimationLoop() {
   if (animationFrameId !== null) return;
 
@@ -240,17 +242,16 @@ function startWaveAnimationLoop() {
     const maxAmp = height / 2 - 2;
 
     const rawRatio = Math.max(0, smoothedAmp / 100);
-    // When silence or gain is zero, activeAmp is strictly ZERO (no unwanted movement)
     const activeAmp = rawRatio < 0.02 ? 0 : Math.min(maxAmp, rawRatio * maxAmp * 1.4);
 
     if (activeAmp > 0) {
-      wavePhase += 0.08 + rawRatio * 0.16; // Wave moves faster when voice level is higher!
+      wavePhase += 0.08 + rawRatio * 0.16;
     }
 
     spectrumCtx.clearRect(0, 0, width, height);
 
     if (activeAmp > 0.05) {
-      // Multi-Layered Harmonic Ribbon Sine Waves (matching reference design)
+      idleFrameCount = 0;
       const numLines = 6;
       for (let i = 0; i < numLines; i++) {
         spectrumCtx.save();
@@ -262,7 +263,7 @@ function startWaveAnimationLoop() {
 
         for (let x = 0; x <= width; x += 2) {
           const progress = x / width;
-          const envelope = Math.sin(progress * Math.PI); // Envelope for tapered end points
+          const envelope = Math.sin(progress * Math.PI);
           const y = centerY + Math.sin(progress * Math.PI * freqMult + phaseShift) * (activeAmp + offsetFactor * 8) * envelope;
 
           if (x === 0) spectrumCtx.moveTo(x, y);
@@ -271,7 +272,7 @@ function startWaveAnimationLoop() {
 
         const alpha = Math.max(0.2, 1.0 - Math.abs(offsetFactor) * 1.2);
         if (i % 2 === 1) {
-          spectrumCtx.setLineDash([4, 3]); // Alternating dashed ribbon lines
+          spectrumCtx.setLineDash([4, 3]);
         } else {
           spectrumCtx.setLineDash([]);
         }
@@ -297,6 +298,12 @@ function startWaveAnimationLoop() {
       spectrumCtx.lineWidth = 1;
       spectrumCtx.stroke();
       spectrumCtx.restore();
+
+      idleFrameCount++;
+      if (idleFrameCount > 60 && currentTargetAmp < 0.05) {
+        animationFrameId = null;
+        return; // Throttles rendering when silent
+      }
     }
 
     animationFrameId = requestAnimationFrame(renderWave);

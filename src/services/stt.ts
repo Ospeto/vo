@@ -67,41 +67,30 @@ export function prewarmGeminiClient(): void {
   }
 }
 
+import { loadNativePasteAddon, resolveNativePastePath } from "./native-paste-addon.js";
+
 let cachedActiveAppName = "Unknown";
 let lastActiveAppTime = 0;
-let isRefreshingApp = false;
-
-function refreshActiveAppNameAsync(): void {
-  if (isRefreshingApp) return;
-  isRefreshingApp = true;
-  try {
-    exec(
-      `osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'`,
-      { encoding: "utf-8", timeout: 600 },
-      (err, stdout) => {
-        isRefreshingApp = false;
-        if (!err && stdout) {
-          const appName = stdout.trim();
-          if (appName) {
-            cachedActiveAppName = appName;
-            lastActiveAppTime = Date.now();
-          }
-        }
-      }
-    );
-  } catch {
-    isRefreshingApp = false;
-  }
-}
 
 export function getActiveAppName(): string {
   const now = Date.now();
-  if (cachedActiveAppName !== "Unknown") {
-    if (now - lastActiveAppTime > 3000) {
-      refreshActiveAppNameAsync();
-    }
+  if (cachedActiveAppName !== "Unknown" && now - lastActiveAppTime < 3000) {
     return cachedActiveAppName;
   }
+
+  try {
+    const root = process.cwd();
+    const addonPath = resolveNativePastePath(root);
+    const addon = loadNativePasteAddon(addonPath);
+    if (addon) {
+      const target = addon.capture();
+      if (target && target.ok && target.appName) {
+        cachedActiveAppName = target.appName;
+        lastActiveAppTime = now;
+        return cachedActiveAppName;
+      }
+    }
+  } catch {}
 
   try {
     const appName = execSync(
@@ -464,7 +453,6 @@ export function getFallbackModelChain(
   const fallbackCandidates: string[] = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
-    "gemini-3.1-pro",
     "gemini-1.5-flash",
   ];
 

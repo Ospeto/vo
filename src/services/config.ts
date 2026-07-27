@@ -360,6 +360,32 @@ export class ConfigError extends Error {
   }
 }
 
+export function encryptSecret(secret?: string): string | undefined {
+  if (!secret) return undefined;
+  try {
+    const electron = require("electron");
+    if (electron?.safeStorage?.isEncryptionAvailable?.()) {
+      return `enc:${electron.safeStorage.encryptString(secret).toString("base64")}`;
+    }
+  } catch {}
+  return secret;
+}
+
+export function decryptSecret(encrypted?: string): string | undefined {
+  if (!encrypted) return undefined;
+  if (encrypted.startsWith("enc:")) {
+    try {
+      const electron = require("electron");
+      if (electron?.safeStorage?.isEncryptionAvailable?.()) {
+        const buffer = Buffer.from(encrypted.slice(4), "base64");
+        return electron.safeStorage.decryptString(buffer);
+      }
+    } catch {}
+    return undefined;
+  }
+  return encrypted;
+}
+
 export function resolveConfigPath(cwd: string = process.cwd()): string {
   const projPath = join(cwd, ".pi", "pi-voice.json");
   if (cwd && cwd !== "/" && cwd !== homedir() && existsSync(projPath)) {
@@ -440,8 +466,8 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     customVocabulary: mergedCustomVocab,
     presetVocabulary: mergedPresetVocab,
     appPresetMappings: (appPresetMappings || DEFAULT_APP_PRESET_MAPPINGS) as Record<string, DictationPreset>,
-    geminiApiKey,
-    geminiFallbackApiKey,
+    geminiApiKey: decryptSecret(geminiApiKey),
+    geminiFallbackApiKey: decryptSecret(geminiFallbackApiKey),
     audioDeviceId,
   };
 }
@@ -461,6 +487,14 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       const content = readFileSync(configPath, "utf-8");
       existingJson = JSON.parse(content);
     } catch {}
+  }
+
+  // Encrypt secrets if provided in patch
+  if (patch.geminiApiKey !== undefined) {
+    patch.geminiApiKey = encryptSecret(patch.geminiApiKey);
+  }
+  if (patch.geminiFallbackApiKey !== undefined) {
+    patch.geminiFallbackApiKey = encryptSecret(patch.geminiFallbackApiKey);
   }
 
   // Sanitize custom terms
