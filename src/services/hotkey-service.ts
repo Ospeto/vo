@@ -4,25 +4,27 @@ import { FnHook } from "./fn-hook.js";
 import logger from "./logger.js";
 
 export interface HotkeyCallbacks {
-  onDown: () => void;
-  onUp?: () => void;
+  onDown: (mode: "dictate" | "edit") => void;
+  onUp?: (mode: "dictate" | "edit") => void;
 }
 
 export interface IHotkeyService {
-  start(binding: KeyBinding, callbacks: HotkeyCallbacks | (() => void)): Promise<void>;
-  replace(newBindingStr: string, callbacks: HotkeyCallbacks | (() => void)): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }>;
+  start(binding: KeyBinding, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBinding?: KeyBinding): Promise<void>;
+  replace(newBindingStr: string, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBindingStr?: string): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }>;
   stop(): Promise<void>;
 }
 
 export class HotkeyService implements IHotkeyService {
   private currentBinding: KeyBinding | null = null;
+  private currentEditBinding: KeyBinding | null = null;
   private currentDisplay: string = "";
   private fnHook: FnHook | null = null;
-  private onDownCallback: (() => void) | null = null;
-  private onUpCallback: (() => void) | null = null;
+  private onDownCallback: ((mode: "dictate" | "edit") => void) | null = null;
+  private onUpCallback: ((mode: "dictate" | "edit") => void) | null = null;
 
-  async start(binding: KeyBinding, callbacks: HotkeyCallbacks | (() => void)): Promise<void> {
+  async start(binding: KeyBinding, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBinding?: KeyBinding): Promise<void> {
     this.currentBinding = binding;
+    this.currentEditBinding = editBinding ?? null;
     this.currentDisplay = formatKeyDisplay(binding);
     this.onDownCallback = typeof callbacks === "function" ? callbacks : callbacks.onDown;
     this.onUpCallback = typeof callbacks === "function" ? null : (callbacks.onUp ?? null);
@@ -34,11 +36,12 @@ export class HotkeyService implements IHotkeyService {
     // 1. Register native Fn hook via uiohook-napi
     this.fnHook = new FnHook(
       {
-        onFnDown: () => this.onDownCallback?.(),
-        onFnUp: () => this.onUpCallback?.(),
+        onFnDown: (mode) => this.onDownCallback?.(mode),
+        onFnUp: (mode) => this.onUpCallback?.(mode),
       },
       binding,
-      this.currentDisplay
+      this.currentDisplay,
+      editBinding
     );
 
     let fnHookStarted = false;
@@ -52,8 +55,8 @@ export class HotkeyService implements IHotkeyService {
     // 2. Register globalShortcut fallback ONLY if FnHook failed to start
     if (!fnHookStarted) {
       try {
-        globalShortcut.register("Control+Command+Option+V", () => this.onDownCallback?.());
-        globalShortcut.register("CommandOrControl+Shift+I", () => this.onDownCallback?.());
+        globalShortcut.register("Control+Command+Option+V", () => this.onDownCallback?.("dictate"));
+        globalShortcut.register("Control+Command+Option+E", () => this.onDownCallback?.("edit"));
       } catch (err) {
         logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
       }

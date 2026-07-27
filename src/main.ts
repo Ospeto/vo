@@ -720,24 +720,26 @@ function setupIpcHandlers() {
 
 let lastHotkeyDownTime = 0;
 let keyHoldPressStartTime = 0;
+let currentTriggerMode: "dictate" | "edit" = "dictate";
 
 async function startRecordingFlow() {
   const selection = await captureActiveSelection(350);
-  if (selection.hasSelection) {
+  previousClipboardContent = selection.previousClipboard;
+
+  if (currentTriggerMode === "edit" && selection.hasSelection) {
     activeSelectionText = selection.selectedText;
-    previousClipboardContent = selection.previousClipboard;
   } else {
+    // Pure Dictation mode: clear activeSelectionText for STT prompt so Gemini does pure dictation (and overwrites selection)
     activeSelectionText = "";
-    previousClipboardContent = "";
   }
 
-  logger.info({ hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
+  logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
   setState("recording", "Recording...");
   playStartChime();
   captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
 }
 
-function handleHotkeyDown() {
+function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
   const now = Date.now();
   if (now - lastHotkeyDownTime < 350) {
     logger.warn({ deltaMs: now - lastHotkeyDownTime }, "Debounced duplicate hotkey down trigger");
@@ -745,6 +747,7 @@ function handleHotkeyDown() {
   }
   lastHotkeyDownTime = now;
   keyHoldPressStartTime = now;
+  currentTriggerMode = mode;
 
   prewarmConnection();
 
@@ -832,10 +835,14 @@ app.whenReady().then(async () => {
   setupIpcHandlers();
 
   hotkeyService = new HotkeyService();
-  await hotkeyService.start(currentConfig.key, {
-    onDown: () => handleHotkeyDown(),
-    onUp: () => handleHotkeyUp(),
-  });
+  await hotkeyService.start(
+    currentConfig.key,
+    {
+      onDown: (mode) => handleHotkeyDown(mode),
+      onUp: () => handleHotkeyUp(),
+    },
+    currentConfig.editKey
+  );
 
   prewarmGeminiClient();
   startDaemonServer(handleDaemonCommand);

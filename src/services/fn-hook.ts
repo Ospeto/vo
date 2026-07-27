@@ -5,8 +5,8 @@ import type { KeyBinding } from "./config.js";
 import logger from "./logger.js";
 
 export type FnHookCallbacks = {
-  onFnDown: () => void;
-  onFnUp: () => void;
+  onFnDown: (mode: "dictate" | "edit") => void;
+  onFnUp: (mode: "dictate" | "edit") => void;
 };
 
 /**
@@ -33,21 +33,26 @@ function getReleaseCodes(binding: KeyBinding): number[] {
 }
 
 /**
- * Monitors a configurable key combination globally using uiohook-napi.
- * Triggers onFnDown when all keys are held, onFnUp when any is released.
+ * Monitors configurable key combinations globally using uiohook-napi.
+ * Triggers onFnDown(mode) when keys are held, onFnUp(mode) when released.
  */
 export class FnHook {
-  private active = false;
+  public isFnDown = false;
+  private activeMode: "dictate" | "edit" | null = null;
   private callbacks: FnHookCallbacks;
   private started = false;
   private binding: KeyBinding;
+  private editBinding: KeyBinding | null;
   private releaseCodes: Set<number>;
+  private editReleaseCodes: Set<number> | null;
   private displayName: string;
 
-  constructor(callbacks: FnHookCallbacks, binding: KeyBinding, displayName: string) {
+  constructor(callbacks: FnHookCallbacks, binding: KeyBinding, displayName: string, editBinding?: KeyBinding) {
     this.callbacks = callbacks;
     this.binding = binding;
+    this.editBinding = editBinding ?? null;
     this.releaseCodes = new Set(getReleaseCodes(binding));
+    this.editReleaseCodes = editBinding ? new Set(getReleaseCodes(editBinding)) : null;
     this.displayName = displayName;
   }
 
@@ -65,28 +70,48 @@ export class FnHook {
     }
 
     uIOhook.on("keydown", (e: UiohookKeyboardEvent) => {
-      if (this.active) return; // already recording, ignore repeats
+      if (this.activeMode !== null) return; // already active, ignore repeats
 
-      // Check: required modifiers + main key
+      // 1. Check Dictation Key Binding
       if (
         e.keycode === this.binding.keycode &&
-        e.ctrlKey === this.binding.ctrl &&
-        e.shiftKey === this.binding.shift &&
-        e.altKey === this.binding.alt &&
-        e.metaKey === this.binding.meta
+        !e.ctrlKey === !this.binding.ctrl &&
+        !e.shiftKey === !this.binding.shift &&
+        !e.altKey === !this.binding.alt &&
+        !e.metaKey === !this.binding.meta
       ) {
-        this.active = true;
-        this.callbacks.onFnDown();
+        this.activeMode = "dictate";
+        this.isFnDown = true;
+        this.callbacks.onFnDown("dictate");
+        return;
+      }
+
+      // 2. Check Voice Edit Key Binding
+      if (
+        this.editBinding &&
+        e.keycode === this.editBinding.keycode &&
+        !e.ctrlKey === !this.editBinding.ctrl &&
+        !e.shiftKey === !this.editBinding.shift &&
+        !e.altKey === !this.editBinding.alt &&
+        !e.metaKey === !this.editBinding.meta
+      ) {
+        this.activeMode = "edit";
+        this.isFnDown = true;
+        this.callbacks.onFnDown("edit");
+        return;
       }
     });
 
     uIOhook.on("keyup", (e: UiohookKeyboardEvent) => {
-      if (!this.active) return;
+      if (this.activeMode === null) return;
 
-      // Release when any of the bound keys is lifted
-      if (this.releaseCodes.has(e.keycode)) {
-        this.active = false;
-        this.callbacks.onFnUp();
+      const currentMode = this.activeMode;
+      const targetReleaseCodes = currentMode === "edit" ? this.editReleaseCodes : this.releaseCodes;
+
+      if (targetReleaseCodes && targetReleaseCodes.has(e.keycode)) {
+        this.activeMode = null;
+        this.isFnDown = false;
+        this.callbacks.onFnUp(currentMode);
       }
     });
 
@@ -99,11 +124,8 @@ export class FnHook {
     if (!this.started) return;
     uIOhook.stop();
     this.started = false;
-    this.active = false;
+    this.activeMode = null;
+    this.isFnDown = false;
     logger.info("Stopped monitoring key");
-  }
-
-  get isFnDown(): boolean {
-    return this.active;
   }
 }

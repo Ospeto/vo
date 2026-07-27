@@ -25,6 +25,8 @@ export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" |
 export interface PiVoiceConfig {
   key: KeyBinding;
   keyDisplay: string;
+  editKey: KeyBinding;
+  editKeyDisplay: string;
   provider: SpeechProvider;
   geminiModel: GeminiModelChoice;
   inputGain: number;
@@ -46,6 +48,7 @@ export interface PiVoiceConfig {
 
 export interface PiVoiceConfigPatch {
   key?: string;
+  editKey?: string;
   provider?: SpeechProvider;
   geminiModel?: GeminiModelChoice;
   inputGain?: number;
@@ -234,7 +237,10 @@ export function formatKeyDisplay(binding: KeyBinding): string {
 
 // ── Default config ───────────────────────────────────────────────────
 
+// ── Default config ───────────────────────────────────────────────────
+
 const DEFAULT_KEY_STRING = "ctrl+cmd+option+v";
+const DEFAULT_EDIT_KEY_STRING = "ctrl+cmd+option+e";
 const DEFAULT_PROVIDER: SpeechProvider = "gemini";
 const DEFAULT_GEMINI_MODEL: GeminiModelChoice = "gemini-3.1-flash-lite";
 const DEFAULT_INPUT_GAIN = 1.0;
@@ -266,9 +272,12 @@ export const DEFAULT_APP_PRESET_MAPPINGS: Record<string, DictationPreset> = {
 
 function defaultConfig(): PiVoiceConfig {
   const binding = parseKeyBinding(DEFAULT_KEY_STRING);
+  const editBinding = parseKeyBinding(DEFAULT_EDIT_KEY_STRING);
   return {
     key: binding,
     keyDisplay: formatKeyDisplay(binding),
+    editKey: editBinding,
+    editKeyDisplay: formatKeyDisplay(editBinding),
     provider: DEFAULT_PROVIDER,
     geminiModel: DEFAULT_GEMINI_MODEL,
     inputGain: DEFAULT_INPUT_GAIN,
@@ -302,6 +311,21 @@ const configFileSchema = z.object({
     )
     .optional()
     .default(DEFAULT_KEY_STRING),
+  editKey: z
+    .string()
+    .refine(
+      (v) => {
+        try {
+          parseKeyBinding(v);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: "Invalid edit key binding" },
+    )
+    .optional()
+    .default(DEFAULT_EDIT_KEY_STRING),
   provider: z.enum(["local", "gemini", "openai", "elevenlabs"]).optional().default(DEFAULT_PROVIDER),
   geminiModel: z.enum(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"]).optional().default(DEFAULT_GEMINI_MODEL),
   inputGain: z
@@ -381,8 +405,9 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
+  const editKeyBinding = parseKeyBinding(editKeyStr);
 
   const persistedVocab = loadPersistedVocabulary();
   const mergedCustomVocab = Array.from(new Set([...persistedVocab.customVocabulary, ...(customVocabulary || [])]));
@@ -392,13 +417,15 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   };
 
   logger.info(
-    { configPath, key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
+    { configPath, key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
     "Loaded config",
   );
 
   return {
     key: keyBinding,
     keyDisplay: formatKeyDisplay(keyBinding),
+    editKey: editKeyBinding,
+    editKeyDisplay: formatKeyDisplay(editKeyBinding),
     provider,
     geminiModel: geminiModel as GeminiModelChoice,
     inputGain,
@@ -466,6 +493,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
   const mergedJson = {
     ...existingJson,
     ...(patch.key !== undefined ? { key: patch.key } : {}),
+    ...(patch.editKey !== undefined ? { editKey: patch.editKey } : {}),
     ...(patch.provider !== undefined ? { provider: patch.provider } : {}),
     ...(patch.geminiModel !== undefined ? { geminiModel: patch.geminiModel } : {}),
     ...(patch.inputGain !== undefined ? { inputGain: Math.max(0.0, Math.min(2.0, patch.inputGain)) } : {}),
