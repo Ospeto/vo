@@ -534,6 +534,7 @@ async function transcribeGemini(
         config: {
           systemInstruction: fullPrompt,
           temperature: targetTemperature,
+          maxOutputTokens: 384,
         },
       });
 

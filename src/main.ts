@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig, updateConfig, ConfigError, type PiVoiceConfig } from "./services/config.js";
 import { transcribe, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
-import { _resetGeminiClient } from "./services/gemini-client.js";
+import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
 import { IPC, type AppState, type StatePayload } from "./shared/types.js";
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
@@ -691,6 +691,8 @@ function handleHotkeyDown() {
   }
   lastHotkeyDownTime = now;
   keyHoldPressStartTime = now;
+
+  prewarmConnection();
 
   if (currentConfig.dictationMode === "hold") {
     if (currentState === "idle" || currentState === "error") {

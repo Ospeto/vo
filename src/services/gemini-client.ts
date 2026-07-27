@@ -155,3 +155,10 @@ export function getGeminiFallbackClient(): GoogleGenAI | null {
   } catch {}
   return null;
 }
+
+export function prewarmConnection(): void {
+  try {
+    const req = fetch("https://generativelanguage.googleapis.com", { method: "HEAD" });
+    req.catch(() => {});
+  } catch {}
+}
