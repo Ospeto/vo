@@ -198,7 +198,9 @@ function isTerminalApp(appName: string): boolean {
     lower.includes("iterm") ||
     lower.includes("ghostty") ||
     lower.includes("alacritty") ||
-    lower.includes("myanso")
+    lower.includes("myanso") ||
+    lower.includes("bash") ||
+    lower.includes("zsh")
   );
 }
 
@@ -209,22 +211,14 @@ function executeUndoCommand(textLengthToUndo: number = 0) {
 
     let script = "";
     if (isTerminal) {
-      if (textLengthToUndo > 0 && textLengthToUndo <= 100) {
-        script = `
-          tell application "System Events"
-            repeat ${textLengthToUndo} times
-              key code 51
-            end repeat
-          end tell
-        `;
-      } else {
-        script = `
-          tell application "System Events"
-            keystroke "u" using control down
-          end tell
-        `;
-      }
+      // Terminal Apps: Ctrl+U clears line in zsh/bash
+      script = `
+        tell application "System Events"
+          keystroke "u" using control down
+        end tell
+      `;
     } else {
+      // Standard GUI Apps: Cmd+Z
       script = `
         tell application "System Events"
           keystroke "z" using command down
