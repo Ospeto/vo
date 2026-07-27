@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
 import logger from "./logger.js";
+import { loadPersistedVocabulary, savePersistedVocabulary } from "./vocabulary-service.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -343,8 +344,15 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, geminiApiKey } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
 
+  const persistedVocab = loadPersistedVocabulary();
+  const mergedCustomVocab = Array.from(new Set([...persistedVocab.customVocabulary, ...(customVocabulary || [])]));
+  const mergedPresetVocab = {
+    ...persistedVocab.presetVocabulary,
+    ...(presetVocabulary || {}),
+  };
+
   logger.info(
-    { configPath, key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: customVocabulary.length },
+    { configPath, key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
     "Loaded config",
   );
 
@@ -360,8 +368,8 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     chimeSoundStart,
     chimeSoundEnd,
     symbolScannerEnabled,
-    customVocabulary,
-    presetVocabulary,
+    customVocabulary: mergedCustomVocab,
+    presetVocabulary: mergedPresetVocab,
     geminiApiKey,
   };
 }
@@ -391,6 +399,19 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
         .slice(0, 50)
     : undefined;
 
+  const persistedVocab = loadPersistedVocabulary();
+  const existingPresetVocab = (existingJson.presetVocabulary as Record<string, string[]>) || {};
+  const mergedPresetVocab = patch.presetVocabulary !== undefined
+    ? { ...persistedVocab.presetVocabulary, ...existingPresetVocab, ...patch.presetVocabulary }
+    : { ...persistedVocab.presetVocabulary, ...existingPresetVocab };
+
+  const finalCustomVocab = sanitizedVocabulary !== undefined ? sanitizedVocabulary : Array.from(new Set([...persistedVocab.customVocabulary, ...((existingJson.customVocabulary as string[]) || [])]));
+
+  savePersistedVocabulary({
+    customVocabulary: finalCustomVocab,
+    presetVocabulary: mergedPresetVocab,
+  });
+
   // Preserve unrelated keys while merging patch
   const mergedJson = {
     ...existingJson,
@@ -404,8 +425,8 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ...(patch.chimeSoundStart !== undefined ? { chimeSoundStart: patch.chimeSoundStart } : {}),
     ...(patch.chimeSoundEnd !== undefined ? { chimeSoundEnd: patch.chimeSoundEnd } : {}),
     ...(patch.symbolScannerEnabled !== undefined ? { symbolScannerEnabled: patch.symbolScannerEnabled } : {}),
-    ...(sanitizedVocabulary !== undefined ? { customVocabulary: sanitizedVocabulary } : {}),
-    ...(patch.presetVocabulary !== undefined ? { presetVocabulary: patch.presetVocabulary } : {}),
+    customVocabulary: finalCustomVocab,
+    presetVocabulary: mergedPresetVocab,
     ...(patch.geminiApiKey !== undefined ? { geminiApiKey: patch.geminiApiKey.trim() } : {}),
   };
 
