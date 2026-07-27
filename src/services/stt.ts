@@ -526,45 +526,83 @@ async function transcribeGemini(
     ? "Translate the spoken audio into clear, technical English software engineering specifications. Output ONLY pure English text. Under NO circumstances should any Burmese script be included in the response."
     : "Transcribe the spoken audio accurately in Burmese script.";
 
-  // Dynamically scale timeout from 6s to 20s based on audio payload byte length
-  const dynamicTimeoutMs = Math.max(6000, Math.min(20000, Math.ceil(audioBuffer.length / 8)));
+  // Dynamically scale primary timeout from 3s to 12s based on audio payload byte length
+  const dynamicTimeoutMs = Math.max(3000, Math.min(12000, Math.ceil(audioBuffer.length / 12)));
 
-  // Model fallback chain: preferred model first, 3.6-flash ONLY allowed for code_comment preset
+  // Model fallback chain: preferred model first
   const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
 
   for (const model of modelsToTry) {
     try {
-      const fetchPromise = client.models.generateContent({
-        model,
-        contents: [
-          {
-            role: "user",
-            parts: [
+      const runPrimary = async () => {
+        const response = await client.models.generateContent({
+          model,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { inlineData: { mimeType: "audio/webm", data: base64Audio } },
+                { text: userPromptText },
+              ],
+            },
+          ],
+          config: {
+            systemInstruction: fullPrompt,
+            temperature: targetTemperature,
+            maxOutputTokens: 384,
+          },
+        });
+        const text = response.text?.trim() ?? "";
+        return { text, usedPaidKey: false };
+      };
+
+      const primaryPromise = runPrimary();
+
+      const { getGeminiFallbackClient } = await import("./gemini-client.js");
+      const fallbackClient = getGeminiFallbackClient();
+
+      let fastestPromise: Promise<{ text: string; usedPaidKey: boolean }>;
+
+      if (fallbackClient) {
+        // Speculative Parallel Fallback: If Primary Key takes > 2500ms or fails, launch Paid Fallback Key
+        const primaryDelayTimer = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Primary Key delay > 2500ms")), 2500)
+        );
+
+        const speculativeFallback = Promise.race([primaryPromise, primaryDelayTimer]).catch(async () => {
+          logger.info({ model }, "Primary API Key took >2500ms or errored; triggering Parallel Paid Fallback Key");
+          const fbResponse = await fallbackClient.models.generateContent({
+            model,
+            contents: [
               {
-                inlineData: {
-                  mimeType: "audio/webm",
-                  data: base64Audio,
-                },
-              },
-              {
-                text: userPromptText,
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType: "audio/webm", data: base64Audio } },
+                  { text: userPromptText },
+                ],
               },
             ],
-          },
-        ],
-        config: {
-          systemInstruction: fullPrompt,
-          temperature: targetTemperature,
-          maxOutputTokens: 384,
-        },
-      });
+            config: {
+              systemInstruction: fullPrompt,
+              temperature: targetTemperature,
+              maxOutputTokens: 384,
+            },
+          });
+          const fbText = fbResponse.text?.trim() ?? "";
+          return { text: fbText, usedPaidKey: true };
+        });
+
+        fastestPromise = Promise.race([primaryPromise, speculativeFallback]);
+      } else {
+        fastestPromise = primaryPromise;
+      }
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error(`Model ${model} timed out after ${dynamicTimeoutMs}ms`)), dynamicTimeoutMs);
       });
 
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-      let text = response.text?.trim() ?? "";
+      const winner = await Promise.race([fastestPromise, timeoutPromise]);
+      let text = winner.text;
 
       // Bulletproof Fallback: If English preset was requested but response contains Burmese script, run fast text translation
       if (isEnglishPreset && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
@@ -586,40 +624,10 @@ async function transcribeGemini(
         }
       }
 
-      logger.info({ model, preferredModel, activeApp, customTermsCount: allCustomTerms.length, dictationPreset, text, byteLength: audioBuffer.length, dynamicTimeoutMs }, "Gemini STT transcribed successfully");
-      return { rawText: text, activeApp, usedPaidKey: false };
+      logger.info({ model, preferredModel, activeApp, customTermsCount: allCustomTerms.length, dictationPreset, text, byteLength: audioBuffer.length, usedPaidKey: winner.usedPaidKey }, "Gemini STT transcribed successfully");
+      return { rawText: text, activeApp, usedPaidKey: winner.usedPaidKey };
     } catch (err: any) {
-      logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Failed Gemini model transcription, attempting fallback key");
-      try {
-        const { getGeminiFallbackClient } = await import("./gemini-client.js");
-        const fallbackClient = getGeminiFallbackClient();
-        if (fallbackClient) {
-          logger.info({ model }, "Attempting fallback execution with Paid Gemini API Key");
-          const fbResponse = await fallbackClient.models.generateContent({
-            model,
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { inlineData: { mimeType: "audio/webm", data: base64Audio } },
-                  { text: userPromptText },
-                ],
-              },
-            ],
-            config: {
-              systemInstruction: fullPrompt,
-              temperature: targetTemperature,
-            },
-          });
-          const fbText = fbResponse.text?.trim() ?? "";
-          if (fbText) {
-            logger.info({ model, text: fbText }, "Gemini STT transcribed successfully using Fallback Paid API Key");
-            return { rawText: fbText, activeApp, usedPaidKey: true };
-          }
-        }
-      } catch (fbErr: any) {
-        logger.warn({ model, err: fbErr?.message || String(fbErr) }, "Fallback Paid API Key execution failed");
-      }
+      logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Model attempt failed, moving to next candidate");
     }
   }
 
