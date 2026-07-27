@@ -359,13 +359,18 @@ function createPopoverWindow() {
   });
 }
 
+let customHudPosition: { x: number; y: number } | null = null;
+
 function createHudWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const screenBounds = primaryDisplay.workArea;
   const width = 82;
   const height = 26;
-  const x = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
-  const y = screenBounds.y + 6;
+  const defaultX = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
+  const defaultY = screenBounds.y + 6;
+
+  const x = customHudPosition ? customHudPosition.x : defaultX;
+  const y = customHudPosition ? customHudPosition.y : defaultY;
 
   hudWindow = new BrowserWindow({
     width,
@@ -381,6 +386,7 @@ function createHudWindow() {
     alwaysOnTop: true,
     focusable: false,
     hasShadow: false,
+    movable: true,
     webPreferences: {
       preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
       contextIsolation: true,
@@ -389,6 +395,13 @@ function createHudWindow() {
   });
 
   hudWindow.loadFile(fileURLToPath(new URL("../renderer/hud.html", import.meta.url)));
+
+  hudWindow.on("moved", () => {
+    if (hudWindow) {
+      const [newX, newY] = hudWindow.getPosition();
+      customHudPosition = { x: newX, y: newY };
+    }
+  });
 
   hudWindow.on("closed", () => {
     hudWindow = null;

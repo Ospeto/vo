@@ -34,6 +34,11 @@
       justify-content: center;
       gap: 3.5px;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      -webkit-app-region: drag;
+      cursor: grab;
+    }
+    .hud-capsule:active {
+      cursor: grabbing;
     }
     .hud-bar {
       width: 3px;
