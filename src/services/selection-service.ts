@@ -16,57 +16,63 @@ export interface SelectionCaptureResult {
   previousClipboard: string;
 }
 
+const SELECTION_SENTINEL = "__PI_VOICE_SELECTION_SENTINEL__";
+
 /**
- * Captures selected text from the active foreground macOS application.
- * Executes a simulated `cmd+c` keystroke with 250ms timeout window.
+ * Captures selected text from the active foreground macOS application using a clipboard sentinel.
+ * Executes a simulated `cmd+c` keystroke with 200ms timeout window.
  */
-export async function captureActiveSelection(timeoutMs = 250): Promise<SelectionCaptureResult> {
+export async function captureActiveSelection(timeoutMs = 200): Promise<SelectionCaptureResult> {
   const clip = getClipboard();
   const previousClipboard = clip?.readText() || "";
+
+  // Write sentinel to clipboard to reliably detect new selection copy
+  try {
+    clip?.writeText(SELECTION_SENTINEL);
+  } catch {}
 
   return new Promise((resolve) => {
     let resolved = false;
 
-    const timer = setTimeout(() => {
+    const finish = (newText: string) => {
       if (resolved) return;
       resolved = true;
-      const latestText = clip?.readText() || "";
-      const trimmedLatest = latestText.trim();
-      const trimmedPrev = previousClipboard.trim();
 
-      if (trimmedLatest && trimmedLatest !== trimmedPrev) {
-        logger.info({ byteLength: trimmedLatest.length }, "Captured active text selection (fallback timer)");
-        resolve({ hasSelection: true, selectedText: trimmedLatest, previousClipboard });
+      const trimmed = newText.trim();
+      if (trimmed && trimmed !== SELECTION_SENTINEL) {
+        logger.info({ byteLength: trimmed.length }, "Captured active text selection from foreground app");
+        resolve({ hasSelection: true, selectedText: trimmed, previousClipboard });
       } else {
+        // Restore previous clipboard if no selection was captured
+        try {
+          clip?.writeText(previousClipboard);
+        } catch {}
         resolve({ hasSelection: false, selectedText: "", previousClipboard });
       }
+    };
+
+    const timer = setTimeout(() => {
+      const latestText = clip?.readText() || "";
+      finish(latestText);
     }, timeoutMs);
 
     // Trigger AppleScript keystroke "c" using command down
     exec(`osascript -e 'tell application "System Events" to keystroke "c" using command down'`, (err) => {
       if (resolved) return;
-      clearTimeout(timer);
-      resolved = true;
 
       if (err) {
+        clearTimeout(timer);
         logger.debug({ err: String(err) }, "Selection keystroke execution warning");
-        resolve({ hasSelection: false, selectedText: "", previousClipboard });
+        finish(SELECTION_SENTINEL);
         return;
       }
 
-      // Allow 30ms for clipboard buffer to update
+      // Check clipboard after 40ms buffer
       setTimeout(() => {
-        const newClipboard = clip?.readText() || "";
-        const trimmedNew = newClipboard.trim();
-        const trimmedPrev = previousClipboard.trim();
-
-        if (trimmedNew && trimmedNew !== trimmedPrev) {
-          logger.info({ byteLength: trimmedNew.length }, "Captured active text selection from foreground app");
-          resolve({ hasSelection: true, selectedText: trimmedNew, previousClipboard });
-        } else {
-          resolve({ hasSelection: false, selectedText: "", previousClipboard });
-        }
-      }, 30);
+        clearTimeout(timer);
+        const newText = clip?.readText() || "";
+        finish(newText);
+      }, 40);
     });
   });
 }
