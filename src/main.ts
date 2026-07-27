@@ -644,17 +644,20 @@ function setupIpcHandlers() {
     }
 
     try {
+      const keys = targetKey.split(/[,\n]+/).map((k) => k.trim()).filter((k) => k.length > 0 && !k.includes("your_"));
+      const firstKey = keys[0] || targetKey.trim();
+
       const { GoogleGenAI } = await import("@google/genai");
-      const client = new GoogleGenAI({ apiKey: targetKey });
+      const client = new GoogleGenAI({ apiKey: firstKey });
       const res = await client.models.generateContent({
         model: "gemini-3.1-flash-lite",
         contents: "Ping",
       });
       if (res && res.text !== undefined) {
         currentConfig = updateConfig(workingCwd, { geminiApiKey: targetKey });
-        process.env.GEMINI_API_KEY = targetKey;
+        process.env.GEMINI_API_KEY = firstKey;
         _resetGeminiClient();
-        return { success: true, message: "API Key is valid & saved!" };
+        return { success: true, message: keys.length > 1 ? `${keys.length} API Keys are valid & saved!` : "API Key is valid & saved!" };
       }
       return { success: false, error: "Empty response from Gemini API" };
     } catch (err: any) {
