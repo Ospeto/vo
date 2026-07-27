@@ -15,16 +15,17 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
     currentGainValue = inputGain;
     
-    // Explicitly disable autoGainControl for predictable manual user gain control
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        sampleRate: 16000,
-        channelCount: 1,
-        autoGainControl: false,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+    if (!mediaStream || !mediaStream.active) {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          autoGainControl: false,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+    }
 
     audioCtx = new AudioContext({ sampleRate: 16000 });
     if (audioCtx.state === "suspended") {
@@ -193,3 +194,16 @@ window.electronIPC?.onStopRecording(() => {
     window.electronIPC?.sendRecordingError(`MediaRecorder stop failed: ${err.message}`);
   }
 });
+
+// Pre-warm mic stream in background for zero-latency instant startup
+navigator.mediaDevices?.getUserMedia({
+  audio: {
+    sampleRate: 16000,
+    channelCount: 1,
+    autoGainControl: false,
+    echoCancellation: true,
+    noiseSuppression: true,
+  },
+}).then((stream) => {
+  mediaStream = stream;
+}).catch(() => {});

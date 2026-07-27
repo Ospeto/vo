@@ -285,7 +285,7 @@ async function renderHistory() {
     return;
   }
 
-  historyContainer.innerHTML = "";
+  const fragment = document.createDocumentFragment();
   history.forEach((item: HistoryEntry) => {
     const el = document.createElement("div");
     el.className = "history-item";
@@ -314,8 +314,11 @@ async function renderHistory() {
 
     el.appendChild(textEl);
     el.appendChild(metaEl);
-    historyContainer.appendChild(el);
+    fragment.appendChild(el);
   });
+
+  historyContainer.innerHTML = "";
+  historyContainer.appendChild(fragment);
 }
 
 window.electronIPC?.onStateChanged((payload: StatePayload) => {
