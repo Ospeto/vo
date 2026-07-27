@@ -22,7 +22,7 @@ const SELECTION_SENTINEL = "__PI_VOICE_SELECTION_SENTINEL__";
  * Captures selected text from the active foreground macOS application using a clipboard sentinel.
  * Executes a simulated `cmd+c` keystroke with 200ms timeout window.
  */
-export async function captureActiveSelection(timeoutMs = 200): Promise<SelectionCaptureResult> {
+export async function captureActiveSelection(timeoutMs = 350): Promise<SelectionCaptureResult> {
   const clip = getClipboard();
   const previousClipboard = clip?.readText() || "";
 
@@ -56,24 +56,27 @@ export async function captureActiveSelection(timeoutMs = 200): Promise<Selection
       finish(latestText);
     }, timeoutMs);
 
-    // Trigger explicit key code 8 (c) using command down to avoid physical modifier conflict
-    exec(`osascript -e 'tell application "System Events" to key code 8 using {command down}'`, (err) => {
-      if (resolved) return;
+    // Wait 120ms for physical hotkey modifier keys (Control/Option) to be released by user hand
+    setTimeout(() => {
+      // Trigger explicit key code 8 (c) using command down
+      exec(`osascript -e 'tell application "System Events" to key code 8 using {command down}'`, (err) => {
+        if (resolved) return;
 
-      if (err) {
-        clearTimeout(timer);
-        logger.debug({ err: String(err) }, "Selection keystroke execution warning");
-        finish(SELECTION_SENTINEL);
-        return;
-      }
+        if (err) {
+          clearTimeout(timer);
+          logger.debug({ err: String(err) }, "Selection keystroke execution warning");
+          finish(SELECTION_SENTINEL);
+          return;
+        }
 
-      // Check clipboard after 40ms buffer
-      setTimeout(() => {
-        clearTimeout(timer);
-        const newText = clip?.readText() || "";
-        finish(newText);
-      }, 40);
-    });
+        // Check clipboard after 40ms buffer
+        setTimeout(() => {
+          clearTimeout(timer);
+          const newText = clip?.readText() || "";
+          finish(newText);
+        }, 40);
+      });
+    }, 120);
   });
 }
 

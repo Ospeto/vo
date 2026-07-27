@@ -722,7 +722,7 @@ let lastHotkeyDownTime = 0;
 let keyHoldPressStartTime = 0;
 
 async function startRecordingFlow() {
-  const selection = await captureActiveSelection(200);
+  const selection = await captureActiveSelection(350);
   if (selection.hasSelection) {
     activeSelectionText = selection.selectedText;
     previousClipboardContent = selection.previousClipboard;
