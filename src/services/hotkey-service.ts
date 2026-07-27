@@ -86,11 +86,12 @@ export class HotkeyService implements IHotkeyService {
 
       this.fnHook = new FnHook(
         {
-          onFnDown: () => onDown(),
-          onFnUp: () => onUp?.(),
+          onFnDown: (mode) => onDown(mode),
+          onFnUp: (mode) => onUp?.(mode),
         },
         candidateBinding,
-        display
+        display,
+        this.currentEditBinding ?? undefined
       );
 
       let fnHookStarted = false;
