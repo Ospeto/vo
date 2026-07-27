@@ -604,6 +604,7 @@ function setupIpcHandlers() {
     if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
     currentConfig = updateConfig(workingCwd, patch);
     if (patch.geminiApiKey !== undefined) {
+      process.env.GEMINI_API_KEY = patch.geminiApiKey.trim();
       _resetGeminiClient();
     }
     if (patch.inputGain !== undefined) {
@@ -650,7 +651,10 @@ function setupIpcHandlers() {
         contents: "Ping",
       });
       if (res && res.text !== undefined) {
-        return { success: true, message: "API Key is valid & active!" };
+        currentConfig = updateConfig(workingCwd, { geminiApiKey: targetKey });
+        process.env.GEMINI_API_KEY = targetKey;
+        _resetGeminiClient();
+        return { success: true, message: "API Key is valid & saved!" };
       }
       return { success: false, error: "Empty response from Gemini API" };
     } catch (err: any) {

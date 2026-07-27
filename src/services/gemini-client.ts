@@ -17,16 +17,19 @@ export function _resetGeminiClient(): void {
 }
 
 function resolveApiKey(): string | undefined {
-  if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("your_")) return process.env.GEMINI_API_KEY;
-  if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_API_KEY.includes("your_")) return process.env.GOOGLE_API_KEY;
-
+  // 1. Prioritize explicit user UI setting in config.json
   try {
     const config = loadConfig();
     if (config.geminiApiKey && config.geminiApiKey.trim() && !config.geminiApiKey.includes("your_")) {
-      process.env.GEMINI_API_KEY = config.geminiApiKey.trim();
-      return config.geminiApiKey.trim();
+      const trimmedKey = config.geminiApiKey.trim();
+      process.env.GEMINI_API_KEY = trimmedKey;
+      return trimmedKey;
     }
   } catch {}
+
+  // 2. Process environment variables
+  if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("your_")) return process.env.GEMINI_API_KEY;
+  if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_API_KEY.includes("your_")) return process.env.GOOGLE_API_KEY;
 
   const candidateEnvPaths = [
     join(homedir(), ".config", "pi-voice", ".env"),
