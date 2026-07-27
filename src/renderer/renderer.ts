@@ -1020,7 +1020,14 @@ function startHotkeyRecording() {
 
     const isModifierKey = ["Control", "Meta", "Alt", "Shift"].includes(e.key);
     if (!isModifierKey) {
-      const keyStr = [...modifiers, e.key.toLowerCase()].join("+");
+      let mainKey = e.key.toLowerCase();
+      if (e.code && e.code.startsWith("Key")) {
+        mainKey = e.code.replace("Key", "").toLowerCase();
+      } else if (e.code && e.code.startsWith("Digit")) {
+        mainKey = e.code.replace("Digit", "");
+      }
+
+      const keyStr = [...modifiers, mainKey].join("+");
       const res = await window.electronIPC?.registerHotkey(keyStr);
       if (res?.success) {
         keycapDisplay.textContent = res.keyDisplay || keyStr;
@@ -1039,6 +1046,13 @@ function startHotkeyRecording() {
 function stopHotkeyRecording() {
   isRecordingHotkey = false;
   recordBtn.textContent = "Record";
+}
+
+function showHotkeyError(msg: string) {
+  if (hotkeyFeedback) {
+    hotkeyFeedback.textContent = msg;
+    hotkeyFeedback.style.display = "block";
+  }
 }
 
 function hideHotkeyError() {
@@ -1087,7 +1101,14 @@ function startEditHotkeyRecording() {
 
     const isModifierKey = ["Control", "Meta", "Alt", "Shift"].includes(e.key);
     if (!isModifierKey) {
-      const keyStr = [...modifiers, e.key.toLowerCase()].join("+");
+      let mainKey = e.key.toLowerCase();
+      if (e.code && e.code.startsWith("Key")) {
+        mainKey = e.code.replace("Key", "").toLowerCase();
+      } else if (e.code && e.code.startsWith("Digit")) {
+        mainKey = e.code.replace("Digit", "");
+      }
+
+      const keyStr = [...modifiers, mainKey].join("+");
       const res = await window.electronIPC?.registerEditHotkey(keyStr);
       if (res?.success) {
         editKeycapDisplay.textContent = res.keyDisplay || keyStr;
