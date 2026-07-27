@@ -469,8 +469,6 @@ function setupIpcHandlers() {
 
       const isUndo = handleVoiceUndoCheck(text);
       if (!isUndo) {
-        lastPastedText = text;
-        lastPasteTime = Date.now();
         pasteTextToFocusedField(text);
         const activeApp = getActiveAppName();
         const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
