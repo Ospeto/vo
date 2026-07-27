@@ -393,6 +393,7 @@ CRITICAL RULES:
 2. Only write standard English technical/project terms in English script (e.g. SarYayKaung, Ospeto, TBH, Engram, MAS 141, MAS 142, MAS 143, FSRS, SQL, Python, VPN, Image, Wolf).
 3. Transcribe only what was actually spoken. Do NOT hallucinate lists of vocabulary words. No intro or markdown wrappers.
 4. PHONETIC ACCURACY FOR PERSON NAMES: You MUST transcribe person names, family names, and proper nouns using their EXACT target Burmese/English spelling (e.g. 'သော်ဇင်' NOT 'တော်စင်', 'အောင်ချမ်းမြေ့' NOT 'အွန်တန်းမြေ', 'ကို Joy' NOT 'ကိုဂျွိုင်း', 'ဝေယံထက်' NOT 'ဝေယံ', 'မိုးကျော်အောင်' NOT 'မိုးကျော်'). NEVER garble spoken names into phonetically similar unrelated Burmese words.
+5. NEVER truncate, drop trailing words, or cut off sentences mid-way. Output 100% complete, fully-formed transcription for the entire audio.
 `.trim();
 
 export function buildCustomVocabularyPromptPart(terms: string[]): string {
@@ -570,7 +571,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
           config: {
             systemInstruction: fullPrompt,
             temperature: targetTemperature,
-            maxOutputTokens: 384,
+            maxOutputTokens: 2048,
           },
         });
         const text = response.text?.trim() ?? "";
@@ -607,7 +608,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
             config: {
               systemInstruction: fullPrompt,
               temperature: targetTemperature,
-              maxOutputTokens: 384,
+              maxOutputTokens: 2048,
             },
           });
           const fbText = fbResponse.text?.trim() ?? "";
