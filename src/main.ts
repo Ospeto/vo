@@ -268,6 +268,9 @@ function handleVoiceUndoCheck(text: string): boolean {
     "cut that",
     "erase",
     "erase it",
+    "clear",
+    "clear it",
+    "clear that",
   ];
 
   const isMatch = exactUndoKeywords.some((kw) => cleaned === kw || (words.length <= 2 && words.includes(kw)));
