@@ -26,7 +26,9 @@ const modalPresetSelect = document.getElementById("modalPresetSelect") as HTMLSe
 const vocabInput = document.getElementById("vocabInput") as HTMLInputElement;
 const addVocabBtn = document.getElementById("addVocabBtn") as HTMLButtonElement;
 const vocabTagsContainer = document.getElementById("vocabTagsContainer") as HTMLElement;
-const geminiApiKeyInput = document.getElementById("geminiApiKeyInput") as HTMLInputElement;
+const geminiApiKey1Input = document.getElementById("geminiApiKey1Input") as HTMLInputElement;
+const geminiApiKey2Input = document.getElementById("geminiApiKey2Input") as HTMLInputElement;
+const geminiApiKey3Input = document.getElementById("geminiApiKey3Input") as HTMLInputElement;
 const saveApiKeyBtn = document.getElementById("saveApiKeyBtn") as HTMLButtonElement;
 const apiKeyFeedback = document.getElementById("apiKeyFeedback") as HTMLElement;
 
@@ -227,8 +229,11 @@ async function initUI() {
     if ((config as any).appPresetMappings) {
       currentAppMappings = { ...(config as any).appPresetMappings };
     }
-    if (geminiApiKeyInput && (config as any).geminiApiKey) {
-      geminiApiKeyInput.value = (config as any).geminiApiKey;
+    if ((config as any).geminiApiKey) {
+      const keys = String((config as any).geminiApiKey).split(/[,\n]+/).map((k) => k.trim());
+      if (geminiApiKey1Input && keys[0]) geminiApiKey1Input.value = keys[0];
+      if (geminiApiKey2Input && keys[1]) geminiApiKey2Input.value = keys[1];
+      if (geminiApiKey3Input && keys[2]) geminiApiKey3Input.value = keys[2];
     }
     if (geminiFallbackApiKeyInput && (config as any).geminiFallbackApiKey) {
       geminiFallbackApiKeyInput.value = (config as any).geminiFallbackApiKey;
@@ -605,9 +610,13 @@ vocabInput?.addEventListener("keydown", (e) => {
 const testApiKeyBtn = document.getElementById("testApiKeyBtn") as HTMLButtonElement;
 
 testApiKeyBtn?.addEventListener("click", async () => {
-  const keyVal = geminiApiKeyInput?.value ? geminiApiKeyInput.value.trim() : undefined;
+  const k1 = geminiApiKey1Input?.value.trim() || "";
+  const k2 = geminiApiKey2Input?.value.trim() || "";
+  const k3 = geminiApiKey3Input?.value.trim() || "";
+  const keyVal = [k1, k2, k3].filter(Boolean).join(",") || undefined;
+
   if (apiKeyFeedback) {
-    apiKeyFeedback.textContent = "Testing API Key...";
+    apiKeyFeedback.textContent = "Testing API Key(s)...";
     apiKeyFeedback.style.color = "#3b82f6";
     apiKeyFeedback.style.display = "block";
   }
@@ -625,11 +634,16 @@ testApiKeyBtn?.addEventListener("click", async () => {
 });
 
 saveApiKeyBtn?.addEventListener("click", async () => {
-  const keyVal = geminiApiKeyInput?.value ? geminiApiKeyInput.value.trim() : "";
-  await window.electronIPC?.saveConfig({ geminiApiKey: keyVal });
+  const k1 = geminiApiKey1Input?.value.trim() || "";
+  const k2 = geminiApiKey2Input?.value.trim() || "";
+  const k3 = geminiApiKey3Input?.value.trim() || "";
+  const combinedKeys = [k1, k2, k3].filter(Boolean).join(",");
+
+  await window.electronIPC?.saveConfig({ geminiApiKey: combinedKeys });
   if (apiKeyFeedback) {
-    apiKeyFeedback.textContent = keyVal ? "✓ Gemini API Key saved!" : "API Key cleared.";
-    apiKeyFeedback.style.color = keyVal ? "#10b981" : "#ef4444";
+    const keyCount = [k1, k2, k3].filter(Boolean).length;
+    apiKeyFeedback.textContent = keyCount > 0 ? `✓ Saved ${keyCount} Primary Gemini Key(s)!` : "Primary API Keys cleared.";
+    apiKeyFeedback.style.color = keyCount > 0 ? "#10b981" : "#ef4444";
     apiKeyFeedback.style.display = "block";
     setTimeout(() => {
       apiKeyFeedback.style.display = "none";

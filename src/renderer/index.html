@@ -136,15 +136,21 @@
 
         <hr class="modal-divider">
 
-        <!-- Gemini API Key Section -->
+        <!-- Gemini Primary API Keys Section (3 Dedicated Lines for Round-Robin) -->
         <div class="modal-section-group">
-          <label class="section-label" for="geminiApiKeyInput">Gemini API Key(s)</label>
-          <div class="apiKey-settings-row">
-            <input type="password" id="geminiApiKeyInput" placeholder="Paste Gemini API Key(s) (comma separated for 3x Round-Robin)" aria-label="Gemini API Key">
-            <button id="testApiKeyBtn" class="action-btn-sm action-btn-blue" title="Test API Key">Test</button>
-            <button id="saveApiKeyBtn" class="action-btn-sm">Save</button>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <label class="section-label" style="margin-bottom: 0;">Primary Gemini API Keys (3x Round-Robin)</label>
+            <div style="display: flex; gap: 6px;">
+              <button id="testApiKeyBtn" class="action-btn-sm action-btn-blue" title="Test API Key">Test</button>
+              <button id="saveApiKeyBtn" class="action-btn-sm">Save All Keys</button>
+            </div>
           </div>
-          <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 2px;">Enter multiple keys separated by comma to enable Multi-Key Round-Robin rotation.</span>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <input type="password" id="geminiApiKey1Input" placeholder="Primary Key 1 (AIzaSy...)" class="chime-select" style="font-size: 11px; padding: 6px 10px;" aria-label="Gemini Key 1">
+            <input type="password" id="geminiApiKey2Input" placeholder="Primary Key 2 (Optional Backup)" class="chime-select" style="font-size: 11px; padding: 6px 10px;" aria-label="Gemini Key 2">
+            <input type="password" id="geminiApiKey3Input" placeholder="Primary Key 3 (Optional Backup)" class="chime-select" style="font-size: 11px; padding: 6px 10px;" aria-label="Gemini Key 3">
+          </div>
+          <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 4px;">Requests will automatically rotate between Key 1, 2, and 3 to triple your rate limits.</span>
           <span id="apiKeyFeedback" class="feedback-msg"></span>
         </div>
 
