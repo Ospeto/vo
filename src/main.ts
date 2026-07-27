@@ -190,20 +190,53 @@ function pasteTextToFocusedField(text: string) {
   }
 }
 
-function executeUndoCommand() {
+function isTerminalApp(appName: string): boolean {
+  const lower = appName.toLowerCase();
+  return (
+    lower.includes("terminal") ||
+    lower.includes("warp") ||
+    lower.includes("iterm") ||
+    lower.includes("ghostty") ||
+    lower.includes("alacritty") ||
+    lower.includes("myanso")
+  );
+}
+
+function executeUndoCommand(textLengthToUndo: number = 0) {
   try {
-    const script = `
-      tell application "System Events"
-        keystroke "a" using command down
-        delay 0.05
-        key code 51
-      end tell
-    `;
+    const activeApp = getActiveAppName();
+    const isTerminal = isTerminalApp(activeApp);
+
+    let script = "";
+    if (isTerminal) {
+      if (textLengthToUndo > 0 && textLengthToUndo <= 100) {
+        script = `
+          tell application "System Events"
+            repeat ${textLengthToUndo} times
+              key code 51
+            end repeat
+          end tell
+        `;
+      } else {
+        script = `
+          tell application "System Events"
+            keystroke "u" using control down
+          end tell
+        `;
+      }
+    } else {
+      script = `
+        tell application "System Events"
+          keystroke "z" using command down
+        end tell
+      `;
+    }
+
     exec(`osascript -e '${script}'`, (err) => {
       if (err) {
         logger.error({ err: String(err) }, "Undo command failed");
       } else {
-        logger.info("Executed Voice Undo successfully");
+        logger.info({ activeApp, isTerminal, textLengthToUndo }, "Executed Voice Undo successfully");
         playUndoChime();
       }
     });
@@ -222,8 +255,10 @@ function handleVoiceUndoCheck(text: string): boolean {
   const isMatch = exactUndoKeywords.some((kw) => cleaned === kw || words.includes(kw));
 
   if (isMatch) {
-    logger.info({ text, cleaned }, "Voice Undo matched");
-    executeUndoCommand();
+    const undoLength = lastPastedText ? lastPastedText.length : 0;
+    logger.info({ text, cleaned, undoLength }, "Voice Undo matched");
+    executeUndoCommand(undoLength);
+    lastPastedText = "";
     return true;
   }
   return false;
@@ -440,6 +475,8 @@ function setupIpcHandlers() {
 
       const isUndo = handleVoiceUndoCheck(text);
       if (!isUndo) {
+        lastPastedText = text;
+        lastPasteTime = Date.now();
         pasteTextToFocusedField(text);
         const activeApp = getActiveAppName();
         const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
