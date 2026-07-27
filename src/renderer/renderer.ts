@@ -335,6 +335,7 @@ async function initUI() {
     renderAppRules();
     renderPersonNames();
     renderVocabTags();
+    await renderHistory();
   }
 
   if (micDeviceSelect) {
@@ -569,12 +570,7 @@ async function renderHistory() {
           second: "2-digit",
         });
 
-    const itemCostStr = (item as any).cost !== undefined ? ` · $${(item as any).cost.toFixed(6)}` : "";
-    const keyBadge = (item as any).usedPaidKey
-      ? `<span class="paid-key-tag" title="Fallback Paid API Key Used"><span class="badge-dot paid-dot"></span>Paid Key</span>`
-      : `<span class="free-key-tag" title="Primary Free API Key Used"><span class="badge-dot free-dot"></span>Free Tier</span>`;
-
-    metaEl.innerHTML = `${timeStr} · ${item.activeApp || "App"}${itemCostStr} ${keyBadge}`;
+    metaEl.innerHTML = `${timeStr} · ${item.activeApp || "App"}`;
 
     el.title = "Click to copy text to clipboard";
     el.addEventListener("click", async () => {
@@ -604,8 +600,10 @@ window.electronIPC?.onStateChanged((payload: StatePayload) => {
     playStartChime();
   } else if (payload.state === "stopping" || payload.state === "transcribing" || payload.state === "idle") {
     stopSpectrumVisualizer();
-    if (payload.state === "idle" && payload.message?.startsWith("Dictated:")) {
-      playBassyEndChime();
+    if (payload.state === "idle") {
+      if (payload.message?.startsWith("Dictated:") || payload.message?.includes("Key:")) {
+        playBassyEndChime();
+      }
       renderHistory();
     }
   }
