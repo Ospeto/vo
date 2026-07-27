@@ -369,8 +369,10 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
     }
   }
 
-  // 12. Smart English Auto-Capitalization after sentence boundaries
-  cleaned = cleaned.replace(/(^|[။\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase());
+  // 12. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
+  if (!/^(https?:\/\/|ftp:\/\/|git@)/i.test(cleaned)) {
+    cleaned = cleaned.replace(/(^|[။\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase());
+  }
 
   // 13. Fix spacing around Burmese full stop (။)
   cleaned = cleaned.replace(/။([^\s\n])/g, "။ $1");
@@ -527,8 +529,8 @@ async function transcribeGemini(
   let userPromptText = "Transcribe the spoken audio accurately in Burmese script.";
 
   if (hasSelectedText) {
-    sttBasePrompt = `You are an expert AI Text Editor and Transformation Assistant. Your single imperative task is to listen to the user's spoken audio instruction and apply it to the provided [SELECTED TEXT]. Output ONLY the updated replacement text without any wrapping quotes, markdown commentary, or introductory phrases.`;
-    userPromptText = `[SELECTED TEXT]:\n"""\n${selectedText?.trim()}\n"""\n\nSpoken Instruction: Apply the spoken audio instruction to the selected text above and return ONLY the modified replacement text.`;
+    sttBasePrompt = `You are an expert AI Text Editor, Translator, and Transformation Assistant. Your single imperative task is to listen to the user's spoken audio instruction and execute it directly on the provided [SELECTED TEXT]. If the audio instruction asks to translate, rewrite, fix grammar, expand, rephrase, or summarize, you MUST transform the [SELECTED TEXT] accordingly and output ONLY the final transformed replacement text without any surrounding quotes, explanatory notes, or markdown wrappers.`;
+    userPromptText = `[SELECTED TEXT TO TRANSFORM]:\n"""\n${selectedText?.trim()}\n"""\n\nSPOKEN INSTRUCTION: Listen to the spoken audio instruction and transform the selected text above accordingly. Return ONLY the modified replacement text.`;
   } else if (isCodePreset) {
     if (isTranslationActive) {
       sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting.`;
