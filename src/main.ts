@@ -245,8 +245,32 @@ function handleVoiceUndoCheck(text: string): boolean {
 
   if (words.length > 3) return false;
 
-  const exactUndoKeywords = ["undo", "ando", "2nto", "nto", "unto", "ဖျက်လိုက်", "ဖျက်", "ပြန်ဖြတ်"];
-  const isMatch = exactUndoKeywords.some((kw) => cleaned === kw || words.includes(kw));
+  const exactUndoKeywords = [
+    "ဖျက်လိုက်",
+    "ဖျက်",
+    "ဖြတ်လိုက်",
+    "ဖြတ်",
+    "ပြန်ဖြတ်",
+    "ပြန်ဖျက်",
+    "undo",
+    "ando",
+    "2nto",
+    "nto",
+    "unto",
+    "delete",
+    "delete it",
+    "delete that",
+    "remove",
+    "remove it",
+    "remove that",
+    "cut",
+    "cut it",
+    "cut that",
+    "erase",
+    "erase it",
+  ];
+
+  const isMatch = exactUndoKeywords.some((kw) => cleaned === kw || (words.length <= 2 && words.includes(kw)));
 
   if (isMatch) {
     const undoLength = lastPastedText ? lastPastedText.length : 0;
