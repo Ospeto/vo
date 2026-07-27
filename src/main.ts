@@ -43,6 +43,9 @@ let lastPasteTime = 0;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
+let hudWindow: BrowserWindow | null = null;
+let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
+
 function setState(state: AppState, message?: string) {
   currentState = state;
   sequenceId++;
@@ -61,6 +64,24 @@ function setState(state: AppState, message?: string) {
         setState("idle", "Ready");
       }
     }, 2500);
+  }
+
+  if (hudHideTimer) {
+    clearTimeout(hudHideTimer);
+    hudHideTimer = null;
+  }
+
+  if (hudWindow) {
+    hudWindow.webContents.send(IPC.STATE_CHANGED, payload);
+    if (state === "recording" || state === "stopping" || state === "transcribing" || state === "starting") {
+      hudWindow.showInactive();
+    } else {
+      hudHideTimer = setTimeout(() => {
+        if (currentState === "idle" || currentState === "error") {
+          hudWindow?.hide();
+        }
+      }, 1500);
+    }
   }
 
   updateTrayIconForState(state);
@@ -335,6 +356,42 @@ function createPopoverWindow() {
 
   popoverWindow.on("closed", () => {
     popoverWindow = null;
+  });
+}
+
+function createHudWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const screenBounds = primaryDisplay.workArea;
+  const width = 240;
+  const height = 44;
+  const x = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
+  const y = screenBounds.y + 16;
+
+  hudWindow = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    focusable: false,
+    hasShadow: true,
+    webPreferences: {
+      preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  hudWindow.loadFile(fileURLToPath(new URL("../renderer/index.html", import.meta.url)));
+
+  hudWindow.on("closed", () => {
+    hudWindow = null;
   });
 }
 
@@ -698,6 +755,7 @@ app.whenReady().then(async () => {
 
   createCaptureWindow();
   createPopoverWindow();
+  createHudWindow();
   createTray();
 
   setupIpcHandlers();
