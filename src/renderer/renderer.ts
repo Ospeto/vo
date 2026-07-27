@@ -200,50 +200,50 @@ function startWaveAnimationLoop() {
     spectrumCtx.clearRect(0, 0, width, height);
 
     if (activeAmp > 0.05) {
-      // Layer 1: Background Soft Cyan Wave
-      spectrumCtx.save();
-      spectrumCtx.beginPath();
-      for (let x = 0; x <= width; x += 3) {
-        const progress = x / width;
-        const envelope = Math.sin(progress * Math.PI);
-        const y = centerY + Math.sin(progress * Math.PI * 3 + wavePhase + 1.2) * activeAmp * 0.6 * envelope;
-        if (x === 0) spectrumCtx.moveTo(x, y);
-        else spectrumCtx.lineTo(x, y);
+      // Multi-Layered Harmonic Ribbon Sine Waves (matching reference design)
+      const numLines = 6;
+      for (let i = 0; i < numLines; i++) {
+        spectrumCtx.save();
+        spectrumCtx.beginPath();
+
+        const offsetFactor = (i - (numLines - 1) / 2) * 0.22;
+        const phaseShift = wavePhase + i * 0.28;
+        const freqMult = 3.5 + (i % 2 === 0 ? 0.6 : -0.4);
+
+        for (let x = 0; x <= width; x += 2) {
+          const progress = x / width;
+          const envelope = Math.sin(progress * Math.PI); // Envelope for tapered end points
+          const y = centerY + Math.sin(progress * Math.PI * freqMult + phaseShift) * (activeAmp + offsetFactor * 8) * envelope;
+
+          if (x === 0) spectrumCtx.moveTo(x, y);
+          else spectrumCtx.lineTo(x, y);
+        }
+
+        const alpha = Math.max(0.2, 1.0 - Math.abs(offsetFactor) * 1.2);
+        if (i % 2 === 1) {
+          spectrumCtx.setLineDash([4, 3]); // Alternating dashed ribbon lines
+        } else {
+          spectrumCtx.setLineDash([]);
+        }
+
+        const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
+        gradient.addColorStop(0, `rgba(59, 130, 246, ${alpha * 0.65})`);
+        gradient.addColorStop(0.5, `rgba(52, 211, 153, ${alpha})`);
+        gradient.addColorStop(1, `rgba(59, 130, 246, ${alpha * 0.65})`);
+
+        spectrumCtx.strokeStyle = gradient;
+        spectrumCtx.lineWidth = i === 2 || i === 3 ? Math.min(3.2, 1.8 + rawRatio * 2) : 1.2;
+        spectrumCtx.lineCap = "round";
+        spectrumCtx.stroke();
+        spectrumCtx.restore();
       }
-      spectrumCtx.strokeStyle = "rgba(147, 197, 253, 0.45)";
-      spectrumCtx.lineWidth = 1.5;
-      spectrumCtx.stroke();
-      spectrumCtx.restore();
-
-      // Layer 2: Foreground High-Definition Ribbon (Emerald & Blue Gradient)
-      spectrumCtx.save();
-      spectrumCtx.beginPath();
-      for (let x = 0; x <= width; x += 2) {
-        const progress = x / width;
-        const envelope = Math.sin(progress * Math.PI);
-        const y = centerY + Math.sin(progress * Math.PI * 4 + wavePhase) * activeAmp * envelope;
-        if (x === 0) spectrumCtx.moveTo(x, y);
-        else spectrumCtx.lineTo(x, y);
-      }
-
-      const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
-      gradient.addColorStop(0, "rgba(59, 130, 246, 0.95)");
-      gradient.addColorStop(0.5, "rgba(52, 211, 153, 1.0)");
-      gradient.addColorStop(1, "rgba(59, 130, 246, 0.95)");
-
-      spectrumCtx.strokeStyle = gradient;
-      spectrumCtx.lineWidth = Math.min(3.5, 1.8 + rawRatio * 2.2); // Dynamic line thickness
-      spectrumCtx.lineCap = "round";
-      spectrumCtx.lineJoin = "round";
-      spectrumCtx.stroke();
-      spectrumCtx.restore();
     } else {
       // Complete Silence / Mic Gain 0: Clean stationary baseline
       spectrumCtx.save();
       spectrumCtx.beginPath();
       spectrumCtx.moveTo(0, centerY);
       spectrumCtx.lineTo(width, centerY);
-      spectrumCtx.strokeStyle = "rgba(161, 161, 170, 0.22)";
+      spectrumCtx.strokeStyle = "rgba(161, 161, 170, 0.2)";
       spectrumCtx.lineWidth = 1;
       spectrumCtx.stroke();
       spectrumCtx.restore();
