@@ -451,6 +451,8 @@ export interface TranscribeOptions {
   provider?: SpeechProvider;
   geminiModel?: GeminiModelChoice;
   dictationPreset?: DictationPreset;
+  translateEnabled?: boolean;
+  targetLanguage?: string;
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
   symbolScannerEnabled?: boolean;
@@ -480,8 +482,10 @@ async function transcribeGemini(
   customVocabulary?: string[],
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>,
   symbolScannerEnabled: boolean = true,
-  workspacePath?: string
-): Promise<{ rawText: string; activeApp: string }> {
+  workspacePath?: string,
+  translateEnabled?: boolean,
+  targetLanguage: string = "English"
+): Promise<{ rawText: string; activeApp: string; usedPaidKey?: boolean }> {
   const client = getGeminiClient();
   const base64Audio = audioBuffer.toString("base64");
 
@@ -489,9 +493,19 @@ async function transcribeGemini(
   const appContextHint = getAppContextPromptHint(activeApp);
 
   let appMappings: Record<string, DictationPreset> | undefined;
+  let isTranslationActive = translateEnabled ?? false;
+  let resolvedTargetLang = targetLanguage;
+
   try {
     const { loadConfig } = await import("./config.js");
-    appMappings = loadConfig().appPresetMappings;
+    const cfg = loadConfig();
+    appMappings = cfg.appPresetMappings;
+    if (translateEnabled === undefined) {
+      isTranslationActive = cfg.translateEnabled ?? false;
+    }
+    if (!targetLanguage || targetLanguage === "English") {
+      resolvedTargetLang = cfg.targetLanguage ?? "English";
+    }
   } catch {}
 
   const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp, appMappings);
@@ -516,15 +530,19 @@ async function transcribeGemini(
     }
   }
 
-  const isEnglishPreset = effectivePreset === "code_comment" || effectivePreset === "translate";
-  const sttBasePrompt = isEnglishPreset
-    ? "You are an expert real-time Burmese-to-English Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken Burmese audio and output ONLY its clean, precise, technical English translation/specification. NEVER output Burmese script in the response."
-    : BURMESE_ACCURATE_STT_PROMPT;
+  const isCodePreset = effectivePreset === "code_comment";
+  let sttBasePrompt = BURMESE_ACCURATE_STT_PROMPT;
+  let userPromptText = "Transcribe the spoken audio accurately in Burmese script.";
+
+  if (isCodePreset) {
+    sttBasePrompt = "You are an expert real-time Burmese-to-English Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken Burmese audio and output ONLY its clean, precise, technical English translation/specification. NEVER output Burmese script in the response.";
+    userPromptText = "Translate the spoken audio into clear, technical English software engineering specifications. Output ONLY pure English text. Under NO circumstances should any Burmese script be included in the response.";
+  } else if (isTranslationActive) {
+    sttBasePrompt = `You are an expert real-time Speech Translator. Your single imperative task is to listen to the spoken audio and output ONLY its clean, natural translation into ${resolvedTargetLang}. Output ONLY pure ${resolvedTargetLang} text without any commentary.`;
+    userPromptText = `Translate the spoken audio directly into clean, natural ${resolvedTargetLang}. Output ONLY ${resolvedTargetLang} text.`;
+  }
 
   const fullPrompt = `${sttBasePrompt}\n${appContextHint}${workspacePromptPart}${dictPromptPart}${presetHint}`;
-  const userPromptText = isEnglishPreset
-    ? "Translate the spoken audio into clear, technical English software engineering specifications. Output ONLY pure English text. Under NO circumstances should any Burmese script be included in the response."
-    : "Transcribe the spoken audio accurately in Burmese script.";
 
   // Dynamically scale primary timeout from 3s to 12s based on audio payload byte length
   const dynamicTimeoutMs = Math.max(3000, Math.min(12000, Math.ceil(audioBuffer.length / 12)));
@@ -604,8 +622,8 @@ async function transcribeGemini(
       const winner = await Promise.race([fastestPromise, timeoutPromise]);
       let text = winner.text;
 
-      // Bulletproof Fallback: If English preset was requested but response contains Burmese script, run fast text translation
-      if (isEnglishPreset && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
+      // Bulletproof Fallback: If Code preset was requested but response contains Burmese script, run fast text translation
+      if (isCodePreset && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
         logger.info({ model, rawTextWithBurmese: text }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
         try {
           const translateRes = await client.models.generateContent({

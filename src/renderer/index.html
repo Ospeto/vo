@@ -46,7 +46,6 @@
       <div id="presetSegmentedGroup" class="preset-segmented-bar">
         <button type="button" class="preset-pill-btn active" data-preset="fast" title="Fast Mode: Direct low-latency dictation">Fast</button>
         <button type="button" class="preset-pill-btn" data-preset="careful" title="Careful Mode: Deep proofreading & semantic reasoning">Careful</button>
-        <button type="button" class="preset-pill-btn" data-preset="translate" title="Translate Mode: Auto-translate Burmese speech into English">Translate</button>
         <button type="button" class="preset-pill-btn" data-preset="code_comment" title="Code Mode: Syntax-friendly & inline comments">Code</button>
       </div>
     </div>
@@ -83,6 +82,9 @@
         aria-label="Input Gain" 
       >
       <span id="gainValue" class="gain-text">1.00×</span>
+      <button id="translateToggleBtn" class="icon-toggle" title="Toggle Auto-Translation" aria-label="Toggle Auto-Translation" style="font-size: 11px;">
+        🌐
+      </button>
       <button id="chimeBtn" class="icon-toggle active" title="Toggle Audio Chimes" aria-label="Toggle Audio Chimes">
         <svg class="bell-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -168,6 +170,30 @@
                   <option value="gemini-3.6-flash">3.6 Flash</option>
                   <option value="gemini-2.5-flash">2.5 Flash</option>
                   <option value="gemini-2.5-pro">2.5 Pro (Highest Accuracy)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Target Translation Language Section -->
+          <div class="modal-section-group">
+            <label class="section-label" for="targetLanguageSelect">Target Translation Language</label>
+            <div class="chime-card-row">
+              <div class="chime-card-header">
+                <span class="chime-step-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Translation</span>
+                <span class="chime-step-title">Target Language</span>
+              </div>
+              <div class="chime-card-controls">
+                <select id="targetLanguageSelect" class="chime-select" aria-label="Target Translation Language">
+                  <option value="English" selected>English</option>
+                  <option value="Burmese">Burmese (မြန်မာ)</option>
+                  <option value="Japanese">Japanese (日本語)</option>
+                  <option value="Chinese">Chinese (中文)</option>
+                  <option value="Korean">Korean (한국어)</option>
+                  <option value="Thai">Thai (ไทย)</option>
+                  <option value="French">French (Français)</option>
+                  <option value="German">German (Deutsch)</option>
+                  <option value="Spanish">Spanish (Español)</option>
                 </select>
               </div>
             </div>
@@ -276,7 +302,6 @@
               <select id="modalPresetSelect" aria-label="Preset Vocabulary Mode" class="chime-select">
                 <option value="fast" selected>Fast</option>
                 <option value="careful">Careful</option>
-                <option value="translate">Translate</option>
                 <option value="code_comment">Code</option>
               </select>
             </div>

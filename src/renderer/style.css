@@ -346,6 +346,12 @@ input[type="range"] {
   color: #ffffff;
 }
 
+.icon-toggle.translate-active {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #34d399;
+}
+
 .icon-toggle:hover {
   background: rgba(255, 255, 255, 0.16);
 }

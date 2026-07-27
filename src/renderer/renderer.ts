@@ -14,6 +14,7 @@ const chimeBtn = document.getElementById("chimeBtn") as HTMLButtonElement;
 const historyContainer = document.getElementById("historyContainer") as HTMLElement;
 const clearHistoryBtn = document.getElementById("clearHistoryBtn") as HTMLButtonElement;
 const configBtn = document.getElementById("configBtn") as HTMLButtonElement;
+const translateToggleBtn = document.getElementById("translateToggleBtn") as HTMLButtonElement;
 
 // Settings Modal Elements
 const settingsModal = document.getElementById("settingsModal") as HTMLElement;
@@ -23,6 +24,7 @@ const recordBtn = document.getElementById("recordBtn") as HTMLButtonElement;
 const resetShortcutBtn = document.getElementById("resetShortcutBtn") as HTMLButtonElement;
 const hotkeyFeedback = document.getElementById("hotkeyFeedback") as HTMLElement;
 const modalPresetSelect = document.getElementById("modalPresetSelect") as HTMLSelectElement;
+const targetLanguageSelect = document.getElementById("targetLanguageSelect") as HTMLSelectElement;
 const vocabInput = document.getElementById("vocabInput") as HTMLInputElement;
 const addVocabBtn = document.getElementById("addVocabBtn") as HTMLButtonElement;
 const vocabTagsContainer = document.getElementById("vocabTagsContainer") as HTMLElement;
@@ -359,6 +361,11 @@ async function initUI() {
     }
     audioChimesEnabled = config.audioChimesEnabled ?? true;
     updateChimeBtnUI();
+    translateEnabled = config.translateEnabled ?? false;
+    updateTranslateBtnUI();
+    if (targetLanguageSelect && config.targetLanguage) {
+      targetLanguageSelect.value = config.targetLanguage;
+    }
 
     if ((config as any).customVocabulary) {
       currentCustomVocab = [...((config as any).customVocabulary as string[])];
@@ -488,6 +495,8 @@ function renderAppRules() {
   appRulesContainer.appendChild(fragment);
 }
 
+let translateEnabled = false;
+
 function updateChimeBtnUI() {
   if (!chimeBtn) return;
   if (audioChimesEnabled) {
@@ -496,6 +505,17 @@ function updateChimeBtnUI() {
   } else {
     chimeBtn.classList.remove("active");
     chimeBtn.title = "Audio Chimes: Muted";
+  }
+}
+
+function updateTranslateBtnUI() {
+  if (!translateToggleBtn) return;
+  if (translateEnabled) {
+    translateToggleBtn.classList.add("translate-active");
+    translateToggleBtn.title = "Auto-Translation: Enabled";
+  } else {
+    translateToggleBtn.classList.remove("translate-active");
+    translateToggleBtn.title = "Auto-Translation: Disabled";
   }
 }
 
@@ -797,6 +817,20 @@ chimeBtn?.addEventListener("click", async () => {
     playBassyEndChime();
   }
   await window.electronIPC?.saveConfig({ audioChimesEnabled });
+});
+
+translateToggleBtn?.addEventListener("click", async () => {
+  translateEnabled = !translateEnabled;
+  updateTranslateBtnUI();
+  if (translateEnabled) {
+    playMechanicalClickSound();
+  }
+  await window.electronIPC?.saveConfig({ translateEnabled });
+});
+
+targetLanguageSelect?.addEventListener("change", async () => {
+  const selectedLang = targetLanguageSelect.value;
+  await window.electronIPC?.saveConfig({ targetLanguage: selectedLang });
 });
 
 clearHistoryBtn?.addEventListener("click", async () => {

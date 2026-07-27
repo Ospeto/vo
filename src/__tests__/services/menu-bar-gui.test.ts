@@ -245,12 +245,11 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       expect(getPresetPromptInstructions("code_comment")).toContain("SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION");
       expect(getPresetPromptInstructions("code_comment")).toContain("FAITHFUL TRANSLATION & ZERO IMPROVISATION");
       expect(getPresetPromptInstructions("code_comment")).toContain("SPOKEN IDENTIFIER FORMATTING");
-      expect(getPresetPromptInstructions("translate")).toContain("TRANSLATE TO ENGLISH");
       expect(getPresetPromptInstructions("fast")).toContain("GLOBAL NATURAL BILINGUAL DICTATION DIRECTIVE");
+      expect(getPresetPromptInstructions("careful")).toContain("CAREFUL DEEP PROOFREADING");
 
       expect(getPresetTemperature("fast")).toBe(0.0);
       expect(getPresetTemperature("code_comment")).toBe(0.0);
-      expect(getPresetTemperature("translate")).toBe(0.0);
       expect(getPresetTemperature("careful")).toBe(0.0);
     });
 

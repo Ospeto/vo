@@ -18,7 +18,7 @@ export interface KeyBinding {
 
 export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
 export type GeminiModelChoice = "gemini-3.1-flash-lite" | "gemini-2.5-flash";
-export type DictationPreset = "fast" | "careful" | "translate" | "code_comment";
+export type DictationPreset = "fast" | "careful" | "code_comment";
 export type DictationMode = "toggle" | "hold";
 export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
 
@@ -30,6 +30,8 @@ export interface PiVoiceConfig {
   inputGain: number;
   dictationPreset: DictationPreset;
   dictationMode: DictationMode;
+  translateEnabled: boolean;
+  targetLanguage: string;
   audioChimesEnabled: boolean;
   chimeSoundStart: ChimeSoundChoice;
   chimeSoundEnd: ChimeSoundChoice;
@@ -49,6 +51,8 @@ export interface PiVoiceConfigPatch {
   inputGain?: number;
   dictationPreset?: DictationPreset;
   dictationMode?: DictationMode;
+  translateEnabled?: boolean;
+  targetLanguage?: string;
   audioChimesEnabled?: boolean;
   chimeSoundStart?: ChimeSoundChoice;
   chimeSoundEnd?: ChimeSoundChoice;
@@ -270,6 +274,8 @@ function defaultConfig(): PiVoiceConfig {
     inputGain: DEFAULT_INPUT_GAIN,
     dictationPreset: DEFAULT_DICTATION_PRESET,
     dictationMode: DEFAULT_DICTATION_MODE,
+    translateEnabled: false,
+    targetLanguage: "English",
     audioChimesEnabled: DEFAULT_AUDIO_CHIMES_ENABLED,
     chimeSoundStart: "glass",
     chimeSoundEnd: "submarine",
@@ -304,8 +310,10 @@ const configFileSchema = z.object({
     .max(2.0)
     .optional()
     .default(DEFAULT_INPUT_GAIN),
-  dictationPreset: z.enum(["fast", "careful", "translate", "code_comment"]).optional().default(DEFAULT_DICTATION_PRESET),
+  dictationPreset: z.enum(["fast", "careful", "code_comment"]).optional().default(DEFAULT_DICTATION_PRESET),
   dictationMode: z.enum(["toggle", "hold"]).optional().default(DEFAULT_DICTATION_MODE),
+  translateEnabled: z.boolean().optional().default(false),
+  targetLanguage: z.string().optional().default("English"),
   audioChimesEnabled: z.boolean().optional().default(DEFAULT_AUDIO_CHIMES_ENABLED),
   chimeSoundStart: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional().default("glass"),
   chimeSoundEnd: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional().default("submarine"),
@@ -373,7 +381,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
 
   const persistedVocab = loadPersistedVocabulary();
@@ -384,7 +392,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   };
 
   logger.info(
-    { configPath, key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
+    { configPath, key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
     "Loaded config",
   );
 
@@ -396,6 +404,8 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     inputGain,
     dictationPreset,
     dictationMode,
+    translateEnabled,
+    targetLanguage,
     audioChimesEnabled,
     chimeSoundStart,
     chimeSoundEnd,
@@ -461,6 +471,8 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ...(patch.inputGain !== undefined ? { inputGain: Math.max(0.0, Math.min(2.0, patch.inputGain)) } : {}),
     ...(patch.dictationPreset !== undefined ? { dictationPreset: patch.dictationPreset } : {}),
     ...(patch.dictationMode !== undefined ? { dictationMode: patch.dictationMode } : {}),
+    ...(patch.translateEnabled !== undefined ? { translateEnabled: patch.translateEnabled } : {}),
+    ...(patch.targetLanguage !== undefined ? { targetLanguage: patch.targetLanguage } : {}),
     ...(patch.audioChimesEnabled !== undefined ? { audioChimesEnabled: patch.audioChimesEnabled } : {}),
     ...(patch.chimeSoundStart !== undefined ? { chimeSoundStart: patch.chimeSoundStart } : {}),
     ...(patch.chimeSoundEnd !== undefined ? { chimeSoundEnd: patch.chimeSoundEnd } : {}),
