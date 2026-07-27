@@ -181,54 +181,73 @@ function startWaveAnimationLoop() {
       return;
     }
 
-    wavePhase += 0.09;
-    smoothedAmp += (currentTargetAmp - smoothedAmp) * 0.16; // Silky smooth damping
+    // Snappy attack and decay damping
+    smoothedAmp += (currentTargetAmp - smoothedAmp) * 0.24;
 
     const width = spectrumCanvas.width;
     const height = spectrumCanvas.height;
     const centerY = height / 2;
     const maxAmp = height / 2 - 2;
-    const activeAmp = Math.max(3, (smoothedAmp / 100) * maxAmp);
+
+    const rawRatio = Math.max(0, smoothedAmp / 100);
+    // When silence or gain is zero, activeAmp is strictly ZERO (no unwanted movement)
+    const activeAmp = rawRatio < 0.02 ? 0 : Math.min(maxAmp, rawRatio * maxAmp * 1.4);
+
+    if (activeAmp > 0) {
+      wavePhase += 0.08 + rawRatio * 0.16; // Wave moves faster when voice level is higher!
+    }
 
     spectrumCtx.clearRect(0, 0, width, height);
 
-    // Layer 1: Background Ambient Glow Wave (Cyan translucent)
-    spectrumCtx.save();
-    spectrumCtx.beginPath();
-    for (let x = 0; x <= width; x += 3) {
-      const progress = x / width;
-      const envelope = Math.sin(progress * Math.PI);
-      const y = centerY + Math.sin(progress * Math.PI * 3 + wavePhase + 1.2) * activeAmp * 0.65 * envelope;
-      if (x === 0) spectrumCtx.moveTo(x, y);
-      else spectrumCtx.lineTo(x, y);
+    if (activeAmp > 0.05) {
+      // Layer 1: Background Soft Cyan Wave
+      spectrumCtx.save();
+      spectrumCtx.beginPath();
+      for (let x = 0; x <= width; x += 3) {
+        const progress = x / width;
+        const envelope = Math.sin(progress * Math.PI);
+        const y = centerY + Math.sin(progress * Math.PI * 3 + wavePhase + 1.2) * activeAmp * 0.6 * envelope;
+        if (x === 0) spectrumCtx.moveTo(x, y);
+        else spectrumCtx.lineTo(x, y);
+      }
+      spectrumCtx.strokeStyle = "rgba(147, 197, 253, 0.45)";
+      spectrumCtx.lineWidth = 1.5;
+      spectrumCtx.stroke();
+      spectrumCtx.restore();
+
+      // Layer 2: Foreground High-Definition Ribbon (Emerald & Blue Gradient)
+      spectrumCtx.save();
+      spectrumCtx.beginPath();
+      for (let x = 0; x <= width; x += 2) {
+        const progress = x / width;
+        const envelope = Math.sin(progress * Math.PI);
+        const y = centerY + Math.sin(progress * Math.PI * 4 + wavePhase) * activeAmp * envelope;
+        if (x === 0) spectrumCtx.moveTo(x, y);
+        else spectrumCtx.lineTo(x, y);
+      }
+
+      const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, "rgba(59, 130, 246, 0.95)");
+      gradient.addColorStop(0.5, "rgba(52, 211, 153, 1.0)");
+      gradient.addColorStop(1, "rgba(59, 130, 246, 0.95)");
+
+      spectrumCtx.strokeStyle = gradient;
+      spectrumCtx.lineWidth = Math.min(3.5, 1.8 + rawRatio * 2.2); // Dynamic line thickness
+      spectrumCtx.lineCap = "round";
+      spectrumCtx.lineJoin = "round";
+      spectrumCtx.stroke();
+      spectrumCtx.restore();
+    } else {
+      // Complete Silence / Mic Gain 0: Clean stationary baseline
+      spectrumCtx.save();
+      spectrumCtx.beginPath();
+      spectrumCtx.moveTo(0, centerY);
+      spectrumCtx.lineTo(width, centerY);
+      spectrumCtx.strokeStyle = "rgba(161, 161, 170, 0.22)";
+      spectrumCtx.lineWidth = 1;
+      spectrumCtx.stroke();
+      spectrumCtx.restore();
     }
-    spectrumCtx.strokeStyle = "rgba(147, 197, 253, 0.45)";
-    spectrumCtx.lineWidth = 1.5;
-    spectrumCtx.stroke();
-    spectrumCtx.restore();
-
-    // Layer 2: Primary Fluid Ribbon (Vibrant Emerald & Blue Gradient)
-    spectrumCtx.save();
-    spectrumCtx.beginPath();
-    for (let x = 0; x <= width; x += 2) {
-      const progress = x / width;
-      const envelope = Math.sin(progress * Math.PI);
-      const y = centerY + Math.sin(progress * Math.PI * 4 + wavePhase) * activeAmp * envelope;
-      if (x === 0) spectrumCtx.moveTo(x, y);
-      else spectrumCtx.lineTo(x, y);
-    }
-
-    const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, "rgba(59, 130, 246, 0.95)");
-    gradient.addColorStop(0.5, "rgba(52, 211, 153, 1.0)");
-    gradient.addColorStop(1, "rgba(59, 130, 246, 0.95)");
-
-    spectrumCtx.strokeStyle = gradient;
-    spectrumCtx.lineWidth = 2.5;
-    spectrumCtx.lineCap = "round";
-    spectrumCtx.lineJoin = "round";
-    spectrumCtx.stroke();
-    spectrumCtx.restore();
 
     animationFrameId = requestAnimationFrame(renderWave);
   }
