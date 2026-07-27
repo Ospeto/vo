@@ -169,42 +169,45 @@ function playBassyEndChime() {
 
 function drawSpectrumFromData(freqData: number[]) {
   if (!spectrumCanvas || !spectrumCtx) return;
-  spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+  const width = spectrumCanvas.width;
+  const height = spectrumCanvas.height;
+  const centerY = height / 2;
 
-  const barCount = 20;
-  const gap = 3;
-  const barWidth = Math.max(2, Math.floor((spectrumCanvas.width - (barCount + 1) * gap) / barCount));
-  const centerY = spectrumCanvas.height / 2;
-  const maxHeight = spectrumCanvas.height - 6;
+  spectrumCtx.clearRect(0, 0, width, height);
 
-  const step = Math.floor(freqData.length / barCount) || 1;
+  spectrumCtx.save();
+  spectrumCtx.beginPath();
 
-  for (let i = 0; i < barCount; i++) {
-    const rawVal = freqData[i * step] || 0;
-    const barHeight = Math.max(3, Math.round((rawVal / 255) * maxHeight));
-    const x = gap + i * (barWidth + gap);
-    const y = centerY - barHeight / 2;
+  const points = Math.min(freqData.length, 28);
+  const sliceWidth = width / Math.max(1, points - 1);
 
-    // Clean minimal gray monochrome gradient
-    const gradient = spectrumCtx.createLinearGradient(0, y, 0, y + barHeight);
-    gradient.addColorStop(0, "rgba(228, 228, 231, 0.85)");
-    gradient.addColorStop(0.5, "rgba(161, 161, 170, 0.65)");
-    gradient.addColorStop(1, "rgba(228, 228, 231, 0.85)");
+  for (let i = 0; i < points; i++) {
+    const raw = freqData[i] || 0;
+    const amp = Math.max(2, (raw / 255) * (height / 2 - 2));
+    const x = i * sliceWidth;
+    const y = centerY + (i % 2 === 0 ? -amp : amp);
 
-    spectrumCtx.save();
-    spectrumCtx.fillStyle = gradient;
-
-    // Draw minimal rounded center-aligned waveform bar
-    if (typeof (spectrumCtx as any).roundRect === "function") {
-      spectrumCtx.beginPath();
-      (spectrumCtx as any).roundRect(x, y, barWidth, barHeight, Math.min(2, barWidth / 2));
-      spectrumCtx.fill();
+    if (i === 0) {
+      spectrumCtx.moveTo(x, centerY);
+      spectrumCtx.lineTo(x, y);
     } else {
-      spectrumCtx.fillRect(x, y, barWidth, barHeight);
+      const prevX = (i - 1) * sliceWidth;
+      const cpX = (prevX + x) / 2;
+      spectrumCtx.quadraticCurveTo(cpX, y, x, y);
     }
-
-    spectrumCtx.restore();
   }
+
+  const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
+  gradient.addColorStop(0, "rgba(59, 130, 246, 0.85)");
+  gradient.addColorStop(0.5, "rgba(52, 211, 153, 0.95)");
+  gradient.addColorStop(1, "rgba(59, 130, 246, 0.85)");
+
+  spectrumCtx.strokeStyle = gradient;
+  spectrumCtx.lineWidth = 2.2;
+  spectrumCtx.lineCap = "round";
+  spectrumCtx.lineJoin = "round";
+  spectrumCtx.stroke();
+  spectrumCtx.restore();
 }
 
 function stopSpectrumVisualizer() {
@@ -471,11 +474,27 @@ async function renderHistory() {
   const history: HistoryEntry[] = (await window.electronIPC?.getHistory()) || [];
 
   let totalCost = 0;
+  let totalSavedSec = 0;
   history.forEach((item: any) => {
     totalCost += item.cost || 0;
+    totalSavedSec += (item.audioDurationSec || 5) * 3;
   });
+
+  const statDictationsCount = document.getElementById("statDictationsCount");
+  const statSavedTime = document.getElementById("statSavedTime");
+  const statFreeQuota = document.getElementById("statFreeQuota");
+
   if (monthlyCostBadge) {
     monthlyCostBadge.textContent = `Month: $${totalCost.toFixed(5)}`;
+  }
+  if (statDictationsCount) statDictationsCount.textContent = `${history.length}`;
+  if (statSavedTime) {
+    const mins = Math.max(1, Math.round(totalSavedSec / 60));
+    statSavedTime.textContent = `~${mins}m`;
+  }
+  if (statFreeQuota) {
+    const remaining = Math.max(0, 1500 - history.length);
+    statFreeQuota.textContent = `${remaining}/1500`;
   }
 
   if (history.length === 0) {
@@ -551,6 +570,13 @@ window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spect
 
 function updateStatusBadge(state: AppState, message?: string) {
   if (!statusDot || !statusLabel) return;
+
+  const containerEl = document.querySelector(".container");
+  if (state === "recording" || state === "starting") {
+    containerEl?.classList.add("recording-pulse");
+  } else {
+    containerEl?.classList.remove("recording-pulse");
+  }
 
   switch (state) {
     case "idle":
@@ -646,6 +672,22 @@ configBtn?.addEventListener("click", () => {
     renderPersonNames();
     renderVocabTags();
   }
+});
+
+document.querySelectorAll(".modal-tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const targetTab = btn.getAttribute("data-tab");
+    document.querySelectorAll(".modal-tab-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    document.querySelectorAll(".tab-pane").forEach((pane) => {
+      if (pane.id === targetTab) {
+        pane.classList.remove("hidden");
+      } else {
+        pane.classList.add("hidden");
+      }
+    });
+  });
 });
 
 addPersonNameBtn?.addEventListener("click", () => {

@@ -42,9 +42,15 @@ html, body {
   background: var(--bg-translucent);
   backdrop-filter: blur(50px) saturate(210%);
   -webkit-backdrop-filter: blur(50px) saturate(210%);
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(59, 130, 246, 0.22);
   border-radius: var(--corner-radius);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.container.recording-pulse {
+  border-color: rgba(244, 63, 94, 0.55);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55), 0 0 28px rgba(244, 63, 94, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 /* Header */
@@ -533,6 +539,83 @@ footer {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Modal Tabs Navigation Header */
+.modal-tabs-bar {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4px 8px;
+  gap: 4px;
+}
+
+.modal-tab-btn {
+  flex: 1;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.modal-tab-btn.active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tab-pane.hidden {
+  display: none !important;
+}
+
+/* Quick Usage & Quota Stats Bar */
+.stats-bar-container {
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.stat-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-value {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #f4f4f5;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.stat-label {
+  font-size: 8.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 1px;
 }
 
 .close-btn {
