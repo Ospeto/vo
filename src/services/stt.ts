@@ -62,6 +62,8 @@ export function prewarmGeminiClient(): void {
     if (client) {
       logger.info("Pre-warmed Gemini client connection successfully");
     }
+    loadUserDictionary();
+    getActiveAppName();
   } catch (err) {
     logger.warn({ err: String(err) }, "Failed to pre-warm Gemini client connection");
   }
@@ -583,14 +585,14 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       let fastestPromise: Promise<{ text: string; usedPaidKey: boolean }>;
 
       if (fallbackClient) {
-        // Speculative Parallel Fallback: If Primary Key takes > 3500ms or fails, launch Paid Fallback Key
+        // Speculative Parallel Fallback: If Primary Key takes > 2000ms or fails, launch Paid Fallback Key
         const primaryDelayTimer = new Promise<never>((_, reject) => {
-          const t = setTimeout(() => reject(new Error("Primary Key delay > 3500ms")), 3500);
+          const t = setTimeout(() => reject(new Error("Primary Key delay > 2000ms")), 2000);
           if (t && typeof t === "object" && "unref" in t) (t as any).unref();
         });
 
         const speculativeFallback = Promise.race([primaryPromise, primaryDelayTimer]).catch(async () => {
-          logger.info({ model }, "Primary API Key took >2500ms or errored; triggering Parallel Paid Fallback Key");
+          logger.info({ model }, "Primary API Key took >2000ms or errored; triggering Parallel Paid Fallback Key");
           const fbResponse = await fallbackClient.models.generateContent({
             model,
             contents: [
