@@ -18,7 +18,7 @@ export interface KeyBinding {
 
 export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
 export type GeminiModelChoice = "gemini-3.1-flash-lite" | "gemini-2.5-flash";
-export type DictationPreset = "fast" | "code_comment" | "email_polish" | "burmese_written" | "translate_en" | "auto";
+export type DictationPreset = "fast" | "careful" | "code_comment" | "email_polish" | "burmese_written" | "translate_en" | "auto";
 export type DictationMode = "toggle" | "hold";
 export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
 
@@ -277,7 +277,7 @@ const configFileSchema = z.object({
     .max(2.0)
     .optional()
     .default(DEFAULT_INPUT_GAIN),
-  dictationPreset: z.enum(["fast", "code_comment", "email_polish", "burmese_written", "translate_en", "auto"]).optional().default(DEFAULT_DICTATION_PRESET),
+  dictationPreset: z.enum(["fast", "careful", "code_comment", "email_polish", "burmese_written", "translate_en", "auto"]).optional().default(DEFAULT_DICTATION_PRESET),
   dictationMode: z.enum(["toggle", "hold"]).optional().default(DEFAULT_DICTATION_MODE),
   audioChimesEnabled: z.boolean().optional().default(DEFAULT_AUDIO_CHIMES_ENABLED),
   chimeSoundStart: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional().default("glass"),

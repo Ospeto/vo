@@ -213,4 +213,13 @@ describe("transcribe", () => {
     expect(sanitizeTranscribedText("အာ... Database connection အကြောင်း အဆင်ပြေအောင် လုပ်ပေး")).toBe("Database connection အကြောင်း အဆင်ပြေအောင် လုပ်ပေး");
     expect(sanitizeTranscribedText("ဟာ... အလုပ် အဆင်ပြေလား အင်း")).toBe("အလုပ် အဆင်ပြေလား");
   });
+
+  test("returns careful proofreading prompt instructions and includes 3.6-flash in fallback chain", async () => {
+    const { getPresetPromptInstructions, getFallbackModelChain } = await import("../../services/stt.js");
+    const instructions = getPresetPromptInstructions("careful");
+    expect(instructions).toContain("CAREFUL DEEP PROOFREADING");
+    
+    const fallbackChain = getFallbackModelChain("gemini-3.1-flash-lite", "careful");
+    expect(fallbackChain).toContain("gemini-3.6-flash");
+  });
 });

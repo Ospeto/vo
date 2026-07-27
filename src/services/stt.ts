@@ -255,6 +255,13 @@ CORE DIRECTIVES:
       return `${GLOBAL_BILINGUAL_DIRECTIVE}\n\nPreset Mode: BURMESE WRITTEN. Format spoken Burmese into formal, polished Burmese literary/written prose (မြန်မာစာအရေးအသား) while preserving English technical terms and code identifiers in pure English.`;
     case "translate_en":
       return "\nPreset Mode: TRANSLATE TO ENGLISH. Hear the spoken Burmese audio and directly output its accurate, fluent, natural English translation. Output ONLY the English text without any Burmese script, intros, or wrapping quotes.";
+    case "careful":
+      return `
+${GLOBAL_BILINGUAL_DIRECTIVE}
+
+Preset Mode: CAREFUL DEEP PROOFREADING & SEMANTIC REASONING.
+Analyze the spoken audio meticulously. Perform deep proofreading to correct phonetically garbled words, homophones, awkward phrasing, and speech slips. Format the output into highly coherent, grammatically flawless, natural text while strictly preserving 100% of the speaker's core intent, meaning, and technical terminology. Output ONLY the proofread final text.
+`.trim();
     case "fast":
     case "auto":
     default:
@@ -415,8 +422,8 @@ export function getFallbackModelChain(
   effectivePreset?: DictationPreset
 ): string[] {
   let fallbackCandidates: string[];
-  if (effectivePreset === "code_comment") {
-    // For code preset: try preferred, then 3.6-flash, 3.1-flash-lite, 3.5-flash-lite, 2.5-flash, 2.5-pro
+  if (effectivePreset === "code_comment" || effectivePreset === "careful") {
+    // For code & careful presets: try 3.6-flash, 3.1-flash-lite, 3.5-flash-lite, 2.5-flash, 2.5-pro
     fallbackCandidates = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
   } else {
     // For general presets: default fallback is 3.1-flash-lite / 3.5-flash-lite (exclude expensive 3.6-flash)
