@@ -3,7 +3,7 @@ import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 import type { SpeechProvider, GeminiModelChoice, DictationPreset } from "./config.js";
 import { getGeminiClient } from "./gemini-client.js";
 import { scanWorkspaceSymbols } from "./symbol-scanner.js";
@@ -69,12 +69,40 @@ export function prewarmGeminiClient(): void {
 
 let cachedActiveAppName = "Unknown";
 let lastActiveAppTime = 0;
+let isRefreshingApp = false;
+
+function refreshActiveAppNameAsync(): void {
+  if (isRefreshingApp) return;
+  isRefreshingApp = true;
+  try {
+    exec(
+      `osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'`,
+      { encoding: "utf-8", timeout: 600 },
+      (err, stdout) => {
+        isRefreshingApp = false;
+        if (!err && stdout) {
+          const appName = stdout.trim();
+          if (appName) {
+            cachedActiveAppName = appName;
+            lastActiveAppTime = Date.now();
+          }
+        }
+      }
+    );
+  } catch {
+    isRefreshingApp = false;
+  }
+}
 
 export function getActiveAppName(): string {
   const now = Date.now();
-  if (cachedActiveAppName !== "Unknown" && now - lastActiveAppTime < 1500) {
+  if (cachedActiveAppName !== "Unknown") {
+    if (now - lastActiveAppTime > 3000) {
+      refreshActiveAppNameAsync();
+    }
     return cachedActiveAppName;
   }
+
   try {
     const appName = execSync(
       `osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'`,

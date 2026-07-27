@@ -25,10 +25,17 @@ export function scanWorkspaceSymbols(workspacePath: string, maxFiles = 40): Symb
   }
 
   const cached = cache.get(workspacePath);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+  if (cached) {
+    if (Date.now() - cached.timestamp >= CACHE_TTL_MS) {
+      setTimeout(() => performWorkspaceScan(workspacePath, maxFiles), 0);
+    }
     return cached.data;
   }
 
+  return performWorkspaceScan(workspacePath, maxFiles);
+}
+
+function performWorkspaceScan(workspacePath: string, maxFiles = 40): SymbolScanResult {
   const workspaceName = basename(workspacePath);
   const symbols = new Set<string>();
   const fileNames = new Set<string>();
