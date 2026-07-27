@@ -274,7 +274,7 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       expect(resolveEffectivePreset("auto", "Slack")).toBe("email_polish");
       expect(resolveEffectivePreset("auto", "Mail")).toBe("email_polish");
       expect(resolveEffectivePreset("auto", "Obsidian")).toBe("burmese_written");
-      expect(resolveEffectivePreset("auto", "Calculator")).toBe("fast");
+      expect(resolveEffectivePreset("auto", "Calculator")).toBe("careful");
       expect(resolveEffectivePreset("fast", "Cursor")).toBe("fast");
     });
 

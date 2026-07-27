@@ -178,11 +178,24 @@ export function getAppContextPromptHint(appName: string): string {
   return `Active Window: ${appName}`;
 }
 
-export function resolveEffectivePreset(preset?: DictationPreset, appName?: string): DictationPreset {
-  if (preset !== "auto") return preset ?? "fast";
-  if (!appName) return "fast";
+export function resolveEffectivePreset(
+  preset?: DictationPreset,
+  appName?: string,
+  customMappings?: Record<string, DictationPreset>
+): DictationPreset {
+  if (preset !== "auto") return preset ?? "careful";
+  if (!appName) return "careful";
 
   const lower = appName.toLowerCase();
+
+  if (customMappings) {
+    for (const [key, mappedPreset] of Object.entries(customMappings)) {
+      if (lower.includes(key.toLowerCase())) {
+        return mappedPreset;
+      }
+    }
+  }
+
   if (
     lower.includes("code") ||
     lower.includes("cursor") ||
@@ -219,7 +232,7 @@ export function resolveEffectivePreset(preset?: DictationPreset, appName?: strin
     return "burmese_written";
   }
 
-  return "fast";
+  return "careful";
 }
 
 const GLOBAL_BILINGUAL_DIRECTIVE = `
@@ -449,7 +462,13 @@ async function transcribeGemini(
   const activeApp = getActiveAppName();
   const appContextHint = getAppContextPromptHint(activeApp);
 
-  const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp);
+  let appMappings: Record<string, DictationPreset> | undefined;
+  try {
+    const { loadConfig } = await import("./config.js");
+    appMappings = loadConfig().appPresetMappings;
+  } catch {}
+
+  const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp, appMappings);
   const presetHint = getPresetPromptInstructions(effectivePreset);
   const targetTemperature = getPresetTemperature(effectivePreset);
 

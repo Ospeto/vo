@@ -232,6 +232,32 @@
           </div>
         </div>
 
+        <!-- Smart Auto App Rules Section (Collapsible Drawer) -->
+        <details class="modal-section-group app-rules-drawer">
+          <summary class="section-label" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-weight: 600;">
+            <span>🧠 Smart Auto App Rules</span>
+            <span id="appRulesCountBadge" class="cost-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa;">Configured</span>
+          </summary>
+          <div style="margin-top: 10px; font-size: 10.5px; color: #a1a1aa;">
+            Automatically switch dictation presets when specific macOS apps are active in Smart Auto mode.
+          </div>
+          <div id="appRulesContainer" class="app-rules-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto;">
+            <!-- Rendered dynamically -->
+          </div>
+          <div class="add-rule-row" style="display: flex; gap: 6px; margin-top: 10px;">
+            <input type="text" id="newAppNameInput" placeholder="App Name (e.g. Xcode)" class="chime-select" style="flex: 1; font-size: 11px; padding: 4px 8px;" aria-label="New App Name">
+            <select id="newAppPresetSelect" class="chime-select" style="width: 110px; font-size: 11px; padding: 4px;" aria-label="Target Preset">
+              <option value="careful">Careful</option>
+              <option value="code_comment">Code</option>
+              <option value="email_polish">Email</option>
+              <option value="burmese_written">Burmese</option>
+              <option value="translate_en">Translate</option>
+              <option value="fast">Fast</option>
+            </select>
+            <button id="addAppRuleBtn" class="action-btn-sm" style="font-size: 11px; padding: 4px 10px;">Add</button>
+          </div>
+        </details>
+
         <hr class="modal-divider">
 
         <!-- Dynamic Workspace Symbol Scanner Toggle Section -->

@@ -222,4 +222,13 @@ describe("transcribe", () => {
     const fallbackChain = getFallbackModelChain("gemini-3.1-flash-lite", "careful");
     expect(fallbackChain).toContain("gemini-3.6-flash");
   });
+
+  test("resolves custom appPresetMappings in resolveEffectivePreset", async () => {
+    const { resolveEffectivePreset } = await import("../../services/stt.js");
+    const customMappings = { xcode: "code_comment" as const, discord: "email_polish" as const };
+    
+    expect(resolveEffectivePreset("auto", "Xcode", customMappings)).toBe("code_comment");
+    expect(resolveEffectivePreset("auto", "Discord", customMappings)).toBe("email_polish");
+    expect(resolveEffectivePreset("auto", "UnknownApp", customMappings)).toBe("careful");
+  });
 });

@@ -36,6 +36,7 @@ export interface PiVoiceConfig {
   symbolScannerEnabled: boolean;
   customVocabulary: string[];
   presetVocabulary: Partial<Record<DictationPreset, string[]>>;
+  appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
   audioDeviceId?: string;
 }
@@ -53,6 +54,7 @@ export interface PiVoiceConfigPatch {
   symbolScannerEnabled?: boolean;
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
+  appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
   audioDeviceId?: string;
 }
@@ -234,6 +236,28 @@ const DEFAULT_DICTATION_PRESET: DictationPreset = "careful";
 const DEFAULT_DICTATION_MODE: DictationMode = "toggle";
 const DEFAULT_AUDIO_CHIMES_ENABLED = true;
 
+export const DEFAULT_APP_PRESET_MAPPINGS: Record<string, DictationPreset> = {
+  code: "code_comment",
+  cursor: "code_comment",
+  terminal: "code_comment",
+  warp: "code_comment",
+  iterm: "code_comment",
+  ghostty: "code_comment",
+  zed: "code_comment",
+  sublime: "code_comment",
+  slack: "email_polish",
+  mail: "email_polish",
+  outlook: "email_polish",
+  telegram: "email_polish",
+  teams: "email_polish",
+  messages: "email_polish",
+  obsidian: "burmese_written",
+  notion: "burmese_written",
+  bear: "burmese_written",
+  pages: "burmese_written",
+  word: "burmese_written",
+};
+
 function defaultConfig(): PiVoiceConfig {
   const binding = parseKeyBinding(DEFAULT_KEY_STRING);
   return {
@@ -250,6 +274,7 @@ function defaultConfig(): PiVoiceConfig {
     symbolScannerEnabled: true,
     customVocabulary: [],
     presetVocabulary: {},
+    appPresetMappings: DEFAULT_APP_PRESET_MAPPINGS,
   };
 }
 
@@ -285,6 +310,7 @@ const configFileSchema = z.object({
   symbolScannerEnabled: z.boolean().optional().default(true),
   customVocabulary: z.array(z.string()).optional().default([]),
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
+  appPresetMappings: z.record(z.string(), z.string()).optional().default(DEFAULT_APP_PRESET_MAPPINGS),
   geminiApiKey: z.string().optional(),
   audioDeviceId: z.string().optional(),
 });
@@ -344,7 +370,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, geminiApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
 
   const persistedVocab = loadPersistedVocabulary();
@@ -373,6 +399,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     symbolScannerEnabled,
     customVocabulary: mergedCustomVocab,
     presetVocabulary: mergedPresetVocab,
+    appPresetMappings: (appPresetMappings || DEFAULT_APP_PRESET_MAPPINGS) as Record<string, DictationPreset>,
     geminiApiKey,
     audioDeviceId,
   };
@@ -416,6 +443,11 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     presetVocabulary: mergedPresetVocab,
   });
 
+  const existingAppMappings = (existingJson.appPresetMappings as Record<string, DictationPreset>) || DEFAULT_APP_PRESET_MAPPINGS;
+  const mergedAppMappings = patch.appPresetMappings !== undefined
+    ? patch.appPresetMappings
+    : existingAppMappings;
+
   // Preserve unrelated keys while merging patch
   const mergedJson = {
     ...existingJson,
@@ -431,6 +463,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ...(patch.symbolScannerEnabled !== undefined ? { symbolScannerEnabled: patch.symbolScannerEnabled } : {}),
     customVocabulary: finalCustomVocab,
     presetVocabulary: mergedPresetVocab,
+    appPresetMappings: mergedAppMappings,
     ...(patch.geminiApiKey !== undefined ? { geminiApiKey: patch.geminiApiKey.trim() } : {}),
     ...(patch.audioDeviceId !== undefined ? { audioDeviceId: patch.audioDeviceId.trim() } : {}),
   };

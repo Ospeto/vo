@@ -38,6 +38,14 @@ const symbolScannerToggle = document.getElementById("symbolScannerToggle") as HT
 const settingModelSelect = document.getElementById("settingModelSelect") as HTMLSelectElement;
 const micDeviceSelect = document.getElementById("micDeviceSelect") as HTMLSelectElement;
 
+const appRulesContainer = document.getElementById("appRulesContainer") as HTMLElement;
+const appRulesCountBadge = document.getElementById("appRulesCountBadge") as HTMLElement;
+const newAppNameInput = document.getElementById("newAppNameInput") as HTMLInputElement;
+const newAppPresetSelect = document.getElementById("newAppPresetSelect") as HTMLSelectElement;
+const addAppRuleBtn = document.getElementById("addAppRuleBtn") as HTMLButtonElement;
+
+let currentAppMappings: Record<string, string> = {};
+
 const spectrumCanvas = document.getElementById("spectrumCanvas") as HTMLCanvasElement | null;
 const spectrumCtx = spectrumCanvas?.getContext("2d");
 
@@ -212,6 +220,9 @@ async function initUI() {
     if (config.presetVocabulary) {
       currentPresetVocabMap = config.presetVocabulary as Record<string, string[]>;
     }
+    if ((config as any).appPresetMappings) {
+      currentAppMappings = { ...(config as any).appPresetMappings };
+    }
     if (geminiApiKeyInput && (config as any).geminiApiKey) {
       geminiApiKeyInput.value = (config as any).geminiApiKey;
     }
@@ -228,11 +239,25 @@ async function initUI() {
       settingModelSelect.value = config.geminiModel;
     }
     await populateAudioDevices((config as any).audioDeviceId);
+    renderAppRules();
   }
 
   if (micDeviceSelect) {
     micDeviceSelect.addEventListener("change", async () => {
       await window.electronIPC?.saveConfig({ audioDeviceId: micDeviceSelect.value });
+    });
+  }
+
+  if (addAppRuleBtn) {
+    addAppRuleBtn.addEventListener("click", async () => {
+      const name = newAppNameInput?.value.trim().toLowerCase();
+      const preset = newAppPresetSelect?.value;
+      if (name && preset) {
+        currentAppMappings[name] = preset;
+        if (newAppNameInput) newAppNameInput.value = "";
+        renderAppRules();
+        await window.electronIPC?.saveConfig({ appPresetMappings: currentAppMappings });
+      }
     });
   }
 
@@ -243,6 +268,71 @@ async function initUI() {
 
   await renderHistory();
   renderVocabTags();
+}
+
+function renderAppRules() {
+  if (!appRulesContainer) return;
+  appRulesContainer.innerHTML = "";
+
+  const keys = Object.keys(currentAppMappings);
+  if (appRulesCountBadge) {
+    appRulesCountBadge.textContent = `${keys.length} Rules`;
+  }
+
+  if (keys.length === 0) {
+    appRulesContainer.innerHTML = `<span style="font-size: 10.5px; color: #71717a;">No app rules configured.</span>`;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  keys.forEach((appName) => {
+    const mappedPreset = currentAppMappings[appName];
+    const row = document.createElement("div");
+    row.style.cssText = "display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.04); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px;";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.style.cssText = "font-weight: 500; color: #e4e4e7;";
+    nameSpan.textContent = appName;
+
+    const rightGroup = document.createElement("div");
+    rightGroup.style.cssText = "display: flex; align-items: center; gap: 6px;";
+
+    const select = document.createElement("select");
+    select.className = "chime-select";
+    select.style.cssText = "font-size: 10px; padding: 2px 4px;";
+    select.innerHTML = `
+      <option value="careful" ${mappedPreset === "careful" ? "selected" : ""}>Careful</option>
+      <option value="code_comment" ${mappedPreset === "code_comment" ? "selected" : ""}>Code</option>
+      <option value="email_polish" ${mappedPreset === "email_polish" ? "selected" : ""}>Email</option>
+      <option value="burmese_written" ${mappedPreset === "burmese_written" ? "selected" : ""}>Burmese</option>
+      <option value="translate_en" ${mappedPreset === "translate_en" ? "selected" : ""}>Translate</option>
+      <option value="fast" ${mappedPreset === "fast" ? "selected" : ""}>Fast</option>
+    `;
+
+    select.addEventListener("change", async () => {
+      currentAppMappings[appName] = select.value as any;
+      await window.electronIPC?.saveConfig({ appPresetMappings: currentAppMappings });
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "link-btn-danger";
+    delBtn.style.cssText = "font-size: 10px; padding: 2px;";
+    delBtn.textContent = "✕";
+    delBtn.title = "Delete Rule";
+    delBtn.addEventListener("click", async () => {
+      delete currentAppMappings[appName];
+      renderAppRules();
+      await window.electronIPC?.saveConfig({ appPresetMappings: currentAppMappings });
+    });
+
+    rightGroup.appendChild(select);
+    rightGroup.appendChild(delBtn);
+    row.appendChild(nameSpan);
+    row.appendChild(rightGroup);
+    fragment.appendChild(row);
+  });
+
+  appRulesContainer.appendChild(fragment);
 }
 
 function updateChimeBtnUI() {
