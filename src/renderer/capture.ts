@@ -18,13 +18,15 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
     // Explicitly disable autoGainControl for predictable manual user gain control
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
+        sampleRate: 16000,
+        channelCount: 1,
         autoGainControl: false,
         echoCancellation: true,
         noiseSuppression: true,
       },
     });
 
-    audioCtx = new AudioContext();
+    audioCtx = new AudioContext({ sampleRate: 16000 });
     if (audioCtx.state === "suspended") {
       await audioCtx.resume();
     }
@@ -51,9 +53,10 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
     gainNode.connect(compressorNode);
     compressorNode.connect(destination);
 
-    // Setup MediaRecorder using processed destination stream
+    // Setup MediaRecorder using 24kbps Opus speech-compressed destination stream
     mediaRecorder = new MediaRecorder(destination.stream, {
       mimeType: "audio/webm;codecs=opus",
+      audioBitsPerSecond: 24000,
     });
 
     mediaRecorder.ondataavailable = (event) => {
