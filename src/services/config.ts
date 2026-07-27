@@ -230,7 +230,7 @@ const DEFAULT_KEY_STRING = "ctrl+cmd+option+v";
 const DEFAULT_PROVIDER: SpeechProvider = "gemini";
 const DEFAULT_GEMINI_MODEL: GeminiModelChoice = "gemini-3.1-flash-lite";
 const DEFAULT_INPUT_GAIN = 1.0;
-const DEFAULT_DICTATION_PRESET: DictationPreset = "auto";
+const DEFAULT_DICTATION_PRESET: DictationPreset = "careful";
 const DEFAULT_DICTATION_MODE: DictationMode = "toggle";
 const DEFAULT_AUDIO_CHIMES_ENABLED = true;
 
