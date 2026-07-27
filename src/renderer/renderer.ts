@@ -35,6 +35,7 @@ const chimeEndSelect = document.getElementById("chimeEndSelect") as HTMLSelectEl
 const previewStartChimeBtn = document.getElementById("previewStartChimeBtn") as HTMLButtonElement;
 const previewEndChimeBtn = document.getElementById("previewEndChimeBtn") as HTMLButtonElement;
 const symbolScannerToggle = document.getElementById("symbolScannerToggle") as HTMLInputElement;
+const settingModelSelect = document.getElementById("settingModelSelect") as HTMLSelectElement;
 
 const spectrumCanvas = document.getElementById("spectrumCanvas") as HTMLCanvasElement | null;
 const spectrumCtx = spectrumCanvas?.getContext("2d");
@@ -192,6 +193,9 @@ async function initUI() {
     }
     if (symbolScannerToggle && (config as any).symbolScannerEnabled !== undefined) {
       symbolScannerToggle.checked = (config as any).symbolScannerEnabled;
+    }
+    if (settingModelSelect && config.geminiModel) {
+      settingModelSelect.value = config.geminiModel;
     }
   }
 
@@ -407,6 +411,13 @@ gainSlider?.addEventListener("change", async () => {
 
 modelSelect?.addEventListener("change", async () => {
   const selectedModel = modelSelect.value as GeminiModelChoice;
+  if (settingModelSelect) settingModelSelect.value = selectedModel;
+  await window.electronIPC?.saveConfig({ geminiModel: selectedModel });
+});
+
+settingModelSelect?.addEventListener("change", async () => {
+  const selectedModel = settingModelSelect.value as GeminiModelChoice;
+  if (modelSelect) modelSelect.value = selectedModel;
   await window.electronIPC?.saveConfig({ geminiModel: selectedModel });
 });
 

@@ -63,9 +63,9 @@
         <select id="modelSelect" aria-label="Gemini Model">
           <option value="gemini-3.6-flash">3.6 Flash</option>
           <option value="gemini-3.5-flash-lite">3.5 Flash Lite</option>
-          <option value="gemini-3.1-flash-lite">3.1 Flash</option>
+          <option value="gemini-3.1-flash-lite" selected>3.1 Flash Lite (Default)</option>
           <option value="gemini-2.5-flash">2.5 Flash</option>
-          <option value="gemini-2.5-pro">2.5 Pro (Highest Accuracy)</option>
+          <option value="gemini-2.5-pro">2.5 Pro</option>
         </select>
       </div>
     </div>
@@ -144,6 +144,26 @@
             <button id="saveApiKeyBtn" class="action-btn-sm">Save</button>
           </div>
           <span id="apiKeyFeedback" class="feedback-msg"></span>
+        <hr class="modal-divider">
+
+        <!-- Default Gemini Model Section -->
+        <div class="modal-section-group">
+          <label class="section-label" for="settingModelSelect">Default Gemini Model</label>
+          <div class="chime-card-row">
+            <div class="chime-card-header">
+              <span class="chime-step-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">AI Model</span>
+              <span class="chime-step-title">Default Speech Engine</span>
+            </div>
+            <div class="chime-card-controls">
+              <select id="settingModelSelect" class="chime-select" aria-label="Default Gemini Model">
+                <option value="gemini-3.1-flash-lite">3.1 Flash Lite (Default)</option>
+                <option value="gemini-3.5-flash-lite">3.5 Flash Lite</option>
+                <option value="gemini-3.6-flash">3.6 Flash</option>
+                <option value="gemini-2.5-flash">2.5 Flash</option>
+                <option value="gemini-2.5-pro">2.5 Pro (Highest Accuracy)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <hr class="modal-divider">
