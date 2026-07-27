@@ -350,6 +350,15 @@ input[type="range"] {
   background: rgba(16, 185, 129, 0.25);
   border-color: rgba(16, 185, 129, 0.45);
   color: #34d399;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.translate-icon {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s ease;
+}
+
+.icon-toggle:hover .translate-icon {
+  transform: scale(1.12);
 }
 
 .icon-toggle:hover {
