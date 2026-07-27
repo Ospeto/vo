@@ -58,8 +58,8 @@ export async function captureActiveSelection(timeoutMs = 350): Promise<Selection
 
     // Wait 120ms for physical hotkey modifier keys (Control/Option) to be released by user hand
     setTimeout(() => {
-      // Trigger explicit key code 8 (c) using command down
-      exec(`osascript -e 'tell application "System Events" to key code 8 using {command down}'`, (err) => {
+      // Trigger explicit key code 8 (c) using command down on the active frontmost process
+      exec(`osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to key code 8 using {command down}'`, (err) => {
         if (resolved) return;
 
         if (err) {

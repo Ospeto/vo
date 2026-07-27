@@ -205,7 +205,7 @@ function pasteTextToFocusedField(text: string) {
     const hasNativePaste = existsSync(nativePasteBin);
     const pasteCmd = hasNativePaste
       ? `"${nativePasteBin}"`
-      : `osascript -e 'tell application "System Events" to key code 9 using command down'`;
+      : `osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to key code 9 using {command down}'`;
 
     exec(pasteCmd, (err) => {
       setTimeout(() => {
@@ -334,6 +334,7 @@ function createCaptureWindow() {
     width: 200,
     height: 200,
     show: false,
+    focusable: false,
     skipTaskbar: true,
     webPreferences: {
       preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
