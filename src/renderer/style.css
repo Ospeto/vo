@@ -522,11 +522,12 @@ footer {
 }
 
 .modal-body {
-  padding: 12px 14px;
+  padding: 12px 14px 36px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
+  flex: 1;
 }
 
 .modal-body::-webkit-scrollbar {

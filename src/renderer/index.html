@@ -295,22 +295,40 @@
 
         <hr class="modal-divider">
 
+        <!-- Dedicated Person Names Dictionary Card -->
+        <div class="modal-section-group" style="border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <label class="section-label" style="margin-bottom: 0; color: #60a5fa;">👤 Person Names Dictionary (လူနာမည်များ)</label>
+            <span id="personNamesCountBadge" class="cost-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa;">0 Names</span>
+          </div>
+          <div class="vocab-input-row">
+            <input type="text" id="personNameInput" placeholder="Add name (e.g. Aung Aung, Kaung Myat)..." aria-label="Add person name">
+            <button id="addPersonNameBtn" class="action-btn-sm action-btn-blue">+ Add Name</button>
+          </div>
+          <div id="personNamesContainer" class="vocab-tags" style="margin-top: 6px; max-height: 100px; overflow-y: auto;"></div>
+        </div>
+
+        <hr class="modal-divider">
+
         <!-- Preset Mode Vocabulary Section -->
-        <div class="field-group">
-          <label for="modalPresetSelect">Preset Mode Vocabulary</label>
-          <select id="modalPresetSelect" aria-label="Preset Vocabulary Mode">
-            <option value="code_comment">Code</option>
-            <option value="email_polish">Email</option>
-            <option value="burmese_written">Burmese</option>
-            <option value="translate_en">Translate (EN)</option>
-            <option value="fast">Fast</option>
-          </select>
+        <div class="modal-section-group">
+          <div class="field-group">
+            <label for="modalPresetSelect" class="section-label">Preset Mode Vocabulary</label>
+            <select id="modalPresetSelect" aria-label="Preset Vocabulary Mode" class="chime-select">
+              <option value="careful" selected>Careful (Default)</option>
+              <option value="code_comment">Code</option>
+              <option value="email_polish">Email</option>
+              <option value="burmese_written">Burmese</option>
+              <option value="translate_en">Translate (EN)</option>
+              <option value="fast">Fast</option>
+            </select>
+          </div>
+          <div class="vocab-input-row">
+            <input type="text" id="vocabInput" placeholder="Type term (e.g. TypeScript)..." aria-label="Add custom term">
+            <button id="addVocabBtn" class="action-btn-sm">+ Add</button>
+          </div>
+          <div id="vocabTagsContainer" class="vocab-tags" style="margin-top: 6px; max-height: 100px; overflow-y: auto;"></div>
         </div>
-        <div class="vocab-input-row">
-          <input type="text" id="vocabInput" placeholder="Type term (e.g. TypeScript)..." aria-label="Add custom term">
-          <button id="addVocabBtn" class="action-btn-sm">+ Add</button>
-        </div>
-        <div id="vocabTagsContainer" class="vocab-tags"></div>
       </div>
     </div>
   </div>

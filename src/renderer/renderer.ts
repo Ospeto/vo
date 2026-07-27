@@ -26,6 +26,13 @@ const modalPresetSelect = document.getElementById("modalPresetSelect") as HTMLSe
 const vocabInput = document.getElementById("vocabInput") as HTMLInputElement;
 const addVocabBtn = document.getElementById("addVocabBtn") as HTMLButtonElement;
 const vocabTagsContainer = document.getElementById("vocabTagsContainer") as HTMLElement;
+
+const personNameInput = document.getElementById("personNameInput") as HTMLInputElement;
+const addPersonNameBtn = document.getElementById("addPersonNameBtn") as HTMLButtonElement;
+const personNamesContainer = document.getElementById("personNamesContainer") as HTMLElement;
+const personNamesCountBadge = document.getElementById("personNamesCountBadge") as HTMLElement;
+
+let currentCustomVocab: string[] = [];
 const geminiApiKey1Input = document.getElementById("geminiApiKey1Input") as HTMLInputElement;
 const geminiApiKey2Input = document.getElementById("geminiApiKey2Input") as HTMLInputElement;
 const geminiApiKey3Input = document.getElementById("geminiApiKey3Input") as HTMLInputElement;
@@ -223,6 +230,9 @@ async function initUI() {
     audioChimesEnabled = config.audioChimesEnabled ?? true;
     updateChimeBtnUI();
 
+    if ((config as any).customVocabulary) {
+      currentCustomVocab = [...((config as any).customVocabulary as string[])];
+    }
     if (config.presetVocabulary) {
       currentPresetVocabMap = config.presetVocabulary as Record<string, string[]>;
     }
@@ -252,6 +262,8 @@ async function initUI() {
     }
     await populateAudioDevices((config as any).audioDeviceId);
     renderAppRules();
+    renderPersonNames();
+    renderVocabTags();
   }
 
   if (micDeviceSelect) {
@@ -355,6 +367,53 @@ function updateChimeBtnUI() {
   } else {
     chimeBtn.classList.remove("active");
     chimeBtn.title = "Audio Chimes: Muted";
+  }
+}
+
+function renderPersonNames() {
+  if (!personNamesContainer) return;
+  personNamesContainer.innerHTML = "";
+
+  if (personNamesCountBadge) {
+    personNamesCountBadge.textContent = `${currentCustomVocab.length} Names`;
+  }
+
+  if (currentCustomVocab.length === 0) {
+    personNamesContainer.innerHTML = `<span class="vocab-tag-empty">No person names added yet</span>`;
+    return;
+  }
+
+  currentCustomVocab.forEach((term, index) => {
+    const tag = document.createElement("span");
+    tag.className = "vocab-tag";
+    tag.style.borderColor = "rgba(59, 130, 246, 0.4)";
+    tag.style.background = "rgba(59, 130, 246, 0.15)";
+    tag.style.color = "#93c5fd";
+    tag.innerHTML = `${term} <button data-index="${index}" title="Remove name">&times;</button>`;
+    tag.querySelector("button")?.addEventListener("click", async () => {
+      await removePersonName(index);
+    });
+    personNamesContainer.appendChild(tag);
+  });
+}
+
+async function addPersonName(name: string) {
+  const cleanName = name.trim();
+  if (!cleanName) return;
+
+  if (!currentCustomVocab.includes(cleanName)) {
+    currentCustomVocab.push(cleanName);
+    await window.electronIPC?.saveConfig({ customVocabulary: currentCustomVocab });
+    renderPersonNames();
+  }
+  if (personNameInput) personNameInput.value = "";
+}
+
+async function removePersonName(index: number) {
+  if (index >= 0 && index < currentCustomVocab.length) {
+    currentCustomVocab.splice(index, 1);
+    await window.electronIPC?.saveConfig({ customVocabulary: currentCustomVocab });
+    renderPersonNames();
   }
 }
 
@@ -580,7 +639,21 @@ clearHistoryBtn?.addEventListener("click", async () => {
 configBtn?.addEventListener("click", () => {
   if (settingsModal) {
     settingsModal.classList.remove("hidden");
+    renderPersonNames();
     renderVocabTags();
+  }
+});
+
+addPersonNameBtn?.addEventListener("click", () => {
+  if (personNameInput) {
+    addPersonName(personNameInput.value);
+  }
+});
+
+personNameInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && personNameInput) {
+    e.preventDefault();
+    addPersonName(personNameInput.value);
   }
 });
 
