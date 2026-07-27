@@ -190,18 +190,19 @@ function startWaveAnimationLoop() {
     const maxAmp = height / 2 - 2;
 
     const rawRatio = Math.max(0, smoothedAmp / 100);
-    // When silence or gain is zero, activeAmp is strictly ZERO (no unwanted movement)
     const activeAmp = rawRatio < 0.02 ? 0 : Math.min(maxAmp, rawRatio * maxAmp * 1.4);
 
     if (activeAmp > 0) {
-      wavePhase += 0.08 + rawRatio * 0.16; // Wave moves faster when voice level is higher!
+      wavePhase += 0.08 + rawRatio * 0.16;
+    } else {
+      wavePhase += 0.03; // Gentle ambient micro-drift when idle
     }
 
     spectrumCtx.clearRect(0, 0, width, height);
 
     if (activeAmp > 0.05) {
       // 3D Organic Dotted Particle Wave Ribbon (7 Layered Strands)
-      const step = 4; // Dot spacing along X
+      const step = 4;
       for (let k = -3; k <= 3; k++) {
         const offsetPhase = k * 0.22;
         const verticalShift = k * 1.5;
@@ -210,7 +211,7 @@ function startWaveAnimationLoop() {
 
         for (let x = 0; x <= width; x += step) {
           const progress = x / width;
-          const envelope = Math.sin(progress * Math.PI); // Envelope fade at edges
+          const envelope = Math.sin(progress * Math.PI);
           const waveY = centerY + verticalShift + Math.sin(progress * Math.PI * 3.5 + wavePhase + offsetPhase) * activeAmp * envelope;
 
           spectrumCtx.beginPath();
@@ -225,14 +226,15 @@ function startWaveAnimationLoop() {
         }
       }
     } else {
-      // Complete Silence / Mic Gain 0: Clean stationary dotted particle baseline
+      // Complete Silence / Idle: Elegant ambient dotted particle baseline
       const step = 5;
       for (let x = 0; x <= width; x += step) {
         const progress = x / width;
         const envelope = Math.sin(progress * Math.PI);
-        const alpha = 0.15 + 0.25 * envelope;
+        const alpha = 0.2 + 0.3 * envelope;
+        const waveY = centerY + Math.sin(progress * Math.PI * 2 + wavePhase) * 1.2 * envelope;
         spectrumCtx.beginPath();
-        spectrumCtx.arc(x, centerY, 0.9, 0, Math.PI * 2);
+        spectrumCtx.arc(x, waveY, 1.0, 0, Math.PI * 2);
         spectrumCtx.fillStyle = `rgba(161, 161, 170, ${alpha})`;
         spectrumCtx.fill();
       }
@@ -251,13 +253,6 @@ function updateAudioWaveLevel(level: number) {
 
 function stopSpectrumVisualizer() {
   currentTargetAmp = 0;
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-  if (spectrumCanvas && spectrumCtx) {
-    spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
-  }
 }
 
 function updatePresetPills(selectedPreset: string) {
@@ -274,6 +269,7 @@ function updatePresetPills(selectedPreset: string) {
 
 async function initUI() {
   enableControls(true);
+  startWaveAnimationLoop();
   const config = await window.electronIPC?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "fast");
