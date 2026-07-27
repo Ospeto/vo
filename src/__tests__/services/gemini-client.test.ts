@@ -150,4 +150,22 @@ describe("gemini-client", () => {
     getGeminiClient();
     expect(mockGoogleGenAI).toHaveBeenCalledTimes(2);
   });
+
+  test("rotates multiple API keys in round-robin order", () => {
+    process.env.GEMINI_API_KEY = "key1, key2, key3";
+
+    const client1 = getGeminiClient();
+    const client2 = getGeminiClient();
+    const client3 = getGeminiClient();
+    const client4 = getGeminiClient();
+
+    expect(mockGoogleGenAI).toHaveBeenCalledTimes(3);
+    const calls = mockGoogleGenAI.mock.calls as any[];
+    expect(calls[0]![0].apiKey).toBe("key1");
+    expect(calls[1]![0].apiKey).toBe("key2");
+    expect(calls[2]![0].apiKey).toBe("key3");
+
+    expect(client1).not.toBe(client2);
+    expect(client4).toBe(client1);
+  });
 });

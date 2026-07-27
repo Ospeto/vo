@@ -138,13 +138,15 @@
 
         <!-- Gemini API Key Section -->
         <div class="modal-section-group">
-          <label class="section-label" for="geminiApiKeyInput">Gemini API Key</label>
+          <label class="section-label" for="geminiApiKeyInput">Gemini API Key(s)</label>
           <div class="apiKey-settings-row">
-            <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy... (Paste Gemini API Key)" aria-label="Gemini API Key">
+            <input type="password" id="geminiApiKeyInput" placeholder="Paste Gemini API Key(s) (comma separated for 3x Round-Robin)" aria-label="Gemini API Key">
             <button id="testApiKeyBtn" class="action-btn-sm action-btn-blue" title="Test API Key">Test</button>
             <button id="saveApiKeyBtn" class="action-btn-sm">Save</button>
           </div>
+          <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 2px;">Enter multiple keys separated by comma to enable Multi-Key Round-Robin rotation.</span>
           <span id="apiKeyFeedback" class="feedback-msg"></span>
+        </div>
         <!-- Microphone Input Device Section -->
         <div class="modal-section-group">
           <label class="section-label" for="micDeviceSelect">Microphone Input Device</label>
