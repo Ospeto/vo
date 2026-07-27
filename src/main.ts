@@ -46,11 +46,11 @@ let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 
-function setState(state: AppState, message?: string, usedPaidKey?: boolean) {
+function setState(state: AppState, message?: string) {
   currentState = state;
   sequenceId++;
-  const payload: StatePayload = { state, message, sequenceId, usedPaidKey };
-  logger.info({ state, message, sequenceId, usedPaidKey }, "State changed");
+  const payload: StatePayload = { state, message, sequenceId };
+  logger.info({ state, message, sequenceId }, "State changed");
 
   if (stoppingSafetyTimer) {
     clearTimeout(stoppingSafetyTimer);
@@ -577,7 +577,7 @@ function setupIpcHandlers() {
         try {
           if (Notification.isSupported()) {
             new Notification({
-              title: "Paid Gemini Key Used",
+              title: "💳 Paid Gemini Key Used",
               body: "Primary free keys were rate-limited or exhausted. Fallback paid key was used.",
             }).show();
           }
@@ -595,7 +595,7 @@ function setupIpcHandlers() {
         const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
       }
-      setState("idle", `Dictated: "${text}"`, usedPaidKey);
+      setState("idle", usedPaidKey ? `💳 Paid Key: "${text}"` : `Dictated: "${text}"`);
     } catch (err: any) {
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);
