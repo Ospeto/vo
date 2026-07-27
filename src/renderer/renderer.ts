@@ -283,10 +283,27 @@ function updatePresetPills(selectedPreset: string) {
   });
 }
 
+function updateModelPills(selectedModel: string) {
+  const btns = document.querySelectorAll(".model-pill-btn");
+  const badge = document.getElementById("modelLevelLabel");
+  btns.forEach((btn) => {
+    const m = btn.getAttribute("data-model");
+    if (m === selectedModel) {
+      btn.classList.add("active");
+      if (badge) {
+        badge.textContent = btn.getAttribute("data-label") || selectedModel;
+      }
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+}
+
 async function initUI() {
   const config = await window.electronIPC?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "fast");
+    updateModelPills(config.geminiModel || "gemini-3.6-flash");
     if (presetSelect) presetSelect.value = config.dictationPreset;
     if (modeSelect) modeSelect.value = config.dictationMode;
     if (modelSelect) modelSelect.value = config.geminiModel;
@@ -666,9 +683,12 @@ function enableControls(enabled: boolean) {
   document.querySelectorAll<HTMLButtonElement>(".preset-pill-btn").forEach((btn) => {
     btn.disabled = !enabled;
   });
+  document.querySelectorAll<HTMLButtonElement>(".model-pill-btn").forEach((btn) => {
+    btn.disabled = !enabled;
+  });
   if (modeSelect) modeSelect.disabled = !enabled;
   gainSlider.disabled = !enabled;
-  modelSelect.disabled = !enabled;
+  if (modelSelect) modelSelect.disabled = !enabled;
   if (recordBtn) recordBtn.disabled = !enabled;
   configBtn.disabled = !enabled;
 }
@@ -680,6 +700,17 @@ document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
     updatePresetPills(selectedPreset);
     if (presetSelect) presetSelect.value = selectedPreset;
     await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
+  });
+});
+
+document.querySelectorAll(".model-pill-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const selectedModel = btn.getAttribute("data-model");
+    if (!selectedModel) return;
+    updateModelPills(selectedModel);
+    if (modelSelect) modelSelect.value = selectedModel;
+    if (settingModelSelect) settingModelSelect.value = selectedModel;
+    await window.electronIPC?.saveConfig({ geminiModel: selectedModel as any });
   });
 });
 

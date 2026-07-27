@@ -190,6 +190,70 @@ header {
   cursor: not-allowed;
 }
 
+/* Model Section (Low, Medium, High, Ultra) */
+.model-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5px;
+  margin-top: 4px;
+}
+
+.model-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.model-level-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #60a5fa;
+  letter-spacing: 0.02em;
+}
+
+.model-segmented-bar {
+  display: flex;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  padding: 2.5px;
+  gap: 3px;
+}
+
+.model-pill-btn {
+  flex: 1;
+  height: 25px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.model-pill-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.model-pill-btn.active {
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+}
+
+.model-pill-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .field-group {
   display: flex;
   flex-direction: column;
