@@ -3,7 +3,7 @@ import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, updateConfig, ConfigError, type PiVoiceConfig } from "./services/config.js";
+import { loadConfig, updateConfig, parseKeyBinding, ConfigError, type PiVoiceConfig } from "./services/config.js";
 import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
