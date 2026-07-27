@@ -11,6 +11,7 @@ import { IPC, type AppState, type StatePayload } from "./shared/types.js";
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
 import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonResponse } from "./services/daemon-ipc.js";
 import { HotkeyService } from "./services/hotkey-service.js";
+import { captureActiveSelection, restoreClipboard } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
 import logger from "./services/logger.js";
 
@@ -41,6 +42,9 @@ let isPasting = false;
 let lastPastedText = "";
 let lastPasteTime = 0;
 
+let activeSelectionText = "";
+let previousClipboardContent = "";
+
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
 let hudWindow: BrowserWindow | null = null;
@@ -49,8 +53,13 @@ let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 function setState(state: AppState, message?: string) {
   currentState = state;
   sequenceId++;
-  const payload: StatePayload = { state, message, sequenceId };
-  logger.info({ state, message, sequenceId }, "State changed");
+  const payload: StatePayload & { hasSelection?: boolean } = {
+    state,
+    message,
+    sequenceId,
+    hasSelection: Boolean(activeSelectionText && activeSelectionText.trim().length > 0),
+  };
+  logger.info({ state, message, sequenceId, hasSelection: payload.hasSelection }, "State changed");
 
   if (stoppingSafetyTimer) {
     clearTimeout(stoppingSafetyTimer);
@@ -202,7 +211,11 @@ function pasteTextToFocusedField(text: string) {
       setTimeout(() => {
         isPasting = false;
         try {
-          if (previousText && previousText !== text) {
+          if (previousClipboardContent) {
+            restoreClipboard(previousClipboardContent);
+            previousClipboardContent = "";
+            activeSelectionText = "";
+          } else if (previousText && previousText !== text) {
             clipboard.writeText(previousText);
           }
         } catch {}
@@ -562,9 +575,12 @@ function setupIpcHandlers() {
         provider: currentConfig.provider,
         geminiModel: currentConfig.geminiModel,
         dictationPreset: currentConfig.dictationPreset,
+        translateEnabled: currentConfig.translateEnabled,
+        targetLanguage: currentConfig.targetLanguage,
         customVocabulary: currentConfig.customVocabulary,
         presetVocabulary: currentConfig.presetVocabulary,
         symbolScannerEnabled: currentConfig.symbolScannerEnabled,
+        selectedText: activeSelectionText,
       });
 
       if (!text || text.trim().length === 0) {
@@ -705,6 +721,22 @@ function setupIpcHandlers() {
 let lastHotkeyDownTime = 0;
 let keyHoldPressStartTime = 0;
 
+async function startRecordingFlow() {
+  const selection = await captureActiveSelection(200);
+  if (selection.hasSelection) {
+    activeSelectionText = selection.selectedText;
+    previousClipboardContent = selection.previousClipboard;
+  } else {
+    activeSelectionText = "";
+    previousClipboardContent = "";
+  }
+
+  logger.info({ hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
+  setState("recording", "Recording...");
+  playStartChime();
+  captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
+}
+
 function handleHotkeyDown() {
   const now = Date.now();
   if (now - lastHotkeyDownTime < 350) {
@@ -718,10 +750,7 @@ function handleHotkeyDown() {
 
   if (currentConfig.dictationMode === "hold") {
     if (currentState === "idle" || currentState === "error") {
-      logger.info("Hold Down: STARTING recording");
-      setState("recording", "Recording...");
-      playStartChime();
-      captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
+      startRecordingFlow();
     }
   } else {
     toggleRecordingState();
@@ -747,10 +776,7 @@ function toggleRecordingState() {
     playToggleStopChime();
     captureWindow?.webContents.send(IPC.STOP_RECORDING);
   } else if (currentState === "idle" || currentState === "error") {
-    logger.info("Tap 1: STARTING recording");
-    setState("recording", "Recording...");
-    playStartChime();
-    captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
+    startRecordingFlow();
   }
 }
 

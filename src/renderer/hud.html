@@ -98,6 +98,10 @@
 </head>
 <body>
   <div id="hudCapsule" class="hud-capsule recording">
+    <svg id="hudEditIcon" class="hud-edit-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#C084FC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none; margin-right: 2px; filter: drop-shadow(0 0 4px #C084FC);">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
     <div class="hud-bar"></div>
     <div class="hud-bar"></div>
     <div class="hud-bar"></div>
@@ -106,11 +110,15 @@
   </div>
   <script>
     const hudCapsule = document.getElementById("hudCapsule");
+    const hudEditIcon = document.getElementById("hudEditIcon");
 
     if (window.electronIPC) {
       window.electronIPC.onStateChanged((payload) => {
         const state = payload.state || "idle";
         hudCapsule.className = "hud-capsule " + state;
+        if (hudEditIcon) {
+          hudEditIcon.style.display = payload.hasSelection ? "inline-block" : "none";
+        }
       });
 
       window.electronIPC.onAudioLevel((level) => {

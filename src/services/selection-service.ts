@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
 import logger from "./logger.js";
 
 function getClipboard(): { readText(): string; writeText(text: string): void } | null {
@@ -17,42 +17,58 @@ export interface SelectionCaptureResult {
 }
 
 /**
- * Rapidly attempts to capture selected text from the active foreground macOS application.
- * Performs a temporary `cmd+c` key stroke simulation with a strict 60ms timeout.
+ * Captures selected text from the active foreground macOS application.
+ * Executes a simulated `cmd+c` keystroke with 250ms timeout window.
  */
-export async function captureActiveSelection(timeoutMs = 60): Promise<SelectionCaptureResult> {
+export async function captureActiveSelection(timeoutMs = 250): Promise<SelectionCaptureResult> {
   const clip = getClipboard();
   const previousClipboard = clip?.readText() || "";
 
-  try {
-    // Clear clipboard briefly or rely on text comparison
-    // Trigger OS X System Events keystroke "c" using command down
-    execSync(`osascript -e 'tell application "System Events" to keystroke "c" using command down'`, {
-      timeout: timeoutMs,
-      stdio: "ignore",
+  return new Promise((resolve) => {
+    let resolved = false;
+
+    const timer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      const latestText = clip?.readText() || "";
+      const trimmedLatest = latestText.trim();
+      const trimmedPrev = previousClipboard.trim();
+
+      if (trimmedLatest && trimmedLatest !== trimmedPrev) {
+        logger.info({ byteLength: trimmedLatest.length }, "Captured active text selection (fallback timer)");
+        resolve({ hasSelection: true, selectedText: trimmedLatest, previousClipboard });
+      } else {
+        resolve({ hasSelection: false, selectedText: "", previousClipboard });
+      }
+    }, timeoutMs);
+
+    // Trigger AppleScript keystroke "c" using command down
+    exec(`osascript -e 'tell application "System Events" to keystroke "c" using command down'`, (err) => {
+      if (resolved) return;
+      clearTimeout(timer);
+      resolved = true;
+
+      if (err) {
+        logger.debug({ err: String(err) }, "Selection keystroke execution warning");
+        resolve({ hasSelection: false, selectedText: "", previousClipboard });
+        return;
+      }
+
+      // Allow 30ms for clipboard buffer to update
+      setTimeout(() => {
+        const newClipboard = clip?.readText() || "";
+        const trimmedNew = newClipboard.trim();
+        const trimmedPrev = previousClipboard.trim();
+
+        if (trimmedNew && trimmedNew !== trimmedPrev) {
+          logger.info({ byteLength: trimmedNew.length }, "Captured active text selection from foreground app");
+          resolve({ hasSelection: true, selectedText: trimmedNew, previousClipboard });
+        } else {
+          resolve({ hasSelection: false, selectedText: "", previousClipboard });
+        }
+      }, 30);
     });
-
-    const newClipboard = clip?.readText() || "";
-    const trimmedNew = newClipboard.trim();
-    const trimmedPrev = previousClipboard.trim();
-
-    if (trimmedNew && trimmedNew !== trimmedPrev) {
-      logger.info({ byteLength: trimmedNew.length }, "Captured active text selection from foreground app");
-      return {
-        hasSelection: true,
-        selectedText: trimmedNew,
-        previousClipboard,
-      };
-    }
-  } catch (err: any) {
-    logger.debug({ err: err?.message || String(err) }, "No selection captured or selection capture timed out");
-  }
-
-  return {
-    hasSelection: false,
-    selectedText: "",
-    previousClipboard,
-  };
+  });
 }
 
 /**
