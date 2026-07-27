@@ -564,7 +564,37 @@ async function transcribeGemini(
       logger.info({ model, preferredModel, activeApp, customTermsCount: allCustomTerms.length, dictationPreset, text, byteLength: audioBuffer.length, dynamicTimeoutMs }, "Gemini STT transcribed successfully");
       return { rawText: text, activeApp };
     } catch (err: any) {
-      logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Failed Gemini model transcription, trying next");
+      logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Failed Gemini model transcription, attempting fallback key");
+      try {
+        const { getGeminiFallbackClient } = await import("./gemini-client.js");
+        const fallbackClient = getGeminiFallbackClient();
+        if (fallbackClient) {
+          logger.info({ model }, "Attempting fallback execution with Paid Gemini API Key");
+          const fbResponse = await fallbackClient.models.generateContent({
+            model,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType: "audio/webm", data: base64Audio } },
+                  { text: userPromptText },
+                ],
+              },
+            ],
+            config: {
+              systemInstruction: fullPrompt,
+              temperature: targetTemperature,
+            },
+          });
+          const fbText = fbResponse.text?.trim() ?? "";
+          if (fbText) {
+            logger.info({ model, text: fbText }, "Gemini STT transcribed successfully using Fallback Paid API Key");
+            return { rawText: fbText, activeApp };
+          }
+        }
+      } catch (fbErr: any) {
+        logger.warn({ model, err: fbErr?.message || String(fbErr) }, "Fallback Paid API Key execution failed");
+      }
     }
   }
 

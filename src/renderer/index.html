@@ -147,6 +147,20 @@
           <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 2px;">Enter multiple keys separated by comma to enable Multi-Key Round-Robin rotation.</span>
           <span id="apiKeyFeedback" class="feedback-msg"></span>
         </div>
+
+        <!-- Fallback Paid API Key Section -->
+        <div class="modal-section-group" style="margin-top: 10px;">
+          <label class="section-label" for="geminiFallbackApiKeyInput" style="display: flex; align-items: center; gap: 6px;">
+            <span>Fallback Paid API Key</span>
+            <span class="cost-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">Emergency Backup</span>
+          </label>
+          <div class="apiKey-settings-row">
+            <input type="password" id="geminiFallbackApiKeyInput" placeholder="Paste Paid Gemini API Key (Emergency Failover Backup)" aria-label="Fallback Gemini API Key">
+            <button id="saveFallbackApiKeyBtn" class="action-btn-sm">Save</button>
+          </div>
+          <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 2px;">Optional paid key used only if all primary keys hit rate limits or fail.</span>
+          <span id="fallbackApiKeyFeedback" class="feedback-msg"></span>
+        </div>
         <!-- Microphone Input Device Section -->
         <div class="modal-section-group">
           <label class="section-label" for="micDeviceSelect">Microphone Input Device</label>

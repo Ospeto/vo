@@ -6,6 +6,7 @@ import { loadConfig } from "./config.js";
 import logger from "./logger.js";
 
 let geminiClients: GoogleGenAI[] = [];
+let fallbackClient: GoogleGenAI | null = null;
 let currentKeyIndex = 0;
 let keepAliveTimer: NodeJS.Timeout | null = null;
 
@@ -15,6 +16,7 @@ export function _resetGeminiClient(): void {
     keepAliveTimer = null;
   }
   geminiClients = [];
+  fallbackClient = null;
   currentKeyIndex = 0;
 }
 
@@ -123,6 +125,10 @@ export function getGeminiClient(): GoogleGenAI {
       startKeepAliveHeartbeat(geminiClients[0]);
     }
   } else {
+    // Try fallback key before throwing
+    const fbClient = getGeminiFallbackClient();
+    if (fbClient) return fbClient;
+
     throw new Error(
       "Gemini provider requires either GOOGLE_CLOUD_PROJECT (for Vertex AI) " +
         "or GEMINI_API_KEY / GOOGLE_API_KEY (for Gemini API).",
@@ -132,4 +138,20 @@ export function getGeminiClient(): GoogleGenAI {
   const client = geminiClients[currentKeyIndex];
   currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;
   return client;
+}
+
+export function getGeminiFallbackClient(): GoogleGenAI | null {
+  if (fallbackClient) return fallbackClient;
+  try {
+    const config = loadConfig();
+    if (config.geminiFallbackApiKey && config.geminiFallbackApiKey.trim()) {
+      logger.info("Initializing Fallback Paid Gemini API Key Client");
+      fallbackClient = new GoogleGenAI({
+        apiKey: config.geminiFallbackApiKey.trim(),
+        httpOptions: { headers: { Connection: "keep-alive" } },
+      });
+      return fallbackClient;
+    }
+  } catch {}
+  return null;
 }

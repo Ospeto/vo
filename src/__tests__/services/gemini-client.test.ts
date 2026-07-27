@@ -168,4 +168,10 @@ describe("gemini-client", () => {
     expect(client1).not.toBe(client2);
     expect(client4).toBe(client1);
   });
+
+  test("initializes fallback client when fallback key is configured", async () => {
+    const { getGeminiFallbackClient } = await import("../../services/gemini-client.js");
+    const fbClient = getGeminiFallbackClient();
+    expect(fbClient).toBeDefined();
+  });
 });

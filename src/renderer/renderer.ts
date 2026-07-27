@@ -30,6 +30,10 @@ const geminiApiKeyInput = document.getElementById("geminiApiKeyInput") as HTMLIn
 const saveApiKeyBtn = document.getElementById("saveApiKeyBtn") as HTMLButtonElement;
 const apiKeyFeedback = document.getElementById("apiKeyFeedback") as HTMLElement;
 
+const geminiFallbackApiKeyInput = document.getElementById("geminiFallbackApiKeyInput") as HTMLInputElement;
+const saveFallbackApiKeyBtn = document.getElementById("saveFallbackApiKeyBtn") as HTMLButtonElement;
+const fallbackApiKeyFeedback = document.getElementById("fallbackApiKeyFeedback") as HTMLElement;
+
 const chimeStartSelect = document.getElementById("chimeStartSelect") as HTMLSelectElement;
 const chimeEndSelect = document.getElementById("chimeEndSelect") as HTMLSelectElement;
 const previewStartChimeBtn = document.getElementById("previewStartChimeBtn") as HTMLButtonElement;
@@ -225,6 +229,9 @@ async function initUI() {
     }
     if (geminiApiKeyInput && (config as any).geminiApiKey) {
       geminiApiKeyInput.value = (config as any).geminiApiKey;
+    }
+    if (geminiFallbackApiKeyInput && (config as any).geminiFallbackApiKey) {
+      geminiFallbackApiKeyInput.value = (config as any).geminiFallbackApiKey;
     }
     if (chimeStartSelect && (config as any).chimeSoundStart) {
       chimeStartSelect.value = (config as any).chimeSoundStart;
@@ -626,6 +633,19 @@ saveApiKeyBtn?.addEventListener("click", async () => {
     apiKeyFeedback.style.display = "block";
     setTimeout(() => {
       apiKeyFeedback.style.display = "none";
+    }, 2500);
+  }
+});
+
+saveFallbackApiKeyBtn?.addEventListener("click", async () => {
+  const fallbackKeyVal = geminiFallbackApiKeyInput?.value ? geminiFallbackApiKeyInput.value.trim() : "";
+  await window.electronIPC?.saveConfig({ geminiFallbackApiKey: fallbackKeyVal });
+  if (fallbackApiKeyFeedback) {
+    fallbackApiKeyFeedback.textContent = fallbackKeyVal ? "✓ Paid Fallback API Key saved!" : "Fallback API Key cleared.";
+    fallbackApiKeyFeedback.style.color = fallbackKeyVal ? "#10b981" : "#a1a1aa";
+    fallbackApiKeyFeedback.style.display = "block";
+    setTimeout(() => {
+      if (fallbackApiKeyFeedback) fallbackApiKeyFeedback.style.display = "none";
     }, 2500);
   }
 });

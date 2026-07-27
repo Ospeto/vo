@@ -38,6 +38,7 @@ export interface PiVoiceConfig {
   presetVocabulary: Partial<Record<DictationPreset, string[]>>;
   appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
+  geminiFallbackApiKey?: string;
   audioDeviceId?: string;
 }
 
@@ -56,6 +57,7 @@ export interface PiVoiceConfigPatch {
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
   appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
+  geminiFallbackApiKey?: string;
   audioDeviceId?: string;
 }
 
@@ -312,6 +314,7 @@ const configFileSchema = z.object({
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
   appPresetMappings: z.record(z.string(), z.string()).optional().default(DEFAULT_APP_PRESET_MAPPINGS),
   geminiApiKey: z.string().optional(),
+  geminiFallbackApiKey: z.string().optional(),
   audioDeviceId: z.string().optional(),
 });
 
@@ -370,7 +373,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
 
   const persistedVocab = loadPersistedVocabulary();
@@ -401,6 +404,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     presetVocabulary: mergedPresetVocab,
     appPresetMappings: (appPresetMappings || DEFAULT_APP_PRESET_MAPPINGS) as Record<string, DictationPreset>,
     geminiApiKey,
+    geminiFallbackApiKey,
     audioDeviceId,
   };
 }
@@ -465,6 +469,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     presetVocabulary: mergedPresetVocab,
     appPresetMappings: mergedAppMappings,
     ...(patch.geminiApiKey !== undefined ? { geminiApiKey: patch.geminiApiKey.trim() } : {}),
+    ...(patch.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patch.geminiFallbackApiKey.trim() } : {}),
     ...(patch.audioDeviceId !== undefined ? { audioDeviceId: patch.audioDeviceId.trim() } : {}),
   };
 
