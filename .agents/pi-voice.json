@@ -1,0 +1,9 @@
+{
+  "provider": "gemini",
+  "key": "ctrl+cmd+option+v",
+  "inputGain": 1.25,
+  "geminiModel": "gemini-3.5-flash-lite",
+  "audioChimesEnabled": true,
+  "dictationMode": "toggle",
+  "dictationPreset": "code_comment"
+}

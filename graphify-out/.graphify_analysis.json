@@ -1,0 +1,964 @@
+{
+  "communities": {
+    "0": [
+      "extensions_overlay_qa_tests",
+      "extensions_overlay_qa_tests_anchortestcomponent",
+      "extensions_overlay_qa_tests_anchortestcomponent_constructor",
+      "extensions_overlay_qa_tests_anchortestcomponent_handleinput",
+      "extensions_overlay_qa_tests_anchortestcomponent_render",
+      "extensions_overlay_qa_tests_animationdemocomponent",
+      "extensions_overlay_qa_tests_animationdemocomponent_constructor",
+      "extensions_overlay_qa_tests_animationdemocomponent_dispose",
+      "extensions_overlay_qa_tests_animationdemocomponent_handleinput",
+      "extensions_overlay_qa_tests_animationdemocomponent_render",
+      "extensions_overlay_qa_tests_animationdemocomponent_startanimation",
+      "extensions_overlay_qa_tests_baseoverlay",
+      "extensions_overlay_qa_tests_baseoverlay_box",
+      "extensions_overlay_qa_tests_baseoverlay_constructor",
+      "extensions_overlay_qa_tests_baseoverlay_dispose",
+      "extensions_overlay_qa_tests_baseoverlay_invalidate",
+      "extensions_overlay_qa_tests_edgetestcomponent",
+      "extensions_overlay_qa_tests_edgetestcomponent_constructor",
+      "extensions_overlay_qa_tests_edgetestcomponent_handleinput",
+      "extensions_overlay_qa_tests_edgetestcomponent_render",
+      "extensions_overlay_qa_tests_hsltorgb",
+      "extensions_overlay_qa_tests_margintestcomponent",
+      "extensions_overlay_qa_tests_margintestcomponent_constructor",
+      "extensions_overlay_qa_tests_margintestcomponent_handleinput",
+      "extensions_overlay_qa_tests_margintestcomponent_render",
+      "extensions_overlay_qa_tests_maxheighttestcomponent",
+      "extensions_overlay_qa_tests_maxheighttestcomponent_constructor",
+      "extensions_overlay_qa_tests_maxheighttestcomponent_handleinput",
+      "extensions_overlay_qa_tests_maxheighttestcomponent_render",
+      "extensions_overlay_qa_tests_percenttestcomponent",
+      "extensions_overlay_qa_tests_percenttestcomponent_constructor",
+      "extensions_overlay_qa_tests_percenttestcomponent_handleinput",
+      "extensions_overlay_qa_tests_percenttestcomponent_render",
+      "extensions_overlay_qa_tests_sidepanelcomponent",
+      "extensions_overlay_qa_tests_sidepanelcomponent_constructor",
+      "extensions_overlay_qa_tests_sidepanelcomponent_handleinput",
+      "extensions_overlay_qa_tests_sidepanelcomponent_render",
+      "extensions_overlay_qa_tests_sleep",
+      "extensions_overlay_qa_tests_stackoverlaycomponent",
+      "extensions_overlay_qa_tests_stackoverlaycomponent_constructor",
+      "extensions_overlay_qa_tests_stackoverlaycomponent_handleinput",
+      "extensions_overlay_qa_tests_stackoverlaycomponent_render",
+      "extensions_overlay_qa_tests_streamingoverflowcomponent",
+      "extensions_overlay_qa_tests_streamingoverflowcomponent_constructor",
+      "extensions_overlay_qa_tests_streamingoverflowcomponent_dispose",
+      "extensions_overlay_qa_tests_streamingoverflowcomponent_handleinput",
+      "extensions_overlay_qa_tests_streamingoverflowcomponent_render",
+      "extensions_overlay_qa_tests_streamingoverflowcomponent_startprocess",
+      "extensions_overlay_qa_tests_toggledemocomponent",
+      "extensions_overlay_qa_tests_toggledemocomponent_constructor",
+      "extensions_overlay_qa_tests_toggledemocomponent_handleinput",
+      "extensions_overlay_qa_tests_toggledemocomponent_render"
+    ],
+    "1": [
+      "services_config_speechprovider",
+      "services_gemini_client",
+      "services_gemini_client_getgeminiclient",
+      "services_gemini_client_resetgeminiclient",
+      "services_gemini_client_resolveapikey",
+      "services_gemini_client_startkeepaliveheartbeat",
+      "services_logger",
+      "services_logger_getlogpath",
+      "services_logger_logger",
+      "services_logger_logpath",
+      "services_logger_resolvelogpath",
+      "services_logger_rotatelogifneeded",
+      "services_pi_session",
+      "services_pi_session_dispose",
+      "services_pi_session_getorcreatesession",
+      "services_pi_session_prompt",
+      "services_pi_session_promptoptions",
+      "services_pi_session_sessioncwd",
+      "services_pi_session_setsessioncwd",
+      "services_stt",
+      "services_stt_appenduserdictionary",
+      "services_stt_burmese_accurate_stt_prompt",
+      "services_stt_dictionary_dir",
+      "services_stt_dictionary_file",
+      "services_stt_getactiveappname",
+      "services_stt_getappcontextprompthint",
+      "services_stt_getelevenlabsclient",
+      "services_stt_getopenaiclient",
+      "services_stt_loaduserdictionary",
+      "services_stt_prewarmgeminiclient",
+      "services_stt_sanitizetranscribedtext",
+      "services_stt_transcribe",
+      "services_stt_transcribeelevenlabs",
+      "services_stt_transcribegemini",
+      "services_stt_transcribeopenai",
+      "services_tts",
+      "services_tts_getelevenlabsclient",
+      "services_tts_getopenaiclient",
+      "services_tts_speaklocal",
+      "services_whisper_model",
+      "services_whisper_model_downloadmodel",
+      "services_whisper_model_modelcachedir",
+      "services_whisper_model_modelfilename",
+      "services_whisper_model_resolvemodelpath",
+      "src_main_setupipchandlers"
+    ],
+    "2": [
+      "package",
+      "package_author",
+      "package_bin",
+      "package_bin_pi_voice",
+      "package_dependencies",
+      "package_dependencies_electron",
+      "package_dependencies_elevenlabs_elevenlabs_js",
+      "package_dependencies_google_genai",
+      "package_dependencies_mariozechner_pi_coding_agent",
+      "package_dependencies_napi_rs_whisper",
+      "package_dependencies_openai",
+      "package_dependencies_pino",
+      "package_dependencies_uiohook_napi",
+      "package_dependencies_zod",
+      "package_description",
+      "package_devdependencies",
+      "package_devdependencies_electron_vite",
+      "package_devdependencies_types_bun",
+      "package_files",
+      "package_license",
+      "package_main",
+      "package_name",
+      "package_peerdependencies",
+      "package_peerdependencies_typescript",
+      "package_repository",
+      "package_repository_type",
+      "package_repository_url",
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_build_cli",
+      "package_scripts_build_electron",
+      "package_scripts_cli",
+      "package_scripts_dev_cli",
+      "package_scripts_dev_electron",
+      "package_scripts_prepack",
+      "package_scripts_prepublish",
+      "package_scripts_preview",
+      "package_trusteddependencies",
+      "package_type",
+      "package_version"
+    ],
+    "3": [
+      "services_daemon_ipc",
+      "services_daemon_ipc_commandhandler",
+      "services_daemon_ipc_daemoncommand",
+      "services_daemon_ipc_daemonrequest",
+      "services_daemon_ipc_daemonresponse",
+      "services_daemon_ipc_sendcommand",
+      "services_daemon_ipc_startdaemonserver",
+      "services_daemon_ipc_stopdaemonserver",
+      "services_runtime_state",
+      "services_runtime_state_ensuredir",
+      "services_runtime_state_getsocketpath",
+      "services_runtime_state_isprocessalive",
+      "services_runtime_state_readruntimestate",
+      "services_runtime_state_removeruntimestate",
+      "services_runtime_state_runtimestate",
+      "services_runtime_state_saveruntimestate",
+      "services_runtime_state_socket_file",
+      "services_runtime_state_state_dir",
+      "services_runtime_state_state_file",
+      "src_cli",
+      "src_cli_cmddoctor",
+      "src_cli_cmdstart",
+      "src_cli_cmdstatus",
+      "src_cli_cmdstop",
+      "src_cli_command",
+      "src_cli_findpackageroot",
+      "src_cli_isdaemonrunning",
+      "src_cli_parsecommand",
+      "src_cli_usage",
+      "src_main_gracefulshutdown"
+    ],
+    "4": [
+      "shared_types",
+      "shared_types_appstate",
+      "shared_types_audiostreammeta",
+      "shared_types_ipc",
+      "shared_types_pivoiceapi",
+      "shared_types_recordingformat",
+      "shared_types_test",
+      "shared_types_window",
+      "src_main",
+      "src_main_createwindow",
+      "src_main_executeundocommand",
+      "src_main_gotlock",
+      "src_main_handledaemoncommand",
+      "src_main_handlevoicedictionarycheck",
+      "src_main_handlevoicefixlastcheck",
+      "src_main_handlevoiceundocheck",
+      "src_main_nativepastebin",
+      "src_main_pastetexttofocusedfield",
+      "src_main_playstartchime",
+      "src_main_playsuccesschime",
+      "src_main_playtogglestopchime",
+      "src_main_playundochime",
+      "src_main_projectroot",
+      "src_main_setstate",
+      "src_main_setupfnhook",
+      "src_main_togglerecordingstate",
+      "src_preload",
+      "src_preload_api"
+    ],
+    "5": [
+      "extensions_antigravity_image_gen",
+      "extensions_antigravity_image_gen_antigravity_headers",
+      "extensions_antigravity_image_gen_antigravityimagegen",
+      "extensions_antigravity_image_gen_aspect_ratios",
+      "extensions_antigravity_image_gen_aspectratio",
+      "extensions_antigravity_image_gen_buildrequest",
+      "extensions_antigravity_image_gen_cloudcodeassistrequest",
+      "extensions_antigravity_image_gen_cloudcodeassistresponsechunk",
+      "extensions_antigravity_image_gen_content",
+      "extensions_antigravity_image_gen_extensionconfig",
+      "extensions_antigravity_image_gen_getcredentials",
+      "extensions_antigravity_image_gen_imageextension",
+      "extensions_antigravity_image_gen_loadconfig",
+      "extensions_antigravity_image_gen_parsedcredentials",
+      "extensions_antigravity_image_gen_parseoauthcredentials",
+      "extensions_antigravity_image_gen_parsesseforimage",
+      "extensions_antigravity_image_gen_part",
+      "extensions_antigravity_image_gen_readconfigfile",
+      "extensions_antigravity_image_gen_resolvesaveconfig",
+      "extensions_antigravity_image_gen_save_modes",
+      "extensions_antigravity_image_gen_saveconfig",
+      "extensions_antigravity_image_gen_saveimage",
+      "extensions_antigravity_image_gen_savemode",
+      "extensions_antigravity_image_gen_tool_params",
+      "extensions_antigravity_image_gen_toolparams"
+    ],
+    "6": [
+      "extensions_space_invaders",
+      "extensions_space_invaders_alien",
+      "extensions_space_invaders_bullet",
+      "extensions_space_invaders_createaliens",
+      "extensions_space_invaders_createinitialstate",
+      "extensions_space_invaders_createshields",
+      "extensions_space_invaders_gamestate",
+      "extensions_space_invaders_keystate",
+      "extensions_space_invaders_point",
+      "extensions_space_invaders_shield",
+      "extensions_space_invaders_spaceinvaderscomponent",
+      "extensions_space_invaders_spaceinvaderscomponent_alienshoot",
+      "extensions_space_invaders_spaceinvaderscomponent_checkcollisions",
+      "extensions_space_invaders_spaceinvaderscomponent_constructor",
+      "extensions_space_invaders_spaceinvaderscomponent_dispose",
+      "extensions_space_invaders_spaceinvaderscomponent_handleinput",
+      "extensions_space_invaders_spaceinvaderscomponent_invalidate",
+      "extensions_space_invaders_spaceinvaderscomponent_movealiens",
+      "extensions_space_invaders_spaceinvaderscomponent_padline",
+      "extensions_space_invaders_spaceinvaderscomponent_render",
+      "extensions_space_invaders_spaceinvaderscomponent_startgame",
+      "extensions_space_invaders_spaceinvaderscomponent_tick"
+    ],
+    "7": [
+      "services_config",
+      "services_config_configerror",
+      "services_config_configerror_constructor",
+      "services_config_configfileschema",
+      "services_config_defaultconfig",
+      "services_config_formatkeydisplay",
+      "services_config_key_map",
+      "services_config_keybinding",
+      "services_config_loadconfig",
+      "services_config_modifier_names",
+      "services_config_parsekeybinding",
+      "services_config_pivoiceconfig",
+      "services_config_test",
+      "services_fn_hook",
+      "services_fn_hook_fnhook",
+      "services_fn_hook_fnhook_constructor",
+      "services_fn_hook_fnhook_isfndown",
+      "services_fn_hook_fnhook_start",
+      "services_fn_hook_fnhook_stop",
+      "services_fn_hook_fnhookcallbacks",
+      "services_fn_hook_getreleasecodes"
+    ],
+    "8": [
+      "tsconfig",
+      "tsconfig_compileroptions",
+      "tsconfig_compileroptions_allowimportingtsextensions",
+      "tsconfig_compileroptions_allowjs",
+      "tsconfig_compileroptions_jsx",
+      "tsconfig_compileroptions_lib",
+      "tsconfig_compileroptions_module",
+      "tsconfig_compileroptions_moduledetection",
+      "tsconfig_compileroptions_moduleresolution",
+      "tsconfig_compileroptions_noemit",
+      "tsconfig_compileroptions_nofallthroughcasesinswitch",
+      "tsconfig_compileroptions_noimplicitoverride",
+      "tsconfig_compileroptions_nopropertyaccessfromindexsignature",
+      "tsconfig_compileroptions_nouncheckedindexedaccess",
+      "tsconfig_compileroptions_nounusedlocals",
+      "tsconfig_compileroptions_nounusedparameters",
+      "tsconfig_compileroptions_skiplibcheck",
+      "tsconfig_compileroptions_strict",
+      "tsconfig_compileroptions_target",
+      "tsconfig_compileroptions_verbatimmodulesyntax"
+    ],
+    "9": [
+      "extensions_snake",
+      "extensions_snake_createinitialstate",
+      "extensions_snake_direction",
+      "extensions_snake_gamestate",
+      "extensions_snake_point",
+      "extensions_snake_snakecomponent",
+      "extensions_snake_snakecomponent_constructor",
+      "extensions_snake_snakecomponent_dispose",
+      "extensions_snake_snakecomponent_handleinput",
+      "extensions_snake_snakecomponent_invalidate",
+      "extensions_snake_snakecomponent_padline",
+      "extensions_snake_snakecomponent_render",
+      "extensions_snake_snakecomponent_startgame",
+      "extensions_snake_snakecomponent_tick",
+      "extensions_snake_spawnfood"
+    ],
+    "10": [
+      "extensions_todo",
+      "extensions_todo_execute",
+      "extensions_todo_rendercall",
+      "extensions_todo_renderresult",
+      "extensions_todo_todo",
+      "extensions_todo_tododetails",
+      "extensions_todo_todolistcomponent",
+      "extensions_todo_todolistcomponent_constructor",
+      "extensions_todo_todolistcomponent_handleinput",
+      "extensions_todo_todolistcomponent_invalidate",
+      "extensions_todo_todolistcomponent_render",
+      "extensions_todo_todoparams"
+    ],
+    "11": [
+      "extensions_questionnaire",
+      "extensions_questionnaire_answer",
+      "extensions_questionnaire_errorresult",
+      "extensions_questionnaire_question",
+      "extensions_questionnaire_questionnaire",
+      "extensions_questionnaire_questionnaireparams",
+      "extensions_questionnaire_questionnaireresult",
+      "extensions_questionnaire_questionoption",
+      "extensions_questionnaire_questionoptionschema",
+      "extensions_questionnaire_questionschema",
+      "extensions_questionnaire_renderoption"
+    ],
+    "12": [
+      "extensions_rainbow_editor",
+      "extensions_rainbow_editor_brighten",
+      "extensions_rainbow_editor_colorize",
+      "extensions_rainbow_editor_colors",
+      "extensions_rainbow_editor_rainboweditor",
+      "extensions_rainbow_editor_rainboweditor_handleinput",
+      "extensions_rainbow_editor_rainboweditor_hasultrathink",
+      "extensions_rainbow_editor_rainboweditor_render",
+      "extensions_rainbow_editor_rainboweditor_startanimation",
+      "extensions_rainbow_editor_rainboweditor_stopanimation"
+    ],
+    "13": [
+      "example_package",
+      "example_package_dependencies",
+      "example_package_dependencies_pi_voice",
+      "example_package_name",
+      "example_package_private",
+      "example_package_trusteddependencies",
+      "example_package_type",
+      "example_package_version"
+    ],
+    "14": [
+      "extensions_minimal_mode",
+      "extensions_minimal_mode_createbuiltintools",
+      "extensions_minimal_mode_execute",
+      "extensions_minimal_mode_getbuiltintools",
+      "extensions_minimal_mode_rendercall",
+      "extensions_minimal_mode_renderresult",
+      "extensions_minimal_mode_shortenpath",
+      "extensions_minimal_mode_toolcache"
+    ],
+    "15": [
+      "extensions_summarize",
+      "extensions_summarize_buildconversationtext",
+      "extensions_summarize_buildsummaryprompt",
+      "extensions_summarize_contentblock",
+      "extensions_summarize_extracttextparts",
+      "extensions_summarize_extracttoolcalllines",
+      "extensions_summarize_sessionentry",
+      "extensions_summarize_showsummaryui"
+    ],
+    "16": [
+      "extensions_overlay_test",
+      "extensions_overlay_test_overlaytestcomponent",
+      "extensions_overlay_test_overlaytestcomponent_constructor",
+      "extensions_overlay_test_overlaytestcomponent_dispose",
+      "extensions_overlay_test_overlaytestcomponent_handleinput",
+      "extensions_overlay_test_overlaytestcomponent_invalidate",
+      "extensions_overlay_test_overlaytestcomponent_render"
+    ],
+    "17": [
+      "extensions_question",
+      "extensions_question_displayoption",
+      "extensions_question_optionschema",
+      "extensions_question_optionwithdesc",
+      "extensions_question_question",
+      "extensions_question_questiondetails",
+      "extensions_question_questionparams"
+    ],
+    "18": [
+      "extensions_ssh",
+      "extensions_ssh_createremotebashops",
+      "extensions_ssh_createremoteeditops",
+      "extensions_ssh_createremotereadops",
+      "extensions_ssh_createremotewriteops",
+      "extensions_ssh_execute",
+      "extensions_ssh_sshexec"
+    ],
+    "19": [
+      "extensions_tool_override",
+      "extensions_tool_override_blocked_patterns",
+      "extensions_tool_override_execute",
+      "extensions_tool_override_isblockedpath",
+      "extensions_tool_override_log_file",
+      "extensions_tool_override_logaccess",
+      "extensions_tool_override_readschema"
+    ],
+    "20": [
+      "sdk_12_full_control",
+      "sdk_12_full_control_authstorage",
+      "sdk_12_full_control_cwd",
+      "sdk_12_full_control_model",
+      "sdk_12_full_control_modelregistry",
+      "sdk_12_full_control_resourceloader",
+      "sdk_12_full_control_settingsmanager"
+    ],
+    "21": [
+      "services_fn_hook_test",
+      "services_fn_hook_test_keycallback",
+      "services_fn_hook_test_keydowncallbacks",
+      "services_fn_hook_test_keyupcallbacks",
+      "services_fn_hook_test_mockuiohook",
+      "services_fn_hook_test_simulatekeydown",
+      "services_fn_hook_test_simulatekeyup"
+    ],
+    "22": [
+      "services_pi_session_test",
+      "services_pi_session_test_mockcreateagentsession",
+      "services_pi_session_test_mockdispose",
+      "services_pi_session_test_mockprompt",
+      "services_pi_session_test_mocksession",
+      "services_pi_session_test_mocksessionmanagerinmemory",
+      "services_pi_session_test_mocksubscribe"
+    ],
+    "23": [
+      "services_tts_test",
+      "services_tts_test_mockelevenlabstts",
+      "services_tts_test_mockgeneratecontentstream",
+      "services_tts_test_mockopenaispeech",
+      "services_tts_test_mockspawn",
+      "services_tts_test_mockspawncallbacks",
+      "services_tts_test_mockspawninstance"
+    ],
+    "24": [
+      "extensions_notify",
+      "extensions_notify_notify",
+      "extensions_notify_notifyosc777",
+      "extensions_notify_notifyosc99",
+      "extensions_notify_notifywindows",
+      "extensions_notify_windowstoastscript"
+    ],
+    "25": [
+      "extensions_truncated_tool",
+      "extensions_truncated_tool_execute",
+      "extensions_truncated_tool_rendercall",
+      "extensions_truncated_tool_renderresult",
+      "extensions_truncated_tool_rgdetails",
+      "extensions_truncated_tool_rgparams"
+    ],
+    "26": [
+      "sdk_09_api_keys_and_oauth",
+      "sdk_09_api_keys_and_oauth_authstorage",
+      "sdk_09_api_keys_and_oauth_customauthstorage",
+      "sdk_09_api_keys_and_oauth_custommodelregistry",
+      "sdk_09_api_keys_and_oauth_modelregistry",
+      "sdk_09_api_keys_and_oauth_simpleregistry"
+    ],
+    "27": [
+      "extensions_modal_editor",
+      "extensions_modal_editor_modaleditor",
+      "extensions_modal_editor_modaleditor_handleinput",
+      "extensions_modal_editor_modaleditor_render",
+      "extensions_modal_editor_normal_keys"
+    ],
+    "28": [
+      "extensions_preset",
+      "extensions_preset_loadpresets",
+      "extensions_preset_preset",
+      "extensions_preset_presetextension",
+      "extensions_preset_presetsconfig"
+    ],
+    "29": [
+      "extensions_titlebar_spinner",
+      "extensions_titlebar_spinner_braille_frames",
+      "extensions_titlebar_spinner_getbasetitle",
+      "extensions_titlebar_spinner_startanimation",
+      "extensions_titlebar_spinner_stopanimation"
+    ],
+    "30": [
+      "sdk_02_custom_model",
+      "sdk_02_custom_model_authstorage",
+      "sdk_02_custom_model_custommodel",
+      "sdk_02_custom_model_modelregistry",
+      "sdk_02_custom_model_opus"
+    ],
+    "31": [
+      "services_stt_test",
+      "services_stt_test_mockelevenlabsstt",
+      "services_stt_test_mockgeneratecontent",
+      "services_stt_test_mockopenaitranscription",
+      "services_stt_test_mockwhisperfull"
+    ],
+    "32": [
+      "extensions_custom_header",
+      "extensions_custom_header_getpimascot",
+      "extensions_custom_header_invalidate",
+      "extensions_custom_header_render"
+    ],
+    "33": [
+      "extensions_interactive_shell",
+      "extensions_interactive_shell_default_interactive_commands",
+      "extensions_interactive_shell_getinteractivecommands",
+      "extensions_interactive_shell_isinteractivecommand"
+    ],
+    "34": [
+      "renderer_renderer",
+      "renderer_renderer_audiochunks",
+      "renderer_renderer_startwebmrecording",
+      "renderer_renderer_stopwebmrecording"
+    ],
+    "35": [
+      "sdk_04_skills",
+      "sdk_04_skills_customskill",
+      "sdk_04_skills_loader",
+      "sdk_04_skills_skills_allskills_diagnostics"
+    ],
+    "36": [
+      "sdk_10_settings",
+      "sdk_10_settings_inmemorysettings",
+      "sdk_10_settings_settingsmanager",
+      "sdk_10_settings_settingsmanagerfromdisk"
+    ],
+    "37": [
+      "extensions_claude_rules",
+      "extensions_claude_rules_clauderulesextension",
+      "extensions_claude_rules_findmarkdownfiles"
+    ],
+    "38": [
+      "extensions_custom_footer",
+      "extensions_custom_footer_invalidate",
+      "extensions_custom_footer_render"
+    ],
+    "39": [
+      "extensions_mac_system_theme",
+      "extensions_mac_system_theme_execasync",
+      "extensions_mac_system_theme_isdarkmode"
+    ],
+    "40": [
+      "extensions_tools",
+      "extensions_tools_toolsextension",
+      "extensions_tools_toolsstate"
+    ],
+    "41": [
+      "extensions_widget_placement",
+      "extensions_widget_placement_applywidgets",
+      "extensions_widget_placement_widgetplacementextension"
+    ],
+    "42": [
+      "sdk_03_custom_prompt",
+      "sdk_03_custom_prompt_loader1",
+      "sdk_03_custom_prompt_loader2"
+    ],
+    "43": [
+      "sdk_08_prompt_templates",
+      "sdk_08_prompt_templates_deploytemplate",
+      "sdk_08_prompt_templates_loader"
+    ],
+    "44": [
+      "services_daemon_ipc_test",
+      "services_daemon_ipc_test_cleanupdirs",
+      "services_daemon_ipc_test_maketestdir"
+    ],
+    "45": [
+      "services_whisper_model_test",
+      "services_whisper_model_test_start",
+      "services_whisper_model_test_testhome"
+    ],
+    "46": [
+      "shared_audio_utils",
+      "shared_audio_utils_downsample",
+      "shared_audio_utils_test"
+    ],
+    "47": [
+      "extensions_commands",
+      "extensions_commands_commandsextension"
+    ],
+    "48": [
+      "extensions_dirty_repo_guard",
+      "extensions_dirty_repo_guard_checkdirtyrepo"
+    ],
+    "49": [
+      "extensions_hello",
+      "extensions_hello_execute"
+    ],
+    "50": [
+      "extensions_pirate",
+      "extensions_pirate_pirateextension"
+    ],
+    "51": [
+      "extensions_shutdown_command",
+      "extensions_shutdown_command_execute"
+    ],
+    "52": [
+      "native_pi_paste",
+      "native_pi_paste_main"
+    ],
+    "53": [
+      "sdk_06_extensions",
+      "sdk_06_extensions_resourceloader"
+    ],
+    "54": [
+      "sdk_07_context_files",
+      "sdk_07_context_files_loader"
+    ],
+    "55": [
+      "services_gemini_client_test",
+      "services_gemini_client_test_mockgooglegenai"
+    ],
+    "56": [
+      "services_logger_test",
+      "services_logger_test_resolvelogpath"
+    ],
+    "57": [
+      "services_runtime_state_test",
+      "services_runtime_state_test_testhome"
+    ],
+    "58": [
+      "electron_vite_config"
+    ],
+    "59": [
+      "extensions_auto_commit_on_exit"
+    ],
+    "60": [
+      "extensions_bash_spawn_hook"
+    ],
+    "61": [
+      "extensions_bookmark"
+    ],
+    "62": [
+      "extensions_confirm_destructive"
+    ],
+    "63": [
+      "extensions_custom_compaction"
+    ],
+    "64": [
+      "extensions_event_bus"
+    ],
+    "65": [
+      "extensions_file_trigger"
+    ],
+    "66": [
+      "extensions_git_checkpoint"
+    ],
+    "67": [
+      "extensions_handoff"
+    ],
+    "68": [
+      "extensions_inline_bash"
+    ],
+    "69": [
+      "extensions_input_transform"
+    ],
+    "70": [
+      "extensions_message_renderer"
+    ],
+    "71": [
+      "extensions_model_status"
+    ],
+    "72": [
+      "extensions_permission_gate"
+    ],
+    "73": [
+      "extensions_protected_paths"
+    ],
+    "74": [
+      "extensions_qna"
+    ],
+    "75": [
+      "extensions_rpc_demo"
+    ],
+    "76": [
+      "extensions_send_user_message"
+    ],
+    "77": [
+      "extensions_session_name"
+    ],
+    "78": [
+      "extensions_status_line"
+    ],
+    "79": [
+      "extensions_system_prompt_header"
+    ],
+    "80": [
+      "extensions_timed_confirm"
+    ],
+    "81": [
+      "extensions_trigger_compact"
+    ],
+    "82": [
+      "renderer_vite_env_d"
+    ],
+    "83": [
+      "sdk_01_minimal"
+    ],
+    "84": [
+      "sdk_05_tools"
+    ],
+    "85": [
+      "sdk_11_sessions"
+    ]
+  },
+  "cohesion": {
+    "0": 0.053544494720965306,
+    "1": 0.07272727272727272,
+    "2": 0.05,
+    "3": 0.12873563218390804,
+    "4": 0.10582010582010581,
+    "5": 0.09333333333333334,
+    "6": 0.1471861471861472,
+    "7": 0.15714285714285714,
+    "8": 0.1,
+    "9": 0.20952380952380953,
+    "10": 0.16666666666666666,
+    "11": 0.18181818181818182,
+    "12": 0.26666666666666666,
+    "13": 0.25,
+    "14": 0.35714285714285715,
+    "15": 0.32142857142857145,
+    "16": 0.2857142857142857,
+    "17": 0.2857142857142857,
+    "18": 0.5714285714285714,
+    "19": 0.38095238095238093,
+    "20": 0.2857142857142857,
+    "21": 0.2857142857142857,
+    "22": 0.2857142857142857,
+    "23": 0.2857142857142857,
+    "24": 0.6,
+    "25": 0.3333333333333333,
+    "26": 0.3333333333333333,
+    "27": 0.4,
+    "28": 0.4,
+    "29": 0.6,
+    "30": 0.4,
+    "31": 0.4,
+    "32": 0.6666666666666666,
+    "33": 0.6666666666666666,
+    "34": 0.5,
+    "35": 0.5,
+    "36": 0.5,
+    "37": 0.6666666666666666,
+    "38": 0.6666666666666666,
+    "39": 1.0,
+    "40": 0.6666666666666666,
+    "41": 0.6666666666666666,
+    "42": 0.6666666666666666,
+    "43": 0.6666666666666666,
+    "44": 0.6666666666666666,
+    "45": 0.6666666666666666,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0
+  },
+  "gods": [
+    {
+      "id": "tsconfig_compileroptions",
+      "label": "compilerOptions",
+      "degree": 19
+    },
+    {
+      "id": "extensions_overlay_qa_tests_baseoverlay",
+      "label": "BaseOverlay",
+      "degree": 15
+    },
+    {
+      "id": "extensions_space_invaders_spaceinvaderscomponent",
+      "label": "SpaceInvadersComponent",
+      "degree": 12
+    },
+    {
+      "id": "package_scripts",
+      "label": "scripts",
+      "degree": 10
+    },
+    {
+      "id": "services_logger_logger",
+      "label": "logger",
+      "degree": 10
+    },
+    {
+      "id": "extensions_snake_snakecomponent",
+      "label": "SnakeComponent",
+      "degree": 9
+    },
+    {
+      "id": "services_runtime_state_readruntimestate",
+      "label": "readRuntimeState()",
+      "degree": 9
+    },
+    {
+      "id": "services_config_loadconfig",
+      "label": "loadConfig()",
+      "degree": 8
+    },
+    {
+      "id": "extensions_overlay_qa_tests_streamingoverflowcomponent",
+      "label": "StreamingOverflowComponent",
+      "degree": 7
+    },
+    {
+      "id": "extensions_overlay_qa_tests_animationdemocomponent",
+      "label": "AnimationDemoComponent",
+      "degree": 7
+    }
+  ],
+  "surprises": [
+    {
+      "source": "cmdStart()",
+      "target": "loadConfig()",
+      "source_files": [
+        "src/cli.ts",
+        "src/services/config.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "cmdStart()",
+      "target": "resolveModelPath()",
+      "source_files": [
+        "src/cli.ts",
+        "src/services/whisper-model.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "setupIpcHandlers()",
+      "target": "transcribe()",
+      "source_files": [
+        "src/main.ts",
+        "src/services/stt.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "peripheral node `setupIpcHandlers()` unexpectedly reaches hub `transcribe()`"
+    },
+    {
+      "source": "isDaemonRunning()",
+      "target": "readRuntimeState()",
+      "source_files": [
+        "src/cli.ts",
+        "src/services/runtime-state.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "cmdDoctor()",
+      "target": "sendCommand()",
+      "source_files": [
+        "src/cli.ts",
+        "src/services/daemon-ipc.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `logger` connect `Community 1` to `Community 3`, `Community 4`, `Community 7`?",
+      "why": "High betweenness centrality (0.005) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `FnHook` connect `Community 7` to `Community 4`?",
+      "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `ASPECT_RATIOS`, `AspectRatio`, `SAVE_MODES` to the rest of the system?",
+      "why": "183 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.053544494720965306 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 1` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 2` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.05 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 3` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.12873563218390804 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

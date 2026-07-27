@@ -1,0 +1,33 @@
+{
+  "test:full": [
+    "gemini-client > creates API key client when GEMINI_API_KEY is set",
+    "gemini-client > creates API key client when GOOGLE_API_KEY is set",
+    "gemini-client > prefers GEMINI_API_KEY over GOOGLE_API_KEY",
+    "gemini-client > forces API key mode with GOOGLE_GENAI_USE_VERTEXAI=false",
+    "gemini-client > throws when no credentials are set",
+    "transcribe > transcribes with gemini provider",
+    "transcribe > transcribes with openai provider",
+    "transcribe > transcribes with elevenlabs provider",
+    "transcribe > trims whitespace from transcription",
+    "parseKeyBinding > parses number keys",
+    "parseKeyBinding > throws on modifier-only binding",
+    "parseKeyBinding > throws on multiple main keys",
+    "loadConfig > returns defaults when no config file exists",
+    "loadConfig > uses defaults for missing fields",
+    "loadConfig > throws ConfigError on invalid JSON syntax"
+  ],
+  "typecheck": [
+    "src/__tests__/cli-readiness.test.ts(4,45): error TS2307: Cannot find module '../../services/runtime-state.js' or its corresponding type declarations.",
+    "src/__tests__/services/macos-safety-integration-smoke.test.ts(145,36): error TS2769: No overload matches this call.",
+    "src/services/config.ts(57,19): error TS2339: Property 'N0' does not exist on type",
+    "src/services/config.ts(58,19): error TS2339: Property 'N1' does not exist on type",
+    "src/services/config.ts(59,19): error TS2339: Property 'N2' does not exist on type",
+    "src/services/config.ts(60,19): error TS2339: Property 'N3' does not exist on type",
+    "src/services/config.ts(61,19): error TS2339: Property 'N4' does not exist on type",
+    "src/services/config.ts(62,19): error TS2339: Property 'N5' does not exist on type",
+    "src/services/config.ts(63,19): error TS2339: Property 'N6' does not exist on type",
+    "src/services/config.ts(64,19): error TS2339: Property 'N7' does not exist on type",
+    "src/services/config.ts(65,19): error TS2339: Property 'N8' does not exist on type",
+    "src/services/config.ts(66,19): error TS2339: Property 'N9' does not exist on type"
+  ]
+}

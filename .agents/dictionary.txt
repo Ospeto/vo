@@ -1,0 +1,16 @@
+# High-Priority Core Vocabulary
+SarYayKaung
+Ospeto
+Diablo
+Engram
+RemPanel
+TBH Labs
+TechnoNews
+MAS 141
+MAS 142
+MAS 143
+FSRS
+MIMU
+Antigravity
+DuckDB
+LanceDB

@@ -1,0 +1,77 @@
+# Ospeto (Moe Kyaw Aung)'s Personal Spoken Vocabulary Dictionary
+# Auto-extracted from USER.md, 02-Projects, 01-Dashboards & 03-Resources
+
+# Names & Identity
+မိုးကျော်
+Moe Kyaw Aung
+Moe Kyaw
+Moe
+Ospeto
+Diablo
+Antigravity
+
+# Obsidian Projects (02-Projects)
+Drone Wars
+Fertility Presentation
+Hotel Cancellation Analysis
+Novel-Writing
+Video Pipeline
+Wavy Best Shop
+ContentOS 2.0
+Data Analyst 2027
+Engram
+Hermes Assistant
+Hermes Kiro ACP
+MAS 131 Factorial Design
+Myanmar Phone Compare
+MIMU
+OpenClaw
+Operations Management
+RemPanel
+TechnoNews
+
+# Vault Dashboards & Systems (01-Dashboards)
+Clawly Command Center
+Daily Notes Dashboard
+Engram MAS Memory Dashboard
+Interest Graph
+LLM Wiki
+Light Novel Dashboard
+MAS Knowledge Graph
+Study Fort
+World Building Hub
+Theme-Day OS
+LifeOS
+Daily note
+Anchor habit
+
+# Academic & Statistical Terms (03-Resources)
+MAS 141
+MAS 142
+MAS 143
+Applied Regression
+Survey Design
+Financial Statistics
+OLS Assumptions
+Multiple Linear Regression
+Levene's Test
+Eta-squared
+Factorial Design
+Non-Parametric Method
+FSRS
+
+# Work Pillars, Tools & Infrastructure
+TBH Labs
+TechnoLand
+Tech media
+VPN
+Infrastructure
+SQL
+Kaggle
+Coursera
+GW2
+Guild Wars 2
+Vibe coding
+PyTorch
+Python
+Obsidian

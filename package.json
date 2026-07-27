@@ -1,0 +1,97 @@
+{
+  "name": "vo",
+  "version": "1.0.0",
+  "description": "Voice interface for pi coding agent",
+  "author": "Ospeto",
+  "license": "CC-BY-NC-4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yukukotani/pi-voice"
+  },
+  "type": "module",
+  "main": "./out/main/index.js",
+  "bin": {
+    "vo": "./bin/vo",
+    "pi-voice": "./bin/vo"
+  },
+  "files": [
+    "bin/",
+    "out/"
+  ],
+  "scripts": {
+    "cli": "bun src/cli.ts",
+    "dev:electron": "electron-vite dev",
+    "dev:cli": "bun src/cli.ts",
+    "build": "bun run build:electron && bun run build:cli",
+    "build:electron": "electron-vite build && mkdir -p out/src/assets out/assets && cp -R src/assets/* out/src/assets/ && cp -R src/assets/* out/assets/",
+    "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
+    "dist": "bun run build && electron-builder --mac",
+    "dist:dmg": "bun run build && electron-builder --mac dmg",
+    "dist:zip": "bun run build && electron-builder --mac zip",
+    "preview": "electron-vite preview",
+    "prepack": "bun run build",
+    "prepublish": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "electron": "40.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.1.0",
+    "node-gyp": "12.4.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.35.0",
+    "@google/genai": "^1.40.0",
+    "@mariozechner/pi-coding-agent": "^0.52.7",
+    "@napi-rs/whisper": "^0.0.4",
+    "openai": "^6.10.0",
+    "pino": "^10.3.1",
+    "uiohook-napi": "^1.5.4",
+    "zod": "^4.3.6"
+  },
+  "trustedDependencies": [
+    "electron",
+    "uiohook-napi",
+    "protobufjs"
+  ],
+  "build": {
+    "appId": "com.pi.voice",
+    "productName": "vo",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "bin/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "src/assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}
