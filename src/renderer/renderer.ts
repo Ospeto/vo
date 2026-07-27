@@ -190,54 +190,63 @@ function startWaveAnimationLoop() {
     const maxAmp = height / 2 - 2;
 
     const rawRatio = Math.max(0, smoothedAmp / 100);
+    // When silence or gain is zero, activeAmp is strictly ZERO (no unwanted movement)
     const activeAmp = rawRatio < 0.02 ? 0 : Math.min(maxAmp, rawRatio * maxAmp * 1.4);
 
     if (activeAmp > 0) {
-      wavePhase += 0.08 + rawRatio * 0.16;
-    } else {
-      wavePhase += 0.03; // Gentle ambient micro-drift when idle
+      wavePhase += 0.08 + rawRatio * 0.16; // Wave moves faster when voice level is higher!
     }
 
     spectrumCtx.clearRect(0, 0, width, height);
 
     if (activeAmp > 0.05) {
-      // 3D Organic Dotted Particle Wave Ribbon (7 Layered Strands)
-      const step = 4;
-      for (let k = -3; k <= 3; k++) {
-        const offsetPhase = k * 0.22;
-        const verticalShift = k * 1.5;
-        const strandAlpha = 1 - Math.abs(k) * 0.22;
-        const dotRadius = Math.max(0.7, 1.25 - Math.abs(k) * 0.15);
-
-        for (let x = 0; x <= width; x += step) {
-          const progress = x / width;
-          const envelope = Math.sin(progress * Math.PI);
-          const waveY = centerY + verticalShift + Math.sin(progress * Math.PI * 3.5 + wavePhase + offsetPhase) * activeAmp * envelope;
-
-          spectrumCtx.beginPath();
-          spectrumCtx.arc(x, waveY, dotRadius, 0, Math.PI * 2);
-
-          const alpha = (0.35 + 0.65 * envelope) * strandAlpha;
-          spectrumCtx.fillStyle = k === 0 
-            ? `rgba(52, 211, 153, ${alpha})`
-            : `rgba(96, 165, 250, ${alpha * 0.8})`;
-
-          spectrumCtx.fill();
-        }
-      }
-    } else {
-      // Complete Silence / Idle: Elegant ambient dotted particle baseline
-      const step = 5;
-      for (let x = 0; x <= width; x += step) {
+      // Layer 1: Background Soft Cyan Wave
+      spectrumCtx.save();
+      spectrumCtx.beginPath();
+      for (let x = 0; x <= width; x += 3) {
         const progress = x / width;
         const envelope = Math.sin(progress * Math.PI);
-        const alpha = 0.2 + 0.3 * envelope;
-        const waveY = centerY + Math.sin(progress * Math.PI * 2 + wavePhase) * 1.2 * envelope;
-        spectrumCtx.beginPath();
-        spectrumCtx.arc(x, waveY, 1.0, 0, Math.PI * 2);
-        spectrumCtx.fillStyle = `rgba(161, 161, 170, ${alpha})`;
-        spectrumCtx.fill();
+        const y = centerY + Math.sin(progress * Math.PI * 3 + wavePhase + 1.2) * activeAmp * 0.6 * envelope;
+        if (x === 0) spectrumCtx.moveTo(x, y);
+        else spectrumCtx.lineTo(x, y);
       }
+      spectrumCtx.strokeStyle = "rgba(147, 197, 253, 0.45)";
+      spectrumCtx.lineWidth = 1.5;
+      spectrumCtx.stroke();
+      spectrumCtx.restore();
+
+      // Layer 2: Foreground High-Definition Ribbon (Emerald & Blue Gradient)
+      spectrumCtx.save();
+      spectrumCtx.beginPath();
+      for (let x = 0; x <= width; x += 2) {
+        const progress = x / width;
+        const envelope = Math.sin(progress * Math.PI);
+        const y = centerY + Math.sin(progress * Math.PI * 4 + wavePhase) * activeAmp * envelope;
+        if (x === 0) spectrumCtx.moveTo(x, y);
+        else spectrumCtx.lineTo(x, y);
+      }
+
+      const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, "rgba(59, 130, 246, 0.95)");
+      gradient.addColorStop(0.5, "rgba(52, 211, 153, 1.0)");
+      gradient.addColorStop(1, "rgba(59, 130, 246, 0.95)");
+
+      spectrumCtx.strokeStyle = gradient;
+      spectrumCtx.lineWidth = Math.min(3.5, 1.8 + rawRatio * 2.2); // Dynamic line thickness
+      spectrumCtx.lineCap = "round";
+      spectrumCtx.lineJoin = "round";
+      spectrumCtx.stroke();
+      spectrumCtx.restore();
+    } else {
+      // Complete Silence / Mic Gain 0: Clean stationary baseline
+      spectrumCtx.save();
+      spectrumCtx.beginPath();
+      spectrumCtx.moveTo(0, centerY);
+      spectrumCtx.lineTo(width, centerY);
+      spectrumCtx.strokeStyle = "rgba(161, 161, 170, 0.22)";
+      spectrumCtx.lineWidth = 1;
+      spectrumCtx.stroke();
+      spectrumCtx.restore();
     }
 
     animationFrameId = requestAnimationFrame(renderWave);
@@ -253,6 +262,13 @@ function updateAudioWaveLevel(level: number) {
 
 function stopSpectrumVisualizer() {
   currentTargetAmp = 0;
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  if (spectrumCanvas && spectrumCtx) {
+    spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+  }
 }
 
 function updatePresetPills(selectedPreset: string) {
@@ -268,8 +284,6 @@ function updatePresetPills(selectedPreset: string) {
 }
 
 async function initUI() {
-  enableControls(true);
-  startWaveAnimationLoop();
   const config = await window.electronIPC?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "fast");
@@ -522,29 +536,9 @@ async function removeVocabTerm(preset: string, index: number) {
 
 async function renderHistory() {
   const historyContainer = document.getElementById("historyContainer");
-  const monthlyCostBadge = document.getElementById("monthlyCostBadge");
   if (!historyContainer) return;
 
   const history: HistoryEntry[] = (await window.electronIPC?.getHistory()) || [];
-
-  let totalCost = 0;
-  let totalSavedSec = 0;
-  history.forEach((item: any) => {
-    totalCost += item.cost || 0;
-    totalSavedSec += (item.audioDurationSec || 5) * 3;
-  });
-
-  const statDictationsCount = document.getElementById("statDictationsCount");
-  const statSavedTime = document.getElementById("statSavedTime");
-  const statFreeQuota = document.getElementById("statFreeQuota");
-
-  if (monthlyCostBadge) {
-    monthlyCostBadge.textContent = `$${totalCost.toFixed(4)}`;
-  }
-  if (statFreeQuota) {
-    const remaining = Math.max(0, 1500 - history.length);
-    statFreeQuota.textContent = `${remaining}/1500`;
-  }
 
   if (history.length === 0) {
     historyContainer.innerHTML = '<div class="history-empty">No recent dictations</div>';
@@ -615,11 +609,7 @@ window.electronIPC?.onStateChanged((payload: StatePayload) => {
       renderHistory();
     }
   }
-  updateStatusBadge(payload.state, payload.message, payload.usedPaidKey);
-});
-
-(window.electronIPC as any)?.onUpdatePresetUI((preset: string) => {
-  updatePresetPills(preset);
+  updateStatusBadge(payload.state, payload.message);
 });
 
 window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spectrum?: number[] }) => {
@@ -631,17 +621,8 @@ window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spect
   updateAudioWaveLevel(level);
 });
 
-function updateStatusBadge(state: AppState, message?: string, usedPaidKey?: boolean) {
+function updateStatusBadge(state: AppState, message?: string) {
   if (!statusDot || !statusLabel) return;
-
-  const paidStatusTag = document.getElementById("paidStatusTag");
-  if (paidStatusTag) {
-    if (usedPaidKey) {
-      paidStatusTag.classList.remove("hidden");
-    } else {
-      paidStatusTag.classList.add("hidden");
-    }
-  }
 
   const containerEl = document.querySelector(".container");
   if (state === "recording" || state === "starting") {
@@ -688,21 +669,20 @@ function enableControls(enabled: boolean) {
     btn.disabled = !enabled;
   });
   if (modeSelect) modeSelect.disabled = !enabled;
-  if (gainSlider) gainSlider.disabled = !enabled;
-  if (modelSelect) modelSelect.disabled = !enabled;
+  gainSlider.disabled = !enabled;
+  modelSelect.disabled = !enabled;
   if (recordBtn) recordBtn.disabled = !enabled;
-  if (configBtn) configBtn.disabled = !enabled;
+  configBtn.disabled = !enabled;
 }
 
-// Preset Segmented Bar Click Handler (Event Delegation for 100% reliable 1-click preset switching)
-document.addEventListener("click", async (e) => {
-  const btn = (e.target as HTMLElement)?.closest(".preset-pill-btn") as HTMLButtonElement | null;
-  if (!btn) return;
-  const selectedPreset = btn.getAttribute("data-preset") as DictationPreset;
-  if (!selectedPreset) return;
-  updatePresetPills(selectedPreset);
-  if (presetSelect) presetSelect.value = selectedPreset;
-  await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
+document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const selectedPreset = btn.getAttribute("data-preset") as DictationPreset;
+    if (!selectedPreset) return;
+    updatePresetPills(selectedPreset);
+    if (presetSelect) presetSelect.value = selectedPreset;
+    await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
+  });
 });
 
 presetSelect?.addEventListener("change", async () => {
