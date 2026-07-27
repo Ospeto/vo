@@ -23,6 +23,12 @@ const keycapDisplay = document.getElementById("keycapDisplay") as HTMLElement;
 const recordBtn = document.getElementById("recordBtn") as HTMLButtonElement;
 const resetShortcutBtn = document.getElementById("resetShortcutBtn") as HTMLButtonElement;
 const hotkeyFeedback = document.getElementById("hotkeyFeedback") as HTMLElement;
+
+const editKeycapDisplay = document.getElementById("editKeycapDisplay") as HTMLElement;
+const recordEditBtn = document.getElementById("recordEditBtn") as HTMLButtonElement;
+const resetEditShortcutBtn = document.getElementById("resetEditShortcutBtn") as HTMLButtonElement;
+const editHotkeyFeedback = document.getElementById("editHotkeyFeedback") as HTMLElement;
+
 const modalPresetSelect = document.getElementById("modalPresetSelect") as HTMLSelectElement;
 const targetLanguageSelect = document.getElementById("targetLanguageSelect") as HTMLSelectElement;
 const vocabInput = document.getElementById("vocabInput") as HTMLInputElement;
@@ -358,6 +364,9 @@ async function initUI() {
     }
     if (keycapDisplay) {
       keycapDisplay.textContent = config.keyDisplay;
+    }
+    if (editKeycapDisplay && (config as any).editKeyDisplay) {
+      editKeycapDisplay.textContent = (config as any).editKeyDisplay;
     }
     audioChimesEnabled = config.audioChimesEnabled ?? true;
     updateChimeBtnUI();
@@ -1032,16 +1041,83 @@ function stopHotkeyRecording() {
   recordBtn.textContent = "Record";
 }
 
-function showHotkeyError(msg: string) {
-  if (hotkeyFeedback) {
-    hotkeyFeedback.textContent = msg;
-    hotkeyFeedback.style.display = "block";
-  }
-}
-
 function hideHotkeyError() {
   if (hotkeyFeedback) {
     hotkeyFeedback.style.display = "none";
+  }
+}
+
+let isRecordingEditHotkey = false;
+
+resetEditShortcutBtn?.addEventListener("click", async () => {
+  const res = await window.electronIPC?.registerEditHotkey("ctrl+cmd+option+e");
+  if (res?.success) {
+    editKeycapDisplay.textContent = res.keyDisplay || "⌃⌥⌘E";
+    hideEditHotkeyError();
+  }
+});
+
+recordEditBtn?.addEventListener("click", () => {
+  if (!isRecordingEditHotkey) {
+    startEditHotkeyRecording();
+  } else {
+    stopEditHotkeyRecording();
+  }
+});
+
+function startEditHotkeyRecording() {
+  isRecordingEditHotkey = true;
+  recordEditBtn.textContent = "Record";
+  editKeycapDisplay.textContent = "Press shortcut...";
+  hideEditHotkeyError();
+
+  const handleKeyDown = async (e: KeyboardEvent) => {
+    e.preventDefault();
+    if (e.key === "Escape") {
+      stopEditHotkeyRecording();
+      window.removeEventListener("keydown", handleKeyDown);
+      return;
+    }
+
+    const modifiers: string[] = [];
+    if (e.ctrlKey) modifiers.push("ctrl");
+    if (e.metaKey) modifiers.push("cmd");
+    if (e.altKey) modifiers.push("option");
+    if (e.shiftKey) modifiers.push("shift");
+
+    const isModifierKey = ["Control", "Meta", "Alt", "Shift"].includes(e.key);
+    if (!isModifierKey) {
+      const keyStr = [...modifiers, e.key.toLowerCase()].join("+");
+      const res = await window.electronIPC?.registerEditHotkey(keyStr);
+      if (res?.success) {
+        editKeycapDisplay.textContent = res.keyDisplay || keyStr;
+        hideEditHotkeyError();
+      } else if (res?.error) {
+        showEditHotkeyError(res.error);
+      }
+      stopEditHotkeyRecording();
+      window.removeEventListener("keydown", handleKeyDown);
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+}
+
+function stopEditHotkeyRecording() {
+  isRecordingEditHotkey = false;
+  recordEditBtn.textContent = "Record";
+}
+
+function showEditHotkeyError(msg: string) {
+  if (editHotkeyFeedback) {
+    editHotkeyFeedback.textContent = msg;
+    editHotkeyFeedback.style.display = "block";
+  }
+}
+
+function hideEditHotkeyError() {
+  if (editHotkeyFeedback) {
+    editHotkeyFeedback.style.display = "none";
   }
 }
 

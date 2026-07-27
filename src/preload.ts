@@ -41,6 +41,7 @@ const api = {
   getConfig: () => ipcRenderer.invoke(IPC.GET_CONFIG),
   saveConfig: (patch: { geminiModel?: GeminiModelChoice; inputGain?: number; key?: string; dictationPreset?: string; dictationMode?: string; audioChimesEnabled?: boolean }) => ipcRenderer.invoke(IPC.SAVE_CONFIG, patch),
   registerHotkey: (newKeyStr: string) => ipcRenderer.invoke(IPC.REGISTER_HOTKEY, newKeyStr),
+  registerEditHotkey: (newKeyStr: string) => ipcRenderer.invoke(IPC.REGISTER_EDIT_HOTKEY, newKeyStr),
   getHistory: () => ipcRenderer.invoke(IPC.GET_HISTORY),
   clearHistory: () => ipcRenderer.invoke(IPC.CLEAR_HISTORY),
   toggleDictation: () => ipcRenderer.invoke(IPC.TOGGLE_DICTATION),

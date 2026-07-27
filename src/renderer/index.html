@@ -136,13 +136,24 @@
         <div id="tab-general" class="tab-pane active">
           <!-- Global Dictation Shortcut Section -->
           <div class="modal-section-group">
-            <label class="section-label">Global Dictation Shortcut</label>
+            <label class="section-label">Global Dictation Shortcut (Pure Dictation)</label>
             <div class="shortcut-settings-row">
               <span id="keycapDisplay" class="keycaps">⌃⌥⌘V</span>
               <button id="recordBtn" class="action-btn">Record Shortcut</button>
               <button id="resetShortcutBtn" class="link-btn-danger" title="Reset to ⌃⌥⌘V">Reset</button>
             </div>
             <span id="hotkeyFeedback" class="feedback-msg"></span>
+          </div>
+
+          <!-- Voice AI Edit Shortcut Section -->
+          <div class="modal-section-group">
+            <label class="section-label">Voice AI Edit Shortcut (Selection Transform)</label>
+            <div class="shortcut-settings-row">
+              <span id="editKeycapDisplay" class="keycaps" style="color: #c084fc; border-color: rgba(192, 132, 252, 0.4);">⌃⌥⌘E</span>
+              <button id="recordEditBtn" class="action-btn">Record Shortcut</button>
+              <button id="resetEditShortcutBtn" class="link-btn-danger" title="Reset to ⌃⌥⌘E">Reset</button>
+            </div>
+            <span id="editHotkeyFeedback" class="feedback-msg"></span>
           </div>
 
           <!-- Microphone Input Device Section -->

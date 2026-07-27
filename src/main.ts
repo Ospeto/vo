@@ -707,14 +707,39 @@ function setupIpcHandlers() {
     if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
-    const res = await hotkeyService.replace(newKeyStr, {
-      onDown: () => handleHotkeyDown(),
-      onUp: () => handleHotkeyUp(),
-    });
+    const res = await hotkeyService.replace(
+      newKeyStr,
+      {
+        onDown: (mode) => handleHotkeyDown(mode),
+        onUp: () => handleHotkeyUp(),
+      },
+      currentConfig.editKeyDisplay
+    );
     if (res.success && res.binding) {
       currentConfig = updateConfig(workingCwd, { key: newKeyStr });
     }
     return res;
+  });
+
+  ipcMain.handle(IPC.REGISTER_EDIT_HOTKEY, async (event, newKeyStr: string) => {
+    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
+
+    try {
+      const binding = parseKeyBinding(newKeyStr);
+      currentConfig = updateConfig(workingCwd, { editKey: newKeyStr });
+      await hotkeyService.start(
+        currentConfig.key,
+        {
+          onDown: (mode) => handleHotkeyDown(mode),
+          onUp: () => handleHotkeyUp(),
+        },
+        currentConfig.editKey
+      );
+      return { success: true, binding, keyDisplay: currentConfig.editKeyDisplay };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   });
 }
 
