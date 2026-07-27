@@ -30,7 +30,7 @@ function resolveApiKey(): string | undefined {
 
   const candidateEnvPaths = [
     join(homedir(), ".config", "pi-voice", ".env"),
-    "/Users/macbookair/pi_voice_gemini/pi-voice/.env",
+    join(process.cwd(), ".env"),
     join(homedir(), ".hermes", ".env"),
     join(homedir(), ".env"),
   ];
