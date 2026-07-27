@@ -463,8 +463,8 @@ function renderAppRules() {
     select.className = "chime-select";
     select.style.cssText = "font-size: 10px; padding: 2px 4px;";
     select.innerHTML = `
-      <option value="careful" ${mappedPreset === "careful" ? "selected" : ""}>Careful</option>
-      <option value="code_comment" ${mappedPreset === "code_comment" ? "selected" : ""}>Code</option>
+      <option value="careful" ${mappedPreset === "careful" ? "selected" : ""}>Conversation</option>
+      <option value="code_comment" ${mappedPreset === "code_comment" ? "selected" : ""}>Coding</option>
     `;
 
     select.addEventListener("change", async () => {
