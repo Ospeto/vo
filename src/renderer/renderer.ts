@@ -271,9 +271,22 @@ function stopSpectrumVisualizer() {
   }
 }
 
+function updatePresetPills(selectedPreset: string) {
+  const btns = document.querySelectorAll(".preset-pill-btn");
+  btns.forEach((btn) => {
+    const p = btn.getAttribute("data-preset");
+    if (p === selectedPreset) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+}
+
 async function initUI() {
   const config = await window.electronIPC?.getConfig();
   if (config) {
+    updatePresetPills(config.dictationPreset || "fast");
     if (presetSelect) presetSelect.value = config.dictationPreset;
     if (modeSelect) modeSelect.value = config.dictationMode;
     if (modelSelect) modelSelect.value = config.geminiModel;
@@ -677,6 +690,9 @@ function updateStatusBadge(state: AppState, message?: string) {
 
 function enableControls(enabled: boolean) {
   if (presetSelect) presetSelect.disabled = !enabled;
+  document.querySelectorAll<HTMLButtonElement>(".preset-pill-btn").forEach((btn) => {
+    btn.disabled = !enabled;
+  });
   if (modeSelect) modeSelect.disabled = !enabled;
   gainSlider.disabled = !enabled;
   modelSelect.disabled = !enabled;
@@ -684,8 +700,19 @@ function enableControls(enabled: boolean) {
   configBtn.disabled = !enabled;
 }
 
+document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const selectedPreset = btn.getAttribute("data-preset") as DictationPreset;
+    if (!selectedPreset) return;
+    updatePresetPills(selectedPreset);
+    if (presetSelect) presetSelect.value = selectedPreset;
+    await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
+  });
+});
+
 presetSelect?.addEventListener("change", async () => {
   const selectedPreset = presetSelect.value as DictationPreset;
+  updatePresetPills(selectedPreset);
   await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
 });
 

@@ -129,11 +129,65 @@ header {
   box-shadow: 0 0 5px var(--accent-emerald);
 }
 
-/* Control Grid (Preset, Model) */
-.control-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.control-grid.single-col {
+  grid-template-columns: 1fr;
+}
+
+.preset-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5px;
+}
+
+.section-micro-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.preset-segmented-bar {
+  display: flex;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  padding: 2.5px;
+  gap: 3px;
+}
+
+.preset-pill-btn {
+  flex: 1;
+  height: 25px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preset-pill-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.preset-pill-btn.active {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.18);
+}
+
+.preset-pill-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .field-group {
