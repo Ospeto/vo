@@ -273,6 +273,7 @@ function updatePresetPills(selectedPreset: string) {
 }
 
 async function initUI() {
+  enableControls(true);
   const config = await window.electronIPC?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "fast");
@@ -691,20 +692,21 @@ function enableControls(enabled: boolean) {
     btn.disabled = !enabled;
   });
   if (modeSelect) modeSelect.disabled = !enabled;
-  gainSlider.disabled = !enabled;
-  modelSelect.disabled = !enabled;
+  if (gainSlider) gainSlider.disabled = !enabled;
+  if (modelSelect) modelSelect.disabled = !enabled;
   if (recordBtn) recordBtn.disabled = !enabled;
-  configBtn.disabled = !enabled;
+  if (configBtn) configBtn.disabled = !enabled;
 }
 
-document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    const selectedPreset = btn.getAttribute("data-preset") as DictationPreset;
-    if (!selectedPreset) return;
-    updatePresetPills(selectedPreset);
-    if (presetSelect) presetSelect.value = selectedPreset;
-    await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
-  });
+// Preset Segmented Bar Click Handler (Event Delegation for 100% reliable 1-click preset switching)
+document.addEventListener("click", async (e) => {
+  const btn = (e.target as HTMLElement)?.closest(".preset-pill-btn") as HTMLButtonElement | null;
+  if (!btn) return;
+  const selectedPreset = btn.getAttribute("data-preset") as DictationPreset;
+  if (!selectedPreset) return;
+  updatePresetPills(selectedPreset);
+  if (presetSelect) presetSelect.value = selectedPreset;
+  await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
 });
 
 presetSelect?.addEventListener("change", async () => {
