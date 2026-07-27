@@ -248,7 +248,7 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       expect(getPresetPromptInstructions("email_polish")).toContain("EMAIL POLISH");
       expect(getPresetPromptInstructions("burmese_written")).toContain("BURMESE WRITTEN");
       expect(getPresetPromptInstructions("translate_en")).toContain("TRANSLATE TO ENGLISH");
-      expect(getPresetPromptInstructions("fast")).toBe("");
+      expect(getPresetPromptInstructions("fast")).toContain("GLOBAL NATURAL BILINGUAL DICTATION DIRECTIVE");
 
       expect(getPresetTemperature("fast")).toBe(0.0);
       expect(getPresetTemperature("code_comment")).toBe(0.0);

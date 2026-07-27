@@ -194,6 +194,14 @@ export function resolveEffectivePreset(preset?: DictationPreset, appName?: strin
   return "fast";
 }
 
+const GLOBAL_BILINGUAL_DIRECTIVE = `
+GLOBAL NATURAL BILINGUAL DICTATION DIRECTIVE:
+The speaker naturally mixes spoken Burmese natural prose with English technical terms, acronyms, code identifiers, and CLI commands.
+1. PRESERVE NATURAL BILINGUAL DUAL-LANGUAGE FLOW: Transcribe spoken Burmese text in clean Burmese script (မြန်မာစာ) and spoken English technical terms, identifiers, and commands in exact English (e.g. "Database connection ကို test လုပ်ပြီး တွေ့တဲ့ error ကို log ထုတ်ပေး").
+2. DO NOT FORCE TRANSLATION: Do NOT forcibly translate spoken Burmese words to English, and do NOT forcibly translate English technical terms into Burmese. Keep English technical terms, commands, and product names in exact English.
+3. SPOKEN IDENTIFIER HINTS: Format spoken code cues ("camel case user id" -> userId, "snake case created at" -> created_at) cleanly as code symbols.
+`.trim();
+
 export function getPresetPromptInstructions(preset?: DictationPreset): string {
   switch (preset) {
     case "code_comment":
@@ -213,15 +221,15 @@ CORE DIRECTIVES:
 4. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the instruction:"), or raw dictation repeats be included.
 `.trim();
     case "email_polish":
-      return "\nPreset Mode: EMAIL POLISH. Format the output as a clean, professional, grammatically polished email message with clear paragraphing.";
+      return `${GLOBAL_BILINGUAL_DIRECTIVE}\n\nPreset Mode: EMAIL POLISH. Format the output as a clean, professional, grammatically polished email message with clear paragraphing while preserving natural bilingual technical terms in English.`;
     case "burmese_written":
-      return "\nPreset Mode: BURMESE WRITTEN. Format spoken Burmese into formal, polished Burmese literary/written prose (မြန်မာစာအရေးအသား).";
+      return `${GLOBAL_BILINGUAL_DIRECTIVE}\n\nPreset Mode: BURMESE WRITTEN. Format spoken Burmese into formal, polished Burmese literary/written prose (မြန်မာစာအရေးအသား) while preserving English technical terms and code identifiers in pure English.`;
     case "translate_en":
       return "\nPreset Mode: TRANSLATE TO ENGLISH. Hear the spoken Burmese audio and directly output its accurate, fluent, natural English translation. Output ONLY the English text without any Burmese script, intros, or wrapping quotes.";
     case "fast":
     case "auto":
     default:
-      return "";
+      return GLOBAL_BILINGUAL_DIRECTIVE;
   }
 }
 
