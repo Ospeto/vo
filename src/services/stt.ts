@@ -267,7 +267,15 @@ CORE DIRECTIVES:
     case "burmese_written":
       return `${GLOBAL_BILINGUAL_DIRECTIVE}\n\nPreset Mode: BURMESE WRITTEN. Format spoken Burmese into formal, polished Burmese literary/written prose (မြန်မာစာအရေးအသား) while preserving English technical terms and code identifiers in pure English.`;
     case "translate_en":
-      return "\nPreset Mode: TRANSLATE TO ENGLISH. Hear the spoken Burmese audio and directly output its accurate, fluent, natural English translation. Output ONLY the English text without any Burmese script, intros, or wrapping quotes.";
+      return `
+Preset Mode: TRANSLATE TO ENGLISH & CAREFUL DEEP PROOFREADING.
+Hear the spoken Burmese/English audio and directly output its accurate, fluent, carefully proofread, and natural English translation.
+
+CORE CAREFUL DIRECTIVES:
+1. CAREFUL DEEP PROOFREADING: Perform deep semantic proofreading on the English translation. Fix grammatical errors, awkward phraseology, phonetically garbled words, and speech slips while preserving 100% of the speaker's core intent.
+2. NATURAL & TECHNICAL ENGLISH: Output clear, fluent, professional English prose.
+3. ZERO BURMESE SCRIPT: Output ONLY pure English text. Under NO circumstances should any Burmese script (မြန်မာစာ), intros, or wrapping quotes be included.
+`.trim();
     case "careful":
       return `
 ${GLOBAL_BILINGUAL_DIRECTIVE}
@@ -435,7 +443,7 @@ export function getFallbackModelChain(
   effectivePreset?: DictationPreset
 ): string[] {
   let fallbackCandidates: string[];
-  if (effectivePreset === "code_comment" || effectivePreset === "careful") {
+  if (effectivePreset === "code_comment" || effectivePreset === "careful" || effectivePreset === "translate_en") {
     // For code & careful presets: try 3.6-flash, 3.1-flash-lite, 3.5-flash-lite, 2.5-flash, 2.5-pro
     fallbackCandidates = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
   } else {
