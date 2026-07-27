@@ -410,9 +410,46 @@ const BURMESE_ACCURATE_STT_PROMPT = `
 You are a high-precision Burmese & English Speech-to-Text transcriber.
 CRITICAL RULES:
 1. ALWAYS transcribe spoken Burmese words in standard Burmese Unicode script (မြန်မာအက္ခရာ) (e.g. "မရဘူး", "အဆင်မပြေဘူး", "ပေါ်လာတာ"). NEVER use English/Latin letters for Burmese words (No Burmish like "MaYaBuu").
-2. Only write standard English technical/project terms in English script (e.g. SarYayKaung, Ospeto, TBH, Engram, MAS 141, MAS 142, MAS 143, FSRS, SQL, Python, VPN).
+2. Only write standard English technical/project terms in English script (e.g. SarYayKaung, Ospeto, TBH, Engram, MAS 141, MAS 142, MAS 143, FSRS, SQL, Python, VPN, Image, Wolf).
 3. Transcribe only what was actually spoken. Do NOT hallucinate lists of vocabulary words. No intro or markdown wrappers.
+4. PHONETIC ACCURACY FOR PERSON NAMES: You MUST transcribe person names, family names, and proper nouns using their EXACT target Burmese/English spelling (e.g. 'သော်ဇင်' NOT 'တော်စင်', 'အောင်ချမ်းမြေ့' NOT 'အွန်တန်းမြေ', 'ကို Joy' NOT 'ကိုဂျွိုင်း', 'ဝေယံထက်' NOT 'ဝေယံ', 'မိုးကျော်အောင်' NOT 'မိုးကျော်'). NEVER garble spoken names into phonetically similar unrelated Burmese words.
 `.trim();
+
+export function buildCustomVocabularyPromptPart(terms: string[]): string {
+  if (!terms || terms.length === 0) return "";
+
+  const mappings: string[] = [];
+  const plainTerms: string[] = [];
+
+  for (const raw of terms) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.includes(" - ")) {
+      const [eng, bur] = trimmed.split(" - ").map((s) => s.trim());
+      if (eng && bur) {
+        mappings.push(`- Spoken sound/name "${eng}" or "${bur}" ➔ Output exact spelling: "${bur}"`);
+      }
+    } else if (trimmed.includes(" (") && trimmed.endsWith(")")) {
+      const bur = trimmed.split(" (")[0]?.trim();
+      const eng = trimmed.split(" (")[1]?.slice(0, -1).trim();
+      if (bur && eng) {
+        mappings.push(`- Spoken sound/name "${bur}" or "${eng}" ➔ Output exact spelling: "${bur}"`);
+      }
+    } else {
+      plainTerms.push(trimmed);
+    }
+  }
+
+  let result = "\nMANDATORY PERSON NAMES & VOCABULARY DICTIONARY:\n";
+  if (mappings.length > 0) {
+    result += `PHONETIC MAPPINGS (MUST BE STRICTLY RESPECTED):\n${mappings.join("\n")}\n`;
+  }
+  if (plainTerms.length > 0) {
+    result += `EXACT TARGET SPELLINGS: ${plainTerms.join(", ")}\n`;
+  }
+  return result;
+}
 
 export interface TranscribeOptions {
   provider?: SpeechProvider;
@@ -482,9 +519,7 @@ async function transcribeGemini(
     .filter((t) => t.length > 0)
     .slice(0, 50);
 
-  const dictPromptPart = allCustomTerms.length > 0
-    ? `\nKey Terms: ${allCustomTerms.join(", ")}\n`
-    : "";
+  const dictPromptPart = buildCustomVocabularyPromptPart(allCustomTerms);
 
   let workspacePromptPart = "";
   if (symbolScannerEnabled !== false) {
