@@ -461,7 +461,11 @@ export function getFallbackModelChain(
   preferredModel: GeminiModelChoice,
   _effectivePreset?: DictationPreset
 ): string[] {
-  const fallbackCandidates: string[] = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"];
+  const fallbackCandidates: string[] = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-1.5-flash",
+  ];
 
   const filtered = fallbackCandidates.filter((m) => m !== preferredModel);
   return Array.from(new Set([preferredModel, ...filtered]));
@@ -552,8 +556,8 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 
   const fullPrompt = `${sttBasePrompt}\n${appContextHint}${workspacePromptPart}${dictPromptPart}${presetHint}`;
 
-  // Dynamically scale primary timeout from 7s to 15s based on audio payload byte length
-  const dynamicTimeoutMs = Math.max(7000, Math.min(15000, Math.ceil(audioBuffer.length / 10)));
+  // Dynamically scale primary timeout from 12s to 25s based on audio payload byte length
+  const dynamicTimeoutMs = Math.max(12000, Math.min(25000, Math.ceil(audioBuffer.length / 5)));
 
   // Model fallback chain: preferred model first
   const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
