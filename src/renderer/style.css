@@ -414,42 +414,46 @@ footer {
 .modal-section-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 12px;
+  border-radius: 8px;
 }
 
 .section-label {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .shortcut-settings-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .apiKey-settings-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .apiKey-settings-row input {
   flex: 1;
-  height: 24px;
-  padding: 0 6px;
-  font-size: 11px;
-  border-radius: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.3);
   color: #fff;
 }
 
 .feedback-msg {
-  font-size: 10px;
+  font-size: 10.5px;
   color: #ef4444;
   text-align: center;
   margin-top: 4px;
@@ -463,14 +467,14 @@ footer {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(12, 13, 18, 0.45);
-  backdrop-filter: blur(25px) saturate(190%);
-  -webkit-backdrop-filter: blur(25px) saturate(190%);
+  background: rgba(10, 11, 15, 0.55);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
+  padding: 12px;
   box-sizing: border-box;
   border-radius: var(--corner-radius);
 }
@@ -482,12 +486,12 @@ footer {
 .modal-card {
   width: 100%;
   max-height: 98%;
-  background: var(--bg-translucent);
+  background: rgba(20, 21, 28, 0.95);
   backdrop-filter: blur(50px) saturate(210%);
   -webkit-backdrop-filter: blur(50px) saturate(210%);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -497,10 +501,10 @@ footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -518,11 +522,26 @@ footer {
 }
 
 .modal-body {
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   overflow-y: auto;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+.modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .vocab-input-row {
@@ -534,9 +553,9 @@ footer {
 .apiKey-settings-row input,
 .vocab-input-row input {
   flex: 1;
-  height: 26px;
-  padding: 0 8px;
-  font-size: 11px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
@@ -552,10 +571,10 @@ footer {
 }
 
 .action-btn-sm {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 10.5px;
-  border-radius: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  border-radius: 6px;
   border: 1px solid rgba(16, 185, 129, 0.4);
   background: rgba(16, 185, 129, 0.2);
   color: #10b981;

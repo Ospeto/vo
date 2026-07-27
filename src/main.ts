@@ -334,8 +334,8 @@ function createCaptureWindow() {
 
 function createPopoverWindow() {
   popoverWindow = new BrowserWindow({
-    width: 310,
-    height: 380,
+    width: 380,
+    height: 540,
     show: false,
     frame: false,
     transparent: true,
@@ -435,7 +435,7 @@ function togglePopover() {
 
     const pos = calculatePopoverPosition(
       trayBounds,
-      { width: 310, height: 380 },
+      { width: 380, height: 540 },
       screenBounds
     );
 
