@@ -459,9 +459,7 @@ export function getFallbackModelChain(
   preferredModel: GeminiModelChoice,
   _effectivePreset?: DictationPreset
 ): string[] {
-  // Always prioritize high-quota lightweight models (gemini-3.1-flash-lite, gemini-3.5-flash-lite, gemini-2.5-flash)
-  // to avoid hitting low free tier limits (such as 3.6-flash's ~20 RPD limit).
-  const fallbackCandidates: string[] = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash"];
+  const fallbackCandidates: string[] = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"];
 
   const filtered = fallbackCandidates.filter((m) => m !== preferredModel);
   return Array.from(new Set([preferredModel, ...filtered]));
@@ -546,8 +544,8 @@ async function transcribeGemini(
 
   const fullPrompt = `${sttBasePrompt}\n${appContextHint}${workspacePromptPart}${dictPromptPart}${presetHint}`;
 
-  // Dynamically scale primary timeout from 3s to 12s based on audio payload byte length
-  const dynamicTimeoutMs = Math.max(3000, Math.min(12000, Math.ceil(audioBuffer.length / 12)));
+  // Dynamically scale primary timeout from 7s to 15s based on audio payload byte length
+  const dynamicTimeoutMs = Math.max(7000, Math.min(15000, Math.ceil(audioBuffer.length / 10)));
 
   // Model fallback chain: preferred model first
   const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
@@ -584,10 +582,11 @@ async function transcribeGemini(
       let fastestPromise: Promise<{ text: string; usedPaidKey: boolean }>;
 
       if (fallbackClient) {
-        // Speculative Parallel Fallback: If Primary Key takes > 2500ms or fails, launch Paid Fallback Key
-        const primaryDelayTimer = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Primary Key delay > 2500ms")), 2500)
-        );
+        // Speculative Parallel Fallback: If Primary Key takes > 3500ms or fails, launch Paid Fallback Key
+        const primaryDelayTimer = new Promise<never>((_, reject) => {
+          const t = setTimeout(() => reject(new Error("Primary Key delay > 3500ms")), 3500);
+          if (t && typeof t === "object" && "unref" in t) (t as any).unref();
+        });
 
         const speculativeFallback = Promise.race([primaryPromise, primaryDelayTimer]).catch(async () => {
           logger.info({ model }, "Primary API Key took >2500ms or errored; triggering Parallel Paid Fallback Key");
