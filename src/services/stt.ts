@@ -464,6 +464,7 @@ export function getFallbackModelChain(
   const fallbackCandidates: string[] = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-3.1-pro",
     "gemini-1.5-flash",
   ];
 

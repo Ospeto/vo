@@ -327,7 +327,7 @@ const configFileSchema = z.object({
     .optional()
     .default(DEFAULT_EDIT_KEY_STRING),
   provider: z.enum(["local", "gemini", "openai", "elevenlabs"]).optional().default(DEFAULT_PROVIDER),
-  geminiModel: z.enum(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"]).optional().default(DEFAULT_GEMINI_MODEL),
+  geminiModel: z.enum(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-pro"]).optional().default(DEFAULT_GEMINI_MODEL),
   inputGain: z
     .number()
     .min(0.0)
