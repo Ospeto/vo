@@ -242,8 +242,8 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
 
   describe("6. Dictation Presets & Custom Vocabulary Contracts", () => {
     test("returns correct prompt instructions and temperature for each dictation preset", () => {
-      expect(getPresetPromptInstructions("code_comment")).toContain("SENIOR SOFTWARE ENGINEER AI CODING DIRECTIVE");
-      expect(getPresetPromptInstructions("code_comment")).toContain("CONSTRUCTIVE IMPERATIVE STRUCTURING");
+      expect(getPresetPromptInstructions("code_comment")).toContain("SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION");
+      expect(getPresetPromptInstructions("code_comment")).toContain("FAITHFUL TRANSLATION & ZERO IMPROVISATION");
       expect(getPresetPromptInstructions("code_comment")).toContain("SPOKEN IDENTIFIER FORMATTING");
       expect(getPresetPromptInstructions("email_polish")).toContain("EMAIL POLISH");
       expect(getPresetPromptInstructions("burmese_written")).toContain("BURMESE WRITTEN");

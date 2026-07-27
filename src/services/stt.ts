@@ -198,20 +198,19 @@ export function getPresetPromptInstructions(preset?: DictationPreset): string {
   switch (preset) {
     case "code_comment":
       return `
-Preset Mode: SENIOR SOFTWARE ENGINEER AI CODING DIRECTIVE.
-Listen to the developer's spoken Burmese technical dictation and act as a Senior Staff Software Engineer & Lead Systems Architect to transform their intent into a precise, authoritative, type-safe English specification for AI coding assistants (Cursor / Antigravity / Claude / Copilot).
+Preset Mode: SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION.
+Transcribe and translate the developer's spoken Burmese/English dictation into clean, direct, systematic English instructions for AI coding assistants (Cursor / Antigravity / Claude / Copilot).
 
-CORE ENGINEERING RULES:
-1. SENIOR ENGINEER TERMINOLOGY: Use industry-standard software engineering vocabulary (e.g. "guard clause", "null-coalescing", "idempotent", "type guard", "error propagation", "state mutation").
-2. CONSTRUCTIVE IMPERATIVE STRUCTURING: Convert spoken Burmese SOV intent into direct English SVO imperative coding specs (e.g. "user id မပါရင် ဘာမှမလုပ်ဘဲ ပြန်ထွက်" -> "Add a guard clause to return early if userId is null or undefined").
+CORE DIRECTIVES:
+1. FAITHFUL TRANSLATION & ZERO IMPROVISATION: Translate spoken Burmese/English directly into clean technical English without inventing unmentioned requirements, unsaid state management, unsaid code blocks, or extra architectural steps. Output ONLY what the user explicitly dictated.
+2. CONCISE IMPERATIVE STRUCTURING: Convert spoken intent into clear, direct English engineering imperatives (e.g., "user id မပါရင် ဘာမှမလုပ်ဘဲ ပြန်ထွက်" -> "Return early if userId is null or undefined").
 3. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers:
    - "camel case user id" -> userId
    - "snake case created at" -> created_at
    - "pascal case data model" -> DataModel
    - "upper case api key" -> API_KEY
    - "kebab case user-card" -> user-card
-4. PRECISION & ZERO HALLUCINATION: Include all stated conditions, variable names, logic branches, and error handlers accurately without introducing unmentioned frameworks or libraries.
-5. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the instruction:"), or raw dictation repeats be included in the output.
+4. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the instruction:"), or raw dictation repeats be included.
 `.trim();
     case "email_polish":
       return "\nPreset Mode: EMAIL POLISH. Format the output as a clean, professional, grammatically polished email message with clear paragraphing.";
