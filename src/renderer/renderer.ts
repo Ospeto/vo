@@ -167,50 +167,86 @@ function playBassyEndChime() {
   } catch {}
 }
 
-function drawSpectrumFromData(freqData: number[]) {
-  if (!spectrumCanvas || !spectrumCtx) return;
-  const width = spectrumCanvas.width;
-  const height = spectrumCanvas.height;
-  const centerY = height / 2;
+let animationFrameId: number | null = null;
+let currentTargetAmp = 0;
+let smoothedAmp = 0;
+let wavePhase = 0;
 
-  spectrumCtx.clearRect(0, 0, width, height);
+function startWaveAnimationLoop() {
+  if (animationFrameId !== null) return;
 
-  spectrumCtx.save();
-  spectrumCtx.beginPath();
-
-  const points = Math.min(freqData.length, 28);
-  const sliceWidth = width / Math.max(1, points - 1);
-
-  for (let i = 0; i < points; i++) {
-    const raw = freqData[i] || 0;
-    const amp = Math.max(2, (raw / 255) * (height / 2 - 2));
-    const x = i * sliceWidth;
-    const y = centerY + (i % 2 === 0 ? -amp : amp);
-
-    if (i === 0) {
-      spectrumCtx.moveTo(x, centerY);
-      spectrumCtx.lineTo(x, y);
-    } else {
-      const prevX = (i - 1) * sliceWidth;
-      const cpX = (prevX + x) / 2;
-      spectrumCtx.quadraticCurveTo(cpX, y, x, y);
+  function renderWave() {
+    if (!spectrumCanvas || !spectrumCtx) {
+      animationFrameId = null;
+      return;
     }
+
+    wavePhase += 0.09;
+    smoothedAmp += (currentTargetAmp - smoothedAmp) * 0.16; // Silky smooth damping
+
+    const width = spectrumCanvas.width;
+    const height = spectrumCanvas.height;
+    const centerY = height / 2;
+    const maxAmp = height / 2 - 2;
+    const activeAmp = Math.max(3, (smoothedAmp / 100) * maxAmp);
+
+    spectrumCtx.clearRect(0, 0, width, height);
+
+    // Layer 1: Background Ambient Glow Wave (Cyan translucent)
+    spectrumCtx.save();
+    spectrumCtx.beginPath();
+    for (let x = 0; x <= width; x += 3) {
+      const progress = x / width;
+      const envelope = Math.sin(progress * Math.PI);
+      const y = centerY + Math.sin(progress * Math.PI * 3 + wavePhase + 1.2) * activeAmp * 0.65 * envelope;
+      if (x === 0) spectrumCtx.moveTo(x, y);
+      else spectrumCtx.lineTo(x, y);
+    }
+    spectrumCtx.strokeStyle = "rgba(147, 197, 253, 0.45)";
+    spectrumCtx.lineWidth = 1.5;
+    spectrumCtx.stroke();
+    spectrumCtx.restore();
+
+    // Layer 2: Primary Fluid Ribbon (Vibrant Emerald & Blue Gradient)
+    spectrumCtx.save();
+    spectrumCtx.beginPath();
+    for (let x = 0; x <= width; x += 2) {
+      const progress = x / width;
+      const envelope = Math.sin(progress * Math.PI);
+      const y = centerY + Math.sin(progress * Math.PI * 4 + wavePhase) * activeAmp * envelope;
+      if (x === 0) spectrumCtx.moveTo(x, y);
+      else spectrumCtx.lineTo(x, y);
+    }
+
+    const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
+    gradient.addColorStop(0, "rgba(59, 130, 246, 0.95)");
+    gradient.addColorStop(0.5, "rgba(52, 211, 153, 1.0)");
+    gradient.addColorStop(1, "rgba(59, 130, 246, 0.95)");
+
+    spectrumCtx.strokeStyle = gradient;
+    spectrumCtx.lineWidth = 2.5;
+    spectrumCtx.lineCap = "round";
+    spectrumCtx.lineJoin = "round";
+    spectrumCtx.stroke();
+    spectrumCtx.restore();
+
+    animationFrameId = requestAnimationFrame(renderWave);
   }
 
-  const gradient = spectrumCtx.createLinearGradient(0, 0, width, 0);
-  gradient.addColorStop(0, "rgba(59, 130, 246, 0.85)");
-  gradient.addColorStop(0.5, "rgba(52, 211, 153, 0.95)");
-  gradient.addColorStop(1, "rgba(59, 130, 246, 0.85)");
+  animationFrameId = requestAnimationFrame(renderWave);
+}
 
-  spectrumCtx.strokeStyle = gradient;
-  spectrumCtx.lineWidth = 2.2;
-  spectrumCtx.lineCap = "round";
-  spectrumCtx.lineJoin = "round";
-  spectrumCtx.stroke();
-  spectrumCtx.restore();
+function updateAudioWaveLevel(level: number) {
+  currentTargetAmp = level;
+  startWaveAnimationLoop();
 }
 
 function stopSpectrumVisualizer() {
+  currentTargetAmp = 0;
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
   if (spectrumCanvas && spectrumCtx) {
     spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
   }
@@ -557,15 +593,11 @@ window.electronIPC?.onStateChanged((payload: StatePayload) => {
 
 window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spectrum?: number[] }) => {
   const level = typeof payload === "number" ? payload : payload.level;
-  const spectrum = typeof payload === "object" ? payload.spectrum : undefined;
 
   if (meterFill) {
     meterFill.style.width = `${level}%`;
   }
-
-  if (spectrum && spectrum.length > 0) {
-    drawSpectrumFromData(spectrum);
-  }
+  updateAudioWaveLevel(level);
 });
 
 function updateStatusBadge(state: AppState, message?: string) {
