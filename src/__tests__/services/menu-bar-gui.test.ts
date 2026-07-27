@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getPresetPromptInstructions, getPresetTemperature, resolveEffectivePreset } from "../../services/stt.js";
+import { getPresetPromptInstructions, getPresetTemperature, resolveEffectivePreset, getFallbackModelChain } from "../../services/stt.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, setHistoryDirForTests } from "../../services/history-service.js";
 import { tmpdir } from "node:os";
 import { mkdirSync } from "node:fs";
@@ -255,6 +255,16 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       expect(getPresetTemperature("translate_en")).toBe(0.0);
       expect(getPresetTemperature("email_polish")).toBe(0.1);
       expect(getPresetTemperature("burmese_written")).toBe(0.15);
+    });
+
+    test("restricts gemini-3.6-flash fallback strictly to code_comment preset", () => {
+      const codeChain = getFallbackModelChain("gemini-3.1-flash-lite", "code_comment");
+      expect(codeChain).toContain("gemini-3.6-flash");
+
+      const generalChain = getFallbackModelChain("gemini-3.1-flash-lite", "fast");
+      expect(generalChain).not.toContain("gemini-3.6-flash");
+      expect(generalChain[0]).toBe("gemini-3.1-flash-lite");
+      expect(generalChain[1]).toBe("gemini-3.5-flash-lite");
     });
 
     test("dynamically resolves effective preset when auto mode is selected", () => {

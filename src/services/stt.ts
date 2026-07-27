@@ -377,6 +377,23 @@ export function getPresetTemperature(preset?: DictationPreset): number {
   }
 }
 
+export function getFallbackModelChain(
+  preferredModel: GeminiModelChoice,
+  effectivePreset?: DictationPreset
+): string[] {
+  let fallbackCandidates: string[];
+  if (effectivePreset === "code_comment") {
+    // For code preset: try preferred, then 3.6-flash, 3.1-flash-lite, 3.5-flash-lite, 2.5-flash, 2.5-pro
+    fallbackCandidates = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
+  } else {
+    // For general presets: default fallback is 3.1-flash-lite / 3.5-flash-lite (exclude expensive 3.6-flash)
+    fallbackCandidates = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
+  }
+
+  const filtered = fallbackCandidates.filter((m) => m !== preferredModel);
+  return Array.from(new Set([preferredModel, ...filtered]));
+}
+
 async function transcribeGemini(
   audioBuffer: Buffer,
   preferredModel: GeminiModelChoice = "gemini-3.1-flash-lite",
@@ -429,10 +446,8 @@ async function transcribeGemini(
   // Dynamically scale timeout from 6s to 20s based on audio payload byte length
   const dynamicTimeoutMs = Math.max(6000, Math.min(20000, Math.ceil(audioBuffer.length / 8)));
 
-  // Model fallback chain: preferred model first, then alternate models
-  const allModels = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"] as GeminiModelChoice[];
-  const alternateModels = allModels.filter((m) => m !== preferredModel);
-  const modelsToTry = [preferredModel, ...alternateModels, "gemini-2.5-flash-lite"];
+  // Model fallback chain: preferred model first, 3.6-flash ONLY allowed for code_comment preset
+  const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
 
   for (const model of modelsToTry) {
     try {
