@@ -448,6 +448,7 @@ export interface TranscribeOptions {
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
   symbolScannerEnabled?: boolean;
   workspacePath?: string;
+  selectedText?: string;
 }
 
 export function getPresetTemperature(preset?: DictationPreset): number {
@@ -475,7 +476,8 @@ async function transcribeGemini(
   symbolScannerEnabled: boolean = true,
   workspacePath?: string,
   translateEnabled?: boolean,
-  targetLanguage: string = "English"
+  targetLanguage: string = "English",
+  selectedText?: string
 ): Promise<{ rawText: string; activeApp: string; usedPaidKey?: boolean }> {
   const client = getGeminiClient();
   const base64Audio = audioBuffer.toString("base64");
@@ -521,11 +523,15 @@ async function transcribeGemini(
     }
   }
 
+  const hasSelectedText = Boolean(selectedText && selectedText.trim().length > 0);
   const isCodePreset = effectivePreset === "code_comment";
   let sttBasePrompt = BURMESE_ACCURATE_STT_PROMPT;
   let userPromptText = "Transcribe the spoken audio accurately in Burmese script.";
 
-  if (isCodePreset) {
+  if (hasSelectedText) {
+    sttBasePrompt = `You are an expert AI Text Editor and Transformation Assistant. Your single imperative task is to listen to the user's spoken audio instruction and apply it to the provided [SELECTED TEXT]. Output ONLY the updated replacement text without any wrapping quotes, markdown commentary, or introductory phrases.`;
+    userPromptText = `[SELECTED TEXT]:\n"""\n${selectedText?.trim()}\n"""\n\nSpoken Instruction: Apply the spoken audio instruction to the selected text above and return ONLY the modified replacement text.`;
+  } else if (isCodePreset) {
     if (isTranslationActive) {
       sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting.`;
       userPromptText = `Translate the spoken audio into clear technical specifications in ${resolvedTargetLang}.`;
@@ -733,6 +739,9 @@ export async function transcribeDetailed(
   const presetVocabulary = typeof providerOrOptions === "object" ? providerOrOptions.presetVocabulary : {};
   const symbolScannerEnabled = typeof providerOrOptions === "object" ? providerOrOptions.symbolScannerEnabled ?? true : true;
   const workspacePath = typeof providerOrOptions === "object" ? providerOrOptions.workspacePath : undefined;
+  const translateEnabled = typeof providerOrOptions === "object" ? providerOrOptions.translateEnabled : undefined;
+  const targetLanguage = typeof providerOrOptions === "object" ? (providerOrOptions.targetLanguage ?? "English") : "English";
+  const selectedText = typeof providerOrOptions === "object" ? providerOrOptions.selectedText : undefined;
 
   switch (provider) {
     case "local":
@@ -748,7 +757,18 @@ export async function transcribeDetailed(
       break;
     case "gemini":
     default: {
-      const res = await transcribeGemini(Buffer.from(audioData), geminiModel, dictationPreset, customVocabulary, presetVocabulary, symbolScannerEnabled, workspacePath);
+      const res = await transcribeGemini(
+        Buffer.from(audioData),
+        geminiModel,
+        dictationPreset,
+        customVocabulary,
+        presetVocabulary,
+        symbolScannerEnabled,
+        workspacePath,
+        translateEnabled,
+        targetLanguage,
+        selectedText
+      );
       rawText = res.rawText;
       usedPaidKey = res.usedPaidKey ?? false;
       break;
