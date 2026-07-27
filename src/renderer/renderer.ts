@@ -618,7 +618,11 @@ window.electronIPC?.onStateChanged((payload: StatePayload) => {
       renderHistory();
     }
   }
-  updateStatusBadge(payload.state, payload.message);
+  updateStatusBadge(payload.state, payload.message, payload.usedPaidKey);
+});
+
+(window.electronIPC as any)?.onUpdatePresetUI((preset: string) => {
+  updatePresetPills(preset);
 });
 
 window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spectrum?: number[] }) => {
@@ -630,8 +634,17 @@ window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spect
   updateAudioWaveLevel(level);
 });
 
-function updateStatusBadge(state: AppState, message?: string) {
+function updateStatusBadge(state: AppState, message?: string, usedPaidKey?: boolean) {
   if (!statusDot || !statusLabel) return;
+
+  const paidStatusTag = document.getElementById("paidStatusTag");
+  if (paidStatusTag) {
+    if (usedPaidKey) {
+      paidStatusTag.classList.remove("hidden");
+    } else {
+      paidStatusTag.classList.add("hidden");
+    }
+  }
 
   const containerEl = document.querySelector(".container");
   if (state === "recording" || state === "starting") {

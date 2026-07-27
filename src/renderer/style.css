@@ -89,7 +89,26 @@ header {
   font-weight: 500;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: 150px;
+  max-width: 170px;
+}
+
+.paid-micro-tag {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(244, 63, 94, 0.18);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.25);
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.paid-micro-tag.hidden {
+  display: none;
 }
 
 .header-right {
