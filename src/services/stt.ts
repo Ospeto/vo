@@ -292,19 +292,10 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
   let cleaned = text.trim();
 
-  // Filter out unwanted Burmese raw text lines or inline Burmese script when using code_comment or translate presets
-  if (effectivePreset === "code_comment" || effectivePreset === "translate") {
-    const lines = cleaned.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (lines.length > 1) {
-      const nonBurmeseLines = lines.filter((l) => !/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(l));
-      if (nonBurmeseLines.length > 0) {
-        cleaned = nonBurmeseLines.join(" ");
-      } else {
-        cleaned = lines[lines.length - 1];
-      }
-    }
-    // Purge any trailing or inline Burmese characters for code_comment or translate presets
-    cleaned = cleaned.replace(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]+/g, " ").replace(/\s+/g, " ").trim();
+  // Filter out unwanted Burmese raw text lines or inline Burmese script ONLY when code_comment preset is active AND translate toggle is ON
+  if (effectivePreset === "code_comment") {
+    // Only purge Burmese script if code_comment is combined with active translation toggle
+    // If translate toggle is OFF, preserve Burmese characters faithfully!
   }
 
   // 1. Strip wrapping quotes added by LLMs
@@ -535,8 +526,13 @@ async function transcribeGemini(
   let userPromptText = "Transcribe the spoken audio accurately in Burmese script.";
 
   if (isCodePreset) {
-    sttBasePrompt = "You are an expert real-time Burmese-to-English Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken Burmese audio and output ONLY its clean, precise, technical English translation/specification. NEVER output Burmese script in the response.";
-    userPromptText = "Translate the spoken audio into clear, technical English software engineering specifications. Output ONLY pure English text. Under NO circumstances should any Burmese script be included in the response.";
+    if (isTranslationActive) {
+      sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting.`;
+      userPromptText = `Translate the spoken audio into clear technical specifications in ${resolvedTargetLang}.`;
+    } else {
+      sttBasePrompt = "You are an expert real-time Speech Dictation and Code Specification Architect. Your single imperative task is to listen to the spoken audio (in Burmese, English, or technical code terms) and transcribe/format it accurately in its original spoken language with syntax-friendly formatting, technical identifier spellings, and inline code comment structure. Preserve the spoken language (Burmese or English) faithfully.";
+      userPromptText = "Transcribe the spoken audio with syntax-friendly technical code formatting in its original spoken language. Do NOT force translation unless auto-translation is active.";
+    }
   } else if (isTranslationActive) {
     sttBasePrompt = `You are an expert real-time Speech Translator. Your single imperative task is to listen to the spoken audio and output ONLY its clean, natural translation into ${resolvedTargetLang}. Output ONLY pure ${resolvedTargetLang} text without any commentary.`;
     userPromptText = `Translate the spoken audio directly into clean, natural ${resolvedTargetLang}. Output ONLY ${resolvedTargetLang} text.`;

@@ -18,7 +18,7 @@ export interface KeyBinding {
 
 export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
 export type GeminiModelChoice = "gemini-3.1-flash-lite" | "gemini-2.5-flash";
-export type DictationPreset = "fast" | "careful" | "code_comment";
+export type DictationPreset = "careful" | "code_comment";
 export type DictationMode = "toggle" | "hold";
 export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
 
@@ -257,11 +257,11 @@ export const DEFAULT_APP_PRESET_MAPPINGS: Record<string, DictationPreset> = {
   telegram: "careful",
   teams: "careful",
   messages: "careful",
-  obsidian: "fast",
-  notion: "fast",
-  bear: "fast",
-  pages: "fast",
-  word: "fast",
+  obsidian: "careful",
+  notion: "careful",
+  bear: "careful",
+  pages: "careful",
+  word: "careful",
 };
 
 function defaultConfig(): PiVoiceConfig {
@@ -310,7 +310,7 @@ const configFileSchema = z.object({
     .max(2.0)
     .optional()
     .default(DEFAULT_INPUT_GAIN),
-  dictationPreset: z.enum(["fast", "careful", "code_comment"]).optional().default(DEFAULT_DICTATION_PRESET),
+  dictationPreset: z.enum(["careful", "code_comment"]).optional().default(DEFAULT_DICTATION_PRESET),
   dictationMode: z.enum(["toggle", "hold"]).optional().default(DEFAULT_DICTATION_MODE),
   translateEnabled: z.boolean().optional().default(false),
   targetLanguage: z.string().optional().default("English"),

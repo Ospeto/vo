@@ -346,7 +346,7 @@ function updateModelPills(selectedModel: string) {
 async function initUI() {
   const config = await window.electronIPC?.getConfig();
   if (config) {
-    updatePresetPills(config.dictationPreset || "fast");
+    updatePresetPills(config.dictationPreset || "careful");
     updateModelPills(config.geminiModel || "gemini-3.6-flash");
     if (presetSelect) presetSelect.value = config.dictationPreset;
     if (modeSelect) modeSelect.value = config.dictationMode;
@@ -463,9 +463,7 @@ function renderAppRules() {
     select.className = "chime-select";
     select.style.cssText = "font-size: 10px; padding: 2px 4px;";
     select.innerHTML = `
-      <option value="fast" ${mappedPreset === "fast" ? "selected" : ""}>Fast</option>
       <option value="careful" ${mappedPreset === "careful" ? "selected" : ""}>Careful</option>
-      <option value="translate" ${mappedPreset === "translate" ? "selected" : ""}>Translate</option>
       <option value="code_comment" ${mappedPreset === "code_comment" ? "selected" : ""}>Code</option>
     `;
 

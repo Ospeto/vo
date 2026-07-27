@@ -185,20 +185,18 @@ describe("transcribe", () => {
     expect(result).toBe("- First item");
   });
 
-  test("purges trailing and inline Burmese script for code_comment preset", async () => {
+  test("preserves Burmese script for code_comment preset when translate toggle is off", async () => {
     const { sanitizeTranscribedText } = await import("../../services/stt.js");
-    const input = "Review and refactor the Diablo integration code, ensuring all duplicate error handling branches are consolidatedဆင် တော့ ထင်တာပဲ ဒါပေမဲ့ နှစ်ထပ်နှစ်ထပ်တော့ ဖြစ်နေသလိုပဲ နည်းနည်း ပြန်တော့ review လုပ်ရဦးမလားလို့";
+    const input = "Review and refactor code, ensuring error handling branches are consolidated ပြန်တော့ review လုပ်ရဦးမလားလို့";
     const result = sanitizeTranscribedText(input, "VS Code", "code_comment");
-    expect(result).toBe("Review and refactor the Diablo integration code, ensuring all duplicate error handling branches are consolidated review");
-    expect(/[\u1000-\u109F]/.test(result)).toBe(false);
+    expect(result).toContain("ပြန်တော့ review လုပ်ရဦးမလားလို့");
   });
 
-  test("purges trailing and inline Burmese script when preset is auto and activeApp is VS Code", async () => {
+  test("preserves Burmese script when preset is auto and activeApp is VS Code and translate toggle is off", async () => {
     const { sanitizeTranscribedText } = await import("../../services/stt.js");
-    const input = "Review and refactor the Diablo integration code, ensuring all duplicate error handling branches are consolidatedဆင် တော့ ထင်တာပဲ ဒါပေမဲ့ နှစ်ထပ်နှစ်ထပ်တော့ ဖြစ်နေသလိုပဲ နည်းနည်း ပြန်တော့ review လုပ်ရဦးမလားလို့";
+    const input = "Review and refactor code, ensuring error handling branches are consolidated ပြန်တော့ review လုပ်ရဦးမလားလို့";
     const result = sanitizeTranscribedText(input, "VS Code", "auto");
-    expect(result).toBe("Review and refactor the Diablo integration code, ensuring all duplicate error handling branches are consolidated review");
-    expect(/[\u1000-\u109F]/.test(result)).toBe(false);
+    expect(result).toContain("ပြန်တော့ review လုပ်ရဦးမလားလို့");
   });
 
   test("strips Burmese and English hesitation fillers (nd-sat, like, you know, ဟိုဟာလေ)", async () => {
