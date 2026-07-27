@@ -499,7 +499,8 @@ function setupIpcHandlers() {
         pasteTextToFocusedField(text);
         const activeApp = getActiveAppName();
         const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
-        const cost = calculateDictationCost(audioDurationSec, text.length, currentConfig.geminiModel);
+        const isEnglish = currentConfig.dictationPreset !== "burmese_written" && currentConfig.dictationPreset !== "fast";
+        const cost = calculateDictationCost(audioDurationSec, text.length, currentConfig.geminiModel, isEnglish);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, currentConfig.geminiModel);
       }
       setState("idle", `Dictated: "${text}"`);

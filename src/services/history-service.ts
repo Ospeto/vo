@@ -32,12 +32,14 @@ function getHistoryPath(): string {
 export function calculateDictationCost(
   audioDurationSec: number,
   textLength: number,
-  modelUsed: string = "gemini-3.1-flash-lite"
+  modelUsed: string = "gemini-3.1-flash-lite",
+  isEnglishOutput: boolean = true
 ): number {
-  // Input: Audio is 25 tokens/sec
+  // Input: Audio is ~25 tokens/sec
   const audioInputTokens = Math.max(25, Math.ceil(audioDurationSec * 25));
-  // Output: Generated text/translation tokens (~0.65 tokens/char)
-  const textOutputTokens = Math.ceil(textLength * 0.65);
+  // Output: ~0.35 tokens/char for English text, ~0.65 for Burmese script
+  const charTokenRatio = isEnglishOutput ? 0.35 : 0.65;
+  const textOutputTokens = Math.ceil(textLength * charTokenRatio);
 
   let inputRatePerM = 0.25;
   let outputRatePerM = 1.50;
