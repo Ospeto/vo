@@ -362,8 +362,8 @@ function createPopoverWindow() {
 function createHudWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const screenBounds = primaryDisplay.workArea;
-  const width = 90;
-  const height = 28;
+  const width = 82;
+  const height = 26;
   const x = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
   const y = screenBounds.y + 6;
 
@@ -380,7 +380,7 @@ function createHudWindow() {
     skipTaskbar: true,
     alwaysOnTop: true,
     focusable: false,
-    hasShadow: true,
+    hasShadow: false,
     webPreferences: {
       preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
       contextIsolation: true,
