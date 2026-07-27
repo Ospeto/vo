@@ -15,15 +15,33 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
     currentGainValue = inputGain;
     
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        sampleRate: 16000,
-        channelCount: 1,
-        autoGainControl: false,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+    const config = await window.electronIPC?.getConfig();
+    const targetDeviceId = config?.audioDeviceId;
+
+    const baseAudioConstraints: MediaTrackConstraints = {
+      sampleRate: 16000,
+      channelCount: 1,
+      autoGainControl: false,
+      echoCancellation: true,
+      noiseSuppression: true,
+    };
+
+    if (targetDeviceId && targetDeviceId !== "default") {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: { ...baseAudioConstraints, deviceId: { exact: targetDeviceId } },
+        });
+      } catch {
+        // Fallback to system default if specified external mic device is unavailable
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: baseAudioConstraints,
+        });
+      }
+    } else {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: baseAudioConstraints,
+      });
+    }
 
     audioCtx = new AudioContext({ sampleRate: 16000 });
     if (audioCtx.state === "suspended") {

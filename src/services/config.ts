@@ -37,6 +37,7 @@ export interface PiVoiceConfig {
   customVocabulary: string[];
   presetVocabulary: Partial<Record<DictationPreset, string[]>>;
   geminiApiKey?: string;
+  audioDeviceId?: string;
 }
 
 export interface PiVoiceConfigPatch {
@@ -53,6 +54,7 @@ export interface PiVoiceConfigPatch {
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
   geminiApiKey?: string;
+  audioDeviceId?: string;
 }
 
 // ── Key map ──────────────────────────────────────────────────────────
@@ -284,6 +286,7 @@ const configFileSchema = z.object({
   customVocabulary: z.array(z.string()).optional().default([]),
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
   geminiApiKey: z.string().optional(),
+  audioDeviceId: z.string().optional(),
 });
 
 export class ConfigError extends Error {
@@ -341,7 +344,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, geminiApiKey } = result.data;
+  const { key: keyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, geminiApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
 
   const persistedVocab = loadPersistedVocabulary();
@@ -371,6 +374,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     customVocabulary: mergedCustomVocab,
     presetVocabulary: mergedPresetVocab,
     geminiApiKey,
+    audioDeviceId,
   };
 }
 
@@ -428,6 +432,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     customVocabulary: finalCustomVocab,
     presetVocabulary: mergedPresetVocab,
     ...(patch.geminiApiKey !== undefined ? { geminiApiKey: patch.geminiApiKey.trim() } : {}),
+    ...(patch.audioDeviceId !== undefined ? { audioDeviceId: patch.audioDeviceId.trim() } : {}),
   };
 
   const validationResult = configFileSchema.safeParse(mergedJson);

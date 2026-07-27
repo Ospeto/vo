@@ -36,6 +36,7 @@ const previewStartChimeBtn = document.getElementById("previewStartChimeBtn") as 
 const previewEndChimeBtn = document.getElementById("previewEndChimeBtn") as HTMLButtonElement;
 const symbolScannerToggle = document.getElementById("symbolScannerToggle") as HTMLInputElement;
 const settingModelSelect = document.getElementById("settingModelSelect") as HTMLSelectElement;
+const micDeviceSelect = document.getElementById("micDeviceSelect") as HTMLSelectElement;
 
 const spectrumCanvas = document.getElementById("spectrumCanvas") as HTMLCanvasElement | null;
 const spectrumCtx = spectrumCanvas?.getContext("2d");
@@ -43,6 +44,35 @@ const spectrumCtx = spectrumCanvas?.getContext("2d");
 let isRecordingHotkey = false;
 let audioChimesEnabled = true;
 let audioCtx: AudioContext | null = null;
+
+async function populateAudioDevices(selectedDeviceId?: string) {
+  if (!micDeviceSelect) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter((d) => d.kind === "audioinput");
+    
+    const fragment = document.createDocumentFragment();
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "default";
+    defaultOption.textContent = "System Default Microphone";
+    fragment.appendChild(defaultOption);
+
+    audioInputs.forEach((device, index) => {
+      if (device.deviceId && device.deviceId !== "default") {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.textContent = device.label || `Microphone ${index + 1}`;
+        fragment.appendChild(option);
+      }
+    });
+
+    micDeviceSelect.innerHTML = "";
+    micDeviceSelect.appendChild(fragment);
+    if (selectedDeviceId) {
+      micDeviceSelect.value = selectedDeviceId;
+    }
+  } catch {}
+}
 let currentPresetVocabMap: Record<string, string[]> = {};
 
 function getAudioContext(): AudioContext {
@@ -197,6 +227,13 @@ async function initUI() {
     if (settingModelSelect && config.geminiModel) {
       settingModelSelect.value = config.geminiModel;
     }
+    await populateAudioDevices((config as any).audioDeviceId);
+  }
+
+  if (micDeviceSelect) {
+    micDeviceSelect.addEventListener("change", async () => {
+      await window.electronIPC?.saveConfig({ audioDeviceId: micDeviceSelect.value });
+    });
   }
 
   const snapshot = await window.electronIPC?.getStateSnapshot();

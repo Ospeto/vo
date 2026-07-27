@@ -144,6 +144,22 @@
             <button id="saveApiKeyBtn" class="action-btn-sm">Save</button>
           </div>
           <span id="apiKeyFeedback" class="feedback-msg"></span>
+        <!-- Microphone Input Device Section -->
+        <div class="modal-section-group">
+          <label class="section-label" for="micDeviceSelect">Microphone Input Device</label>
+          <div class="chime-card-row">
+            <div class="chime-card-header">
+              <span class="chime-step-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Audio Input</span>
+              <span class="chime-step-title">Hardware Mic</span>
+            </div>
+            <div class="chime-card-controls">
+              <select id="micDeviceSelect" class="chime-select" aria-label="Microphone Input Device">
+                <option value="default">System Default Microphone</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <hr class="modal-divider">
 
         <!-- Default Gemini Model Section -->
