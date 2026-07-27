@@ -362,10 +362,10 @@ function createPopoverWindow() {
 function createHudWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const screenBounds = primaryDisplay.workArea;
-  const width = 240;
-  const height = 44;
+  const width = 90;
+  const height = 28;
   const x = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
-  const y = screenBounds.y + 16;
+  const y = screenBounds.y + 6;
 
   hudWindow = new BrowserWindow({
     width,
@@ -388,7 +388,7 @@ function createHudWindow() {
     },
   });
 
-  hudWindow.loadFile(fileURLToPath(new URL("../renderer/index.html", import.meta.url)));
+  hudWindow.loadFile(fileURLToPath(new URL("../renderer/hud.html", import.meta.url)));
 
   hudWindow.on("closed", () => {
     hudWindow = null;
@@ -579,6 +579,7 @@ function setupIpcHandlers() {
   ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
     if (!validateIpcSender(event)) return;
     popoverWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
+    hudWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
   });
 
   ipcMain.handle(IPC.GET_CONFIG, (event) => {

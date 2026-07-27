@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>vo Ultra-Minimal Waveform HUD</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      overflow: hidden;
+    }
+    .hud-capsule {
+      width: 86px;
+      height: 26px;
+      background: rgba(14, 14, 17, 0.92);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3.5px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .hud-bar {
+      width: 3px;
+      height: 6px;
+      background: #10B981;
+      border-radius: 3px;
+      transition: background-color 0.25s ease, height 0.15s ease, box-shadow 0.25s ease;
+    }
+
+    /* RED for Recording */
+    .hud-capsule.recording .hud-bar {
+      background: #EF4444;
+      box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+      animation: wave-red 0.55s ease-in-out infinite alternate;
+    }
+    .hud-capsule.recording .hud-bar:nth-child(1) { animation-delay: 0.05s; }
+    .hud-capsule.recording .hud-bar:nth-child(2) { animation-delay: 0.20s; }
+    .hud-capsule.recording .hud-bar:nth-child(3) { animation-delay: 0.10s; }
+    .hud-capsule.recording .hud-bar:nth-child(4) { animation-delay: 0.30s; }
+    .hud-capsule.recording .hud-bar:nth-child(5) { animation-delay: 0.15s; }
+
+    /* YELLOW for Transcribing / Stopping */
+    .hud-capsule.transcribing .hud-bar,
+    .hud-capsule.stopping .hud-bar {
+      background: #F59E0B;
+      box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+      animation: wave-yellow 0.45s ease-in-out infinite alternate;
+    }
+    .hud-capsule.transcribing .hud-bar:nth-child(1),
+    .hud-capsule.stopping .hud-bar:nth-child(1) { animation-delay: 0.10s; }
+    .hud-capsule.transcribing .hud-bar:nth-child(2),
+    .hud-capsule.stopping .hud-bar:nth-child(2) { animation-delay: 0.25s; }
+    .hud-capsule.transcribing .hud-bar:nth-child(3),
+    .hud-capsule.stopping .hud-bar:nth-child(3) { animation-delay: 0.05s; }
+    .hud-capsule.transcribing .hud-bar:nth-child(4),
+    .hud-capsule.stopping .hud-bar:nth-child(4) { animation-delay: 0.35s; }
+    .hud-capsule.transcribing .hud-bar:nth-child(5),
+    .hud-capsule.stopping .hud-bar:nth-child(5) { animation-delay: 0.15s; }
+
+    /* GREEN for Idle / Complete */
+    .hud-capsule.idle .hud-bar,
+    .hud-capsule.success .hud-bar {
+      background: #10B981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+      height: 10px;
+    }
+
+    @keyframes wave-red {
+      0% { height: 4px; }
+      100% { height: 15px; }
+    }
+    @keyframes wave-yellow {
+      0% { height: 5px; }
+      100% { height: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hudCapsule" class="hud-capsule recording">
+    <div class="hud-bar"></div>
+    <div class="hud-bar"></div>
+    <div class="hud-bar"></div>
+    <div class="hud-bar"></div>
+    <div class="hud-bar"></div>
+  </div>
+  <script>
+    const hudCapsule = document.getElementById("hudCapsule");
+
+    if (window.electronIPC) {
+      window.electronIPC.onStateChanged((payload) => {
+        const state = payload.state || "idle";
+        hudCapsule.className = "hud-capsule " + state;
+      });
+
+      window.electronIPC.onAudioLevel((level) => {
+        if (hudCapsule.classList.contains("recording")) {
+          const bars = hudCapsule.children;
+          const clamped = Math.max(0.1, Math.min(1, level * 2.5));
+          for (let i = 0; i < bars.length; i++) {
+            const h = Math.round(4 + clamped * (10 + (i % 3) * 3));
+            bars[i].style.height = h + "px";
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

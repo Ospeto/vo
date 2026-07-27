@@ -35,6 +35,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/renderer/index.html"),
           capture: resolve(__dirname, "src/renderer/capture.html"),
+          hud: resolve(__dirname, "src/renderer/hud.html"),
         },
       },
     },
