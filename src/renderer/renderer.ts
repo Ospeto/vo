@@ -583,8 +583,8 @@ async function renderHistory() {
 
     const itemCostStr = (item as any).cost !== undefined ? ` · $${(item as any).cost.toFixed(6)}` : "";
     const keyBadge = (item as any).usedPaidKey
-      ? `<span class="paid-key-tag" title="Fallback Paid API Key Used">💳 Paid Key</span>`
-      : `<span class="free-key-tag" title="Primary Free API Key Used">🟢 Free Key</span>`;
+      ? `<span class="paid-key-tag" title="Fallback Paid API Key Used"><span class="badge-dot paid-dot"></span>Paid Key</span>`
+      : `<span class="free-key-tag" title="Primary Free API Key Used"><span class="badge-dot free-dot"></span>Free Tier</span>`;
 
     metaEl.innerHTML = `${timeStr} · ${item.activeApp || "App"}${itemCostStr} ${keyBadge}`;
 
