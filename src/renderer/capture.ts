@@ -189,20 +189,23 @@ window.electronIPC?.onStopRecording(() => {
     }
 
     const doStop = () => {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-      } else {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        audioBlob.arrayBuffer().then((buf) => {
-          window.electronIPC?.sendRecordingData(buf);
-          audioChunks = [];
-        });
-      }
+      // Allow 150ms for final WebAudio speech tail chunk to flush into MediaRecorder
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        } else {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          audioBlob.arrayBuffer().then((buf) => {
+            window.electronIPC?.sendRecordingData(buf);
+            audioChunks = [];
+          });
+        }
+      }, 150);
     };
 
     const elapsed = Date.now() - recordingStartTime;
-    if (elapsed < 200) {
-      setTimeout(doStop, 200 - elapsed);
+    if (elapsed < 300) {
+      setTimeout(doStop, 300 - elapsed);
     } else {
       doStop();
     }
