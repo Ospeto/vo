@@ -281,7 +281,8 @@ CORE CAREFUL DIRECTIVES:
 ${GLOBAL_BILINGUAL_DIRECTIVE}
 
 Preset Mode: CAREFUL DEEP PROOFREADING & SEMANTIC REASONING.
-Analyze the spoken audio meticulously. Perform deep proofreading to correct phonetically garbled words, homophones, awkward phrasing, and speech slips. Format the output into highly coherent, grammatically flawless, natural text while strictly preserving 100% of the speaker's core intent, meaning, and technical terminology. Output ONLY the proofread final text.
+Analyze the spoken audio meticulously. Perform deep proofreading to correct phonetically garbled words, homophones, awkward phrasing, and speech slips. Format the output into highly coherent, grammatically flawless, natural text while strictly preserving 100% of the speaker's core intent, meaning, and technical terminology.
+CRITICAL: You MUST transcribe and proofread EVERY SINGLE WORD spoken from beginning to end. Never truncate, drop trailing words, or cut off sentences mid-way. Output 100% complete, fully-formed text.
 `.trim();
     case "fast":
     case "auto":

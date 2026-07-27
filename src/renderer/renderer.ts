@@ -553,12 +553,7 @@ async function renderHistory() {
   const statFreeQuota = document.getElementById("statFreeQuota");
 
   if (monthlyCostBadge) {
-    monthlyCostBadge.textContent = `Month: $${totalCost.toFixed(5)}`;
-  }
-  if (statDictationsCount) statDictationsCount.textContent = `${history.length}`;
-  if (statSavedTime) {
-    const mins = Math.max(1, Math.round(totalSavedSec / 60));
-    statSavedTime.textContent = `~${mins}m`;
+    monthlyCostBadge.textContent = `$${totalCost.toFixed(4)}`;
   }
   if (statFreeQuota) {
     const remaining = Math.max(0, 1500 - history.length);
