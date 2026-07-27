@@ -207,4 +207,10 @@ describe("transcribe", () => {
     expect(sanitizeTranscribedText("like, fix the issue, you know, completely")).toBe("Fix the issue, completely");
     expect(sanitizeTranscribedText("ဟိုဟာလေ Database connection ကို test လုပ်ပေး")).toBe("Database connection ကို test လုပ်ပေး");
   });
+
+  test("purges standalone hesitation sounds (အာ..., ဟာ, အင်း) while preserving valid Burmese words (အကြောင်း, အဆင်ပြေ)", async () => {
+    const { sanitizeTranscribedText } = await import("../../services/stt.js");
+    expect(sanitizeTranscribedText("အာ... Database connection အကြောင်း အဆင်ပြေအောင် လုပ်ပေး")).toBe("Database connection အကြောင်း အဆင်ပြေအောင် လုပ်ပေး");
+    expect(sanitizeTranscribedText("ဟာ... အလုပ် အဆင်ပြေလား အင်း")).toBe("အလုပ် အဆင်ပြေလား");
+  });
 });

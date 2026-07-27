@@ -228,6 +228,7 @@ The speaker naturally mixes spoken Burmese natural prose with English technical 
 1. PRESERVE NATURAL BILINGUAL DUAL-LANGUAGE FLOW: Transcribe spoken Burmese text in clean Burmese script (မြန်မာစာ) and spoken English technical terms, identifiers, and commands in exact English (e.g. "Database connection ကို test လုပ်ပြီး တွေ့တဲ့ error ကို log ထုတ်ပေး").
 2. DO NOT FORCE TRANSLATION: Do NOT forcibly translate spoken Burmese words to English, and do NOT forcibly translate English technical terms into Burmese. Keep English technical terms, commands, and product names in exact English.
 3. SPOKEN IDENTIFIER HINTS: Format spoken code cues ("camel case user id" -> userId, "snake case created at" -> created_at) cleanly as code symbols.
+4. SPOKEN HESITATION PURGING: Completely ignore and filter out all spoken vocalizations, throat-clearing, and hesitation filler phonemes (e.g. 'အာ', 'ဟာ', 'အင်း', 'အင်', 'အာ့', 'အမ်', 'ဟိုဟာ', 'ဒီဥစ္စာ', 'like', 'you know', 'nd-sat', 'um', 'uh'). Do NOT transcribe these vocal fillers into text.
 `.trim();
 
 export function getPresetPromptInstructions(preset?: DictationPreset): string {
@@ -303,7 +304,9 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   // 4. Strip throat clearing and vocalization sounds
   cleaned = cleaned.replace(/^(အဟမ်းး|အဟမ်း|အဟက်|အဟွတ်)\s*,?\s*/gi, "");
 
-  // 5. Strip Burmese & English hesitation filler words at sentence start or mid-sentence
+  // 5. Dual-Layer Precision Morphological Anti-Hesitation Sanitizer
+  // Targets standalone hesitation phonemes (အာ, ဟာ, အင်း, အင်, အမ်, အာ့) followed by punctuation, ellipses, or spaces
+  cleaned = cleaned.replace(/(?:^|\s+)(?:အာ+|ဟာ+|အင်း+|အင်+|အမ်+|အမ်း+|အာ့+)(?:[။\.\,\…\-\–\—\s]*)(?=\s|[။\.\,\…]|$)/g, " ");
   cleaned = cleaned.replace(/^(ဟိုဟာလေ|ဟိုဟာ|အာ့ဆို|အာ့|အင်းး|အင်း|အမ်မ်|အမ်|ဒီဥစ္စာ|အာ)\s*,?\s*/gi, "");
   cleaned = cleaned.replace(/\s*(,\s*nd-sat|,\s*nd\s*sat|,\s*nd)\s*/gi, "");
   cleaned = cleaned.replace(/\b(like|you know)\s*,\s*/gi, "");
