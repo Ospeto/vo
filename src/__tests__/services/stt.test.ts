@@ -220,7 +220,8 @@ describe("transcribe", () => {
     expect(instructions).toContain("CAREFUL DEEP PROOFREADING");
     
     const fallbackChain = getFallbackModelChain("gemini-3.1-flash-lite", "careful");
-    expect(fallbackChain).toContain("gemini-3.6-flash");
+    expect(fallbackChain).not.toContain("gemini-3.6-flash");
+    expect(fallbackChain[0]).toBe("gemini-3.1-flash-lite");
   });
 
   test("resolves custom appPresetMappings in resolveEffectivePreset", async () => {

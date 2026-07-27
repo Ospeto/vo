@@ -440,16 +440,11 @@ export function getPresetTemperature(preset?: DictationPreset): number {
 
 export function getFallbackModelChain(
   preferredModel: GeminiModelChoice,
-  effectivePreset?: DictationPreset
+  _effectivePreset?: DictationPreset
 ): string[] {
-  let fallbackCandidates: string[];
-  if (effectivePreset === "code_comment" || effectivePreset === "careful" || effectivePreset === "translate_en") {
-    // For code & careful presets: try 3.6-flash, 3.1-flash-lite, 3.5-flash-lite, 2.5-flash, 2.5-pro
-    fallbackCandidates = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
-  } else {
-    // For general presets: default fallback is 3.1-flash-lite / 3.5-flash-lite (exclude expensive 3.6-flash)
-    fallbackCandidates = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
-  }
+  // Always prioritize high-quota lightweight models (gemini-3.1-flash-lite, gemini-3.5-flash-lite, gemini-2.5-flash)
+  // to avoid hitting low free tier limits (such as 3.6-flash's ~20 RPD limit).
+  const fallbackCandidates: string[] = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash"];
 
   const filtered = fallbackCandidates.filter((m) => m !== preferredModel);
   return Array.from(new Set([preferredModel, ...filtered]));
