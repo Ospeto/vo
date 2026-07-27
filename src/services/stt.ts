@@ -303,9 +303,11 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   // 4. Strip throat clearing and vocalization sounds
   cleaned = cleaned.replace(/^(အဟမ်းး|အဟမ်း|အဟက်|အဟွတ်)\s*,?\s*/gi, "");
 
-  // 5. Strip Burmese hesitation filler words at sentence start or mid-sentence
-  cleaned = cleaned.replace(/^(ဟိုဟာလေ|ဟိုဟာ|အာ့ဆို|အာ့|အင်းး|အင်း|အမ်မ်|အမ်)\s*,?\s*/gi, "");
-  cleaned = cleaned.replace(/\s+(ဟိုဟာလေ|ဟိုဟာ)\s+/gi, " ");
+  // 5. Strip Burmese & English hesitation filler words at sentence start or mid-sentence
+  cleaned = cleaned.replace(/^(ဟိုဟာလေ|ဟိုဟာ|အာ့ဆို|အာ့|အင်းး|အင်း|အမ်မ်|အမ်|ဒီဥစ္စာ|အာ)\s*,?\s*/gi, "");
+  cleaned = cleaned.replace(/\s*(,\s*nd-sat|,\s*nd\s*sat|,\s*nd)\s*/gi, "");
+  cleaned = cleaned.replace(/\b(like|you know)\s*,\s*/gi, "");
+  cleaned = cleaned.replace(/\s+(ဟိုဟာလေ|ဟိုဟာ|ဒီဥစ္စာ)\s+/gi, " ");
 
   // 6. Remove repetitive word stutters
   cleaned = cleaned.replace(/\b(ဒီ|ဟို|အာ)\s+\1\b/gi, "$1");

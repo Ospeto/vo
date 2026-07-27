@@ -603,6 +603,7 @@ function setupIpcHandlers() {
 }
 
 let lastHotkeyDownTime = 0;
+let keyHoldPressStartTime = 0;
 
 function handleHotkeyDown() {
   const now = Date.now();
@@ -611,6 +612,7 @@ function handleHotkeyDown() {
     return;
   }
   lastHotkeyDownTime = now;
+  keyHoldPressStartTime = now;
 
   if (currentConfig.dictationMode === "hold") {
     if (currentState === "idle" || currentState === "error") {
@@ -625,9 +627,10 @@ function handleHotkeyDown() {
 }
 
 function handleHotkeyUp() {
-  if (currentConfig.dictationMode === "hold") {
+  const pressDuration = Date.now() - keyHoldPressStartTime;
+  if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
     if (currentState === "recording" || currentState === "starting") {
-      logger.info("Hold Up: STOPPING recording");
+      logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Auto-Detect)");
       setState("stopping", "Stopping...");
       playToggleStopChime();
       captureWindow?.webContents.send(IPC.STOP_RECORDING);

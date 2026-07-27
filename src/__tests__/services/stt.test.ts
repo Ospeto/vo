@@ -200,4 +200,11 @@ describe("transcribe", () => {
     expect(result).toBe("Review and refactor the Diablo integration code, ensuring all duplicate error handling branches are consolidated review");
     expect(/[\u1000-\u109F]/.test(result)).toBe(false);
   });
+
+  test("strips Burmese and English hesitation fillers (nd-sat, like, you know, ဟိုဟာလေ)", async () => {
+    const { sanitizeTranscribedText } = await import("../../services/stt.js");
+    expect(sanitizeTranscribedText("hello world, nd-sat")).toBe("Hello world");
+    expect(sanitizeTranscribedText("like, fix the issue, you know, completely")).toBe("Fix the issue, completely");
+    expect(sanitizeTranscribedText("ဟိုဟာလေ Database connection ကို test လုပ်ပေး")).toBe("Database connection ကို test လုပ်ပေး");
+  });
 });
