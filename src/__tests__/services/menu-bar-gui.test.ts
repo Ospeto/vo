@@ -245,16 +245,13 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       expect(getPresetPromptInstructions("code_comment")).toContain("SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION");
       expect(getPresetPromptInstructions("code_comment")).toContain("FAITHFUL TRANSLATION & ZERO IMPROVISATION");
       expect(getPresetPromptInstructions("code_comment")).toContain("SPOKEN IDENTIFIER FORMATTING");
-      expect(getPresetPromptInstructions("email_polish")).toContain("EMAIL POLISH");
-      expect(getPresetPromptInstructions("burmese_written")).toContain("BURMESE WRITTEN");
-      expect(getPresetPromptInstructions("translate_en")).toContain("TRANSLATE TO ENGLISH");
+      expect(getPresetPromptInstructions("translate")).toContain("TRANSLATE TO ENGLISH");
       expect(getPresetPromptInstructions("fast")).toContain("GLOBAL NATURAL BILINGUAL DICTATION DIRECTIVE");
 
       expect(getPresetTemperature("fast")).toBe(0.0);
       expect(getPresetTemperature("code_comment")).toBe(0.0);
-      expect(getPresetTemperature("translate_en")).toBe(0.0);
-      expect(getPresetTemperature("email_polish")).toBe(0.1);
-      expect(getPresetTemperature("burmese_written")).toBe(0.15);
+      expect(getPresetTemperature("translate")).toBe(0.0);
+      expect(getPresetTemperature("careful")).toBe(0.0);
     });
 
     test("excludes gemini-3.6-flash from fallback chain to protect free tier rate limits", () => {

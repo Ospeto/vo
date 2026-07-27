@@ -262,11 +262,7 @@ CORE DIRECTIVES:
    - "kebab case user-card" -> user-card
 4. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the instruction:"), or raw dictation repeats be included.
 `.trim();
-    case "email_polish":
-      return `${GLOBAL_BILINGUAL_DIRECTIVE}\n\nPreset Mode: EMAIL POLISH. Format the output as a clean, professional, grammatically polished email message with clear paragraphing while preserving natural bilingual technical terms in English.`;
-    case "burmese_written":
-      return `${GLOBAL_BILINGUAL_DIRECTIVE}\n\nPreset Mode: BURMESE WRITTEN. Format spoken Burmese into formal, polished Burmese literary/written prose (မြန်မာစာအရေးအသား) while preserving English technical terms and code identifiers in pure English.`;
-    case "translate_en":
+    case "translate":
       return `
 Preset Mode: TRANSLATE TO ENGLISH & CAREFUL DEEP PROOFREADING.
 Hear the spoken Burmese/English audio and directly output its accurate, fluent, carefully proofread, and natural English translation.
@@ -285,7 +281,6 @@ Analyze the spoken audio meticulously. Perform deep proofreading to correct phon
 CRITICAL: You MUST transcribe and proofread EVERY SINGLE WORD spoken from beginning to end. Never truncate, drop trailing words, or cut off sentences mid-way. Output 100% complete, fully-formed text.
 `.trim();
     case "fast":
-    case "auto":
     default:
       return GLOBAL_BILINGUAL_DIRECTIVE;
   }
@@ -297,8 +292,8 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
   let cleaned = text.trim();
 
-  // Filter out unwanted Burmese raw text lines or inline Burmese script when using code_comment or translate_en presets
-  if (effectivePreset === "code_comment" || effectivePreset === "translate_en") {
+  // Filter out unwanted Burmese raw text lines or inline Burmese script when using code_comment or translate presets
+  if (effectivePreset === "code_comment" || effectivePreset === "translate") {
     const lines = cleaned.split("\n").map((l) => l.trim()).filter(Boolean);
     if (lines.length > 1) {
       const nonBurmeseLines = lines.filter((l) => !/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(l));
@@ -308,7 +303,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
         cleaned = lines[lines.length - 1];
       }
     }
-    // Purge any trailing or inline Burmese characters for code_comment or translate_en presets
+    // Purge any trailing or inline Burmese characters for code_comment or translate presets
     cleaned = cleaned.replace(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]+/g, " ").replace(/\s+/g, " ").trim();
   }
 
@@ -463,17 +458,7 @@ export interface TranscribeOptions {
 }
 
 export function getPresetTemperature(preset?: DictationPreset): number {
-  switch (preset) {
-    case "email_polish":
-      return 0.1;
-    case "burmese_written":
-      return 0.15;
-    case "fast":
-    case "code_comment":
-    case "translate_en":
-    default:
-      return 0.0;
-  }
+  return 0.0;
 }
 
 export function getFallbackModelChain(
@@ -531,7 +516,7 @@ async function transcribeGemini(
     }
   }
 
-  const isEnglishPreset = effectivePreset === "code_comment" || effectivePreset === "translate_en";
+  const isEnglishPreset = effectivePreset === "code_comment" || effectivePreset === "translate";
   const sttBasePrompt = isEnglishPreset
     ? "You are an expert real-time Burmese-to-English Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken Burmese audio and output ONLY its clean, precise, technical English translation/specification. NEVER output Burmese script in the response."
     : BURMESE_ACCURATE_STT_PROMPT;

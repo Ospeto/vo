@@ -18,7 +18,7 @@ export interface KeyBinding {
 
 export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
 export type GeminiModelChoice = "gemini-3.1-flash-lite" | "gemini-2.5-flash";
-export type DictationPreset = "fast" | "careful" | "code_comment" | "email_polish" | "burmese_written" | "translate_en" | "auto";
+export type DictationPreset = "fast" | "careful" | "translate" | "code_comment";
 export type DictationMode = "toggle" | "hold";
 export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
 
@@ -247,17 +247,17 @@ export const DEFAULT_APP_PRESET_MAPPINGS: Record<string, DictationPreset> = {
   ghostty: "code_comment",
   zed: "code_comment",
   sublime: "code_comment",
-  slack: "email_polish",
-  mail: "email_polish",
-  outlook: "email_polish",
-  telegram: "email_polish",
-  teams: "email_polish",
-  messages: "email_polish",
-  obsidian: "burmese_written",
-  notion: "burmese_written",
-  bear: "burmese_written",
-  pages: "burmese_written",
-  word: "burmese_written",
+  slack: "careful",
+  mail: "careful",
+  outlook: "careful",
+  telegram: "careful",
+  teams: "careful",
+  messages: "careful",
+  obsidian: "fast",
+  notion: "fast",
+  bear: "fast",
+  pages: "fast",
+  word: "fast",
 };
 
 function defaultConfig(): PiVoiceConfig {
@@ -304,7 +304,7 @@ const configFileSchema = z.object({
     .max(2.0)
     .optional()
     .default(DEFAULT_INPUT_GAIN),
-  dictationPreset: z.enum(["fast", "careful", "code_comment", "email_polish", "burmese_written", "translate_en", "auto"]).optional().default(DEFAULT_DICTATION_PRESET),
+  dictationPreset: z.enum(["fast", "careful", "translate", "code_comment"]).optional().default(DEFAULT_DICTATION_PRESET),
   dictationMode: z.enum(["toggle", "hold"]).optional().default(DEFAULT_DICTATION_MODE),
   audioChimesEnabled: z.boolean().optional().default(DEFAULT_AUDIO_CHIMES_ENABLED),
   chimeSoundStart: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional().default("glass"),
