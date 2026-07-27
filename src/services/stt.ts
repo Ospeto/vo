@@ -571,7 +571,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
           config: {
             systemInstruction: fullPrompt,
             temperature: targetTemperature,
-            maxOutputTokens: 2048,
+            maxOutputTokens: 8192,
           },
         });
         const text = response.text?.trim() ?? "";
@@ -608,7 +608,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
             config: {
               systemInstruction: fullPrompt,
               temperature: targetTemperature,
-              maxOutputTokens: 2048,
+              maxOutputTokens: 8192,
             },
           });
           const fbText = fbResponse.text?.trim() ?? "";
