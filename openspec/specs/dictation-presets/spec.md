@@ -4,7 +4,7 @@
 TBD - created by archiving change vo-menu-bar-gui-enhancements. Update Purpose after archive.
 ## Requirements
 ### Requirement: Dictation Preset Selection
-The system SHALL provide a preset mode dropdown in the Menu Bar GUI popover allowing selection between Fast Transcribe, Code Comment, Email Polish, and Burmese Written modes.
+The system SHALL provide a preset mode dropdown in the Menu Bar GUI popover allowing selection between Auto, Careful, Fast Transcribe, Code Comment, Email Polish, Burmese Written, and Translate modes.
 
 #### Scenario: User selects Code Comment preset
 - **WHEN** the user selects "Code Comment" from the preset dropdown
@@ -44,14 +44,14 @@ The system SHALL accept user-defined custom vocabulary terms and supply them to 
 - **THEN** the system SHALL sanitize the list (max 50 terms, 40 chars each) and pass them as context terms to Gemini API payloads
 
 ### Requirement: Translate Preset Mode
-The system SHALL support `translate_en` in `DictationPreset` to convert spoken Burmese audio into fluent English text during Speech-to-Text transcription.
+The system SHALL support `translate` in `DictationPreset` to convert spoken Burmese audio into fluent English text during Speech-to-Text transcription.
 
 #### Scenario: User selects Translate preset and speaks Burmese
-- **WHEN** user selects `translate_en` preset and speaks Burmese audio
+- **WHEN** user selects `translate` preset and speaks Burmese audio
 - **THEN** Gemini STT transcribes and translates the audio directly into English text without Burmese script.
 
 #### Scenario: Prompt instructions formatting
-- **WHEN** `getPresetPromptInstructions("translate_en")` is called
+- **WHEN** `getPresetPromptInstructions("translate")` is called
 - **THEN** the system returns a prompt string instructing direct translation to English text.
 
 ### Requirement: AI Coding Prompt Enhancer for Code Preset
@@ -79,4 +79,3 @@ The system SHALL support `auto` in `DictationPreset` to dynamically resolve effe
 #### Scenario: Active app is Obsidian when preset is auto
 - **WHEN** dictation preset is set to `auto` and active app is `Obsidian`
 - **THEN** `resolveEffectivePreset("auto", "Obsidian")` returns `burmese_written`.
-

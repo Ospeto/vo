@@ -58,6 +58,9 @@ const previewEndChimeBtn = document.getElementById("previewEndChimeBtn") as HTML
 const symbolScannerToggle = document.getElementById("symbolScannerToggle") as HTMLInputElement;
 const settingModelSelect = document.getElementById("settingModelSelect") as HTMLSelectElement;
 const micDeviceSelect = document.getElementById("micDeviceSelect") as HTMLSelectElement;
+const addAppRuleBtn = document.getElementById("addAppRuleBtn") as HTMLButtonElement | null;
+const newAppNameInput = document.getElementById("newAppNameInput") as HTMLInputElement | null;
+const newAppPresetSelect = document.getElementById("newAppPresetSelect") as HTMLSelectElement | null;
 
 
 

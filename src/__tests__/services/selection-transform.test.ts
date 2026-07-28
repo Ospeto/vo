@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test";
 import { captureActiveSelection, restoreClipboard } from "../../services/selection-service.js";
-import { TranscribeOptions } from "../../services/stt.js";
+import type { TranscribeOptions } from "../../services/stt.js";
 
 describe("Selection Transformation & Capture Service Suite", () => {
   test("captureActiveSelection returns default fallback structure when execSync times out or fails", async () => {

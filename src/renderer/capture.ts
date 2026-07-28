@@ -110,7 +110,9 @@ function startMetering() {
 
     let sumSquares = 0;
     for (let i = 0; i < buffer.length; i++) {
-      sumSquares += buffer[i] * buffer[i];
+      const val = buffer[i] ?? 0;
+      const amplified = val;
+      sumSquares += amplified * amplified;
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
     
