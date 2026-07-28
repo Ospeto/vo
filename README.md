@@ -55,10 +55,11 @@
   - Code Editors (`VS Code`, `Cursor`, `Myanso`, `Terminal`) ➔ `code_comment` (English Tech Spec)
   - Notes & Vaults (`Obsidian`) ➔ `burmese_written` (Standard Burmese Prose)
   - Mail & Chat (`Slack`, `Mail`) ➔ `email_polish` (Polished English)
+- **`careful`**: Deep proofreading and semantic reasoning while preserving the speaker's intent.
 - **`code_comment`**: Software engineering specification mode.
 - **`burmese_written`**: Formal Burmese written prose.
 - **`email_polish`**: Refined professional communication.
-- **`translate_en`**: Verbatim Burmese-to-English translation.
+- **`translate`**: Careful Burmese-to-English translation.
 - **`fast`**: Raw verbatim Burmese transcription.
 
 ### 4. 🔊 Notification Audio Chimes Settings
