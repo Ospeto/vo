@@ -24,7 +24,9 @@ export function createElectronClipboardAdapter(writeBuffer?: ClipboardAdapter<an
       availableFormats: () => clip.availableFormats?.() || [],
       readBuffer: (format) => clip.readBuffer?.(format) || Buffer.alloc(0),
       writeBuffer: writeBuffer ? (format, data) => {
-        if ((writeBuffer as any)(format, data) === false) throw new Error("Native clipboard buffer write failed");
+        if ((writeBuffer as (format: string, data: Buffer) => unknown)(format, data) === false) {
+          throw new Error("Native clipboard buffer write failed");
+        }
       } : undefined,
       writeBufferIsAdditive: hasCustomBufferSupport,
     };

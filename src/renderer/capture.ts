@@ -28,6 +28,7 @@ const endpointDetector = new SpeechEndpointDetector({
 });
 
 let sessionMaxRms = 0;
+let sessionPeakAmplitude = 0;
 let sessionTotalFrames = 0;
 let sessionSpeechFrames = 0;
 let sessionClippingFrames = 0;
@@ -163,6 +164,7 @@ function startMetering() {
     const metrics = analyzePcmFrame(buffer, 0.008, 0.003, 0.99);
     sessionTotalFrames++;
     sessionMaxRms = Math.max(sessionMaxRms, metrics.rms);
+    sessionPeakAmplitude = Math.max(sessionPeakAmplitude, metrics.peak);
     if (metrics.isSpeech) sessionSpeechFrames++;
     if (metrics.isClipped) sessionClippingFrames++;
 
@@ -241,6 +243,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   recordingStartTime = Date.now();
   endpointDetector.reset();
   sessionMaxRms = 0;
+  sessionPeakAmplitude = 0;
   sessionTotalFrames = 0;
   sessionSpeechFrames = 0;
   sessionClippingFrames = 0;
@@ -305,7 +308,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
         const stats: AudioRecordingStats = {
           durationMs,
           maxRms: sessionMaxRms,
-          peakAmplitude: sessionMaxRms,
+          peakAmplitude: sessionPeakAmplitude,
           speechFrames: sessionSpeechFrames,
           totalFrames: sessionTotalFrames,
           clippingFrames: sessionClippingFrames,
@@ -313,6 +316,11 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
         };
 
         const diag = diagnoseAudioStats(stats);
+        if (diag.status === "clipped") {
+          window.electronIPC?.sendRecordingError("Microphone input clipped or distorted");
+          audioChunks = [];
+          return;
+        }
         if (diag.status === "near_silence") {
           window.electronIPC?.sendRecordingError("No speech detected (silent audio)");
           audioChunks = [];
