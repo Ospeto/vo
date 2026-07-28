@@ -317,15 +317,6 @@
                 <option value="person_name">Category: Person Name (လူနာမည်)</option>
                 <option value="technical">Category: Technical</option>
               </select>
-              <select id="dictionaryPresetSelect" class="chime-select" style="flex: 1;" aria-label="Preset Scope">
-                <option value="">Scope: All Presets (Global)</option>
-                <option value="careful">Scope: Conversation</option>
-                <option value="code_comment">Scope: Coding</option>
-                <option value="burmese_written">Scope: Burmese</option>
-                <option value="translate">Scope: Translate (EN)</option>
-                <option value="fast">Scope: Fast</option>
-                <option value="email_polish">Scope: Email Polish</option>
-              </select>
               <button id="addDictionaryEntryBtn" type="button" class="action-btn-sm">+ Add Entry</button>
             </div>
             <div id="dictionaryValidation" role="alert" style="color:#fca5a5;font-size:10px;min-height:14px;margin-top:4px;"></div>
@@ -333,31 +324,13 @@
             <!-- Useful Filters Bar -->
             <div id="dictionaryFilterBar" style="display: flex; gap: 6px; margin-top: 10px; margin-bottom: 6px; overflow-x: auto;">
               <button type="button" class="vocab-filter-btn active" data-filter="all">All</button>
+              <button type="button" class="vocab-filter-btn" data-filter="general">General</button>
               <button type="button" class="vocab-filter-btn" data-filter="person_name">Person Names</button>
               <button type="button" class="vocab-filter-btn" data-filter="technical">Technical</button>
-              <button type="button" class="vocab-filter-btn" data-filter="preset_scoped">Preset-scoped</button>
             </div>
 
             <!-- Unified Entries Container -->
             <div id="dictionaryEntriesContainer" class="vocab-tags" style="margin-top:6px;max-height:160px;overflow-y:auto;"></div>
-
-            <!-- Live Preview -->
-            <div style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 8px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <label for="dictionaryPreviewInput" class="section-label" style="display:block; margin-bottom: 0;">Live Preview</label>
-                <select id="previewPresetSelect" class="chime-select" style="font-size: 10px; padding: 2px 6px;" aria-label="Preview Preset Scope">
-                  <option value="">Preset: Global / All</option>
-                  <option value="careful">Preset: Conversation</option>
-                  <option value="code_comment">Preset: Coding</option>
-                  <option value="burmese_written">Preset: Burmese</option>
-                  <option value="translate">Preset: Translate (EN)</option>
-                  <option value="fast">Preset: Fast</option>
-                  <option value="email_polish">Preset: Email Polish</option>
-                </select>
-              </div>
-              <input type="text" id="dictionaryPreviewInput" placeholder="Type text to test corrections" aria-label="Dictionary preview input" style="width:100%;">
-              <div id="dictionaryPreviewOutput" style="font-size:11px;color:#d4d4d8;margin-top:4px;white-space:pre-wrap;"></div>
-            </div>
           </div>
 
           

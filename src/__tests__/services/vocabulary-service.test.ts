@@ -67,7 +67,7 @@ describe("vocabulary-service", () => {
 
   test("merges legacy case variants into the existing canonical phrase", () => {
     const entries = migrateVocabulary(["antigravity"], {}, [{ id: "canonical", phrase: "Antigravity", spokenAliases: ["Antigravity"], enabled: true }]);
-    expect(entries.find((entry) => entry.id === "canonical")).toEqual({ id: "canonical", phrase: "Antigravity", spokenAliases: ["Antigravity", "antigravity"], enabled: true });
+    expect(entries.find((entry) => entry.id === "canonical")).toEqual({ id: "canonical", phrase: "Antigravity", spokenAliases: ["Antigravity", "antigravity"], enabled: true, category: "general" });
   });
 
 });
