@@ -459,6 +459,20 @@ async function initUI() {
   renderVocabTags();
   renderDictionaryEntries();
   addDictionaryEntryBtn?.addEventListener("click", saveDictionaryEntry);
+  dictionaryPhraseInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveDictionaryEntry();
+    }
+  });
+  dictionaryAliasesInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveDictionaryEntry();
+    }
+  });
+  dictionaryPhraseInput?.addEventListener("input", () => showDictionaryError(""));
+  dictionaryAliasesInput?.addEventListener("input", () => showDictionaryError(""));
   dictionaryPreviewInput?.addEventListener("input", renderDictionaryPreview);
 }
 
@@ -493,6 +507,7 @@ function renderDictionaryEntries() {
       dictionaryAliasesInput.value = entry.spokenAliases.join(", ");
       editingDictionaryId = entry.id;
       addDictionaryEntryBtn.textContent = "Save";
+      showDictionaryError("");
     });
     row.appendChild(edit);
     const remove = document.createElement("button");
@@ -532,12 +547,32 @@ async function saveDictionaryEntry() {
     return;
   }
   if (aliases.length === 0) aliases.push(phrase);
-  const nextEntry: DictionaryEntry = { id: editingDictionaryId || crypto.randomUUID(), phrase, spokenAliases: aliases, enabled: true };
-  const nextEntries = editingDictionaryId
-    ? dictionaryEntries.map((entry) => entry.id === editingDictionaryId ? nextEntry : entry)
+
+  const normPhrase = phrase.normalize("NFKC").toLocaleLowerCase();
+  const existingEntry = !editingDictionaryId
+    ? dictionaryEntries.find((entry) => entry.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase)
+    : null;
+
+  const targetId = editingDictionaryId || existingEntry?.id || crypto.randomUUID();
+  const mergedAliases = existingEntry
+    ? Array.from(new Set([...existingEntry.spokenAliases, ...aliases]))
+    : aliases;
+
+  const nextEntry: DictionaryEntry = {
+    id: targetId,
+    phrase,
+    spokenAliases: mergedAliases,
+    enabled: true,
+    ...(existingEntry?.legacyWhitespace ? { legacyWhitespace: true } : {}),
+  };
+
+  const isExistingInList = dictionaryEntries.some((entry) => entry.id === targetId);
+  const nextEntries = isExistingInList
+    ? dictionaryEntries.map((entry) => entry.id === targetId ? nextEntry : entry)
     : [...dictionaryEntries, nextEntry];
+
   await saveDictionaryEntries(nextEntries);
-  if (!dictionaryValidation.textContent) {
+  if (!dictionaryValidation?.textContent) {
     editingDictionaryId = null;
     dictionaryPhraseInput.value = "";
     dictionaryAliasesInput.value = "";

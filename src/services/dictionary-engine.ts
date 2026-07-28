@@ -94,7 +94,7 @@ export function validateDictionaryEntries(entries: DictionaryEntry[]): Dictionar
       const existing = aliases.find((item) => item.key === key || ((item.legacyWhitespace || entry.legacyWhitespace === true) && item.key.replace(/\s+/g, "") === compactKey));
       if (!existing) {
         aliases.push({ phrase: entry.phrase, ids: [entry.id], original: alias, key, legacyWhitespace: entry.legacyWhitespace === true });
-      } else if (existing.phrase !== entry.phrase) {
+      } else if (normalizeAlias(existing.phrase) !== normalizeAlias(entry.phrase)) {
         const ids = Array.from(new Set([...existing.ids, entry.id]));
         if (!errors.some((error) => error.alias === existing.original)) {
           errors.push({ alias: existing.original, message: "Alias maps to more than one Write as phrase", entryIds: ids });
