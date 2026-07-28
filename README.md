@@ -60,7 +60,7 @@
 - **`code_comment`**: Software engineering specification mode.
 - **`burmese_written`**: Formal Burmese written prose.
 - **`email_polish`**: Refined professional communication.
-- **`translate`**: Careful Burmese-to-English translation.
+- **Auto-Translation**: Optional translation mode using the configured target language; the legacy `translate` preset enables this mode while preserving the selected target language.
 - **`fast`**: Raw verbatim Burmese transcription.
 
 ### 4. 🔊 Notification Audio Chimes Settings
@@ -93,6 +93,8 @@
 | **Cancel Dictation** | `Escape` or the dictation hotkey | Cancels active recording or transcription and returns vo to idle without pasting the result |
 | **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text; preserves clipboard formats while capturing and restoring the selection |
 | **Dictation Preset** | `careful` | Default proofreading and semantic reasoning preset |
+| **Auto-Translation** | `false` (OFF) | Optional translation mode; uses the configured target language |
+| **Target Translation Language** | `English` | Language used when auto-translation is enabled |
 | **Default Model** | `gemini-3.1-flash-lite` | Ultra-fast multimodal STT model |
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |

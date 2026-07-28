@@ -43,16 +43,16 @@ The system SHALL accept user-defined custom vocabulary terms and supply them to 
 - **WHEN** the user adds domain terms to the vocabulary editor
 - **THEN** the system SHALL sanitize the list (max 50 terms, 40 chars each) and pass them as context terms to Gemini API payloads
 
-### Requirement: Translate Preset Mode
-The system SHALL support `translate` in `DictationPreset` to convert spoken Burmese audio into fluent English text during Speech-to-Text transcription.
+### Requirement: Auto-Translation Mode
+The system SHALL support an independent `translateEnabled` mode and `targetLanguage` setting for translating speech into the configured target language during Speech-to-Text transcription. The legacy `translate` preset SHALL remain accepted for compatibility and SHALL resolve to the `careful` preset with translation enabled without overwriting `targetLanguage`.
 
-#### Scenario: User selects Translate preset and speaks Burmese
-- **WHEN** user selects `translate` preset and speaks Burmese audio
-- **THEN** Gemini STT transcribes and translates the audio directly into English text without Burmese script.
+#### Scenario: User enables translation and speaks Burmese
+- **WHEN** the user enables auto-translation and speaks Burmese audio
+- **THEN** Gemini STT translates the audio into the configured target language.
 
-#### Scenario: Prompt instructions formatting
-- **WHEN** `getPresetPromptInstructions("translate")` is called
-- **THEN** the system returns a prompt string instructing direct translation to English text.
+#### Scenario: Legacy Translate preset migration
+- **WHEN** configuration contains `dictationPreset: "translate"` without an explicit `translateEnabled` value
+- **THEN** the system persists or resolves `dictationPreset: "careful"`, enables translation, and preserves the configured `targetLanguage`.
 
 ### Requirement: AI Coding Prompt Enhancer for Code Preset
 The system SHALL use a Systematic AI Coding Prompt Enhancer prompt instruction for `code_comment` preset to expand spoken Burmese technical intent into detailed, actionable English AI coding prompts.
