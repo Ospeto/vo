@@ -768,8 +768,15 @@ async function startRecordingFlow() {
   }
 
   safePasteService.captureTarget();
+  setState("starting", "Starting...");
 
   const selection = await captureActiveSelection(350);
+  const lifecycleSnapshot = recordingLifecycle.snapshot();
+  if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
+    if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard);
+    return;
+  }
+
   previousClipboardContent = selection.previousClipboard;
   selectionCaptured = selection.hasSelection;
 
@@ -811,7 +818,10 @@ function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
 function handleHotkeyUp() {
   const pressDuration = Date.now() - keyHoldPressStartTime;
   if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
-    if (currentState === "recording" || currentState === "starting") {
+    if (currentState === "starting") {
+      recordingLifecycle.reset();
+      setState("idle", "Ready");
+    } else if (currentState === "recording") {
       logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Auto-Detect)");
       const stopRes = recordingLifecycle.requestStop();
       if (stopRes.accepted) {
