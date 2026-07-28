@@ -266,6 +266,20 @@ CORE CAREFUL DIRECTIVES:
 2. NATURAL & TECHNICAL ENGLISH: Output clear, fluent, professional English prose.
 3. ZERO BURMESE SCRIPT: Output ONLY pure English text. Under NO circumstances should any Burmese script (မြန်မာစာ), intros, or wrapping quotes be included.
 `.trim();
+    case "burmese_written":
+      return `
+${GLOBAL_BILINGUAL_DIRECTIVE}
+
+Preset Mode: BURMESE WRITTEN PROSE & BILINGUAL ACCURACY.
+When translation mode is inactive, transcribe spoken audio into fluent, natural written prose in its original spoken language. Accurately preserve embedded English technical terms, proper nouns, and acronyms in exact English script.
+`.trim();
+    case "email_polish":
+      return `
+${GLOBAL_BILINGUAL_DIRECTIVE}
+
+Preset Mode: EMAIL & MESSAGE POLISHING.
+Transcribe spoken audio into clean, professional email/messaging prose while accurately preserving embedded technical terms, code identifiers, and acronyms.
+`.trim();
     case "careful":
       return `
 ${GLOBAL_BILINGUAL_DIRECTIVE}
@@ -648,12 +662,12 @@ async function transcribeGemini(
   const hasSelectedText = Boolean(selectedText && selectedText.trim().length > 0);
   const isCodePreset = effectivePreset === "code_comment";
   let sttBasePrompt = BURMESE_ACCURATE_STT_PROMPT;
-  let userPromptText = "Transcribe the spoken audio accurately in Burmese script.";
+  let userPromptText = "Transcribe the spoken audio accurately in its original spoken language (Burmese or English).";
 
   if (hasSelectedText) {
     const translationDirective = isTranslationActive
       ? `\nTRANSLATION DIRECTIVE: Translation mode is ACTIVE. Target language is ${resolvedTargetLang}. If the spoken audio is an editing or translation command, or if translating the selected text, produce the result in ${resolvedTargetLang}.`
-      : `\nTARGET LANGUAGE PREFERENCE: ${resolvedTargetLang}. If a translation command specifies or implies translation, target language is ${resolvedTargetLang}.`;
+      : `\nTRANSLATION DIRECTIVE: Translation mode is INACTIVE. Maintain original language of selected text and spoken dictation. Do NOT force translation to ${resolvedTargetLang} unless spoken audio explicitly dictates a translation target.`;
 
     sttBasePrompt = `You are an expert AI Dual-Mode Voice Editor and Dictation Assistant. Your task is to analyze the spoken audio together with the provided [SELECTED TEXT].${translationDirective}
 

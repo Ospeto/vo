@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS_Apple_Silicon-black.svg)](https://github.com/Ospeto/vo)
 [![Tests](https://img.shields.io/badge/tests-266%2F266_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
 
-**`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` seamlessly transcribes spoken Burmese audio into clean, technical English software specifications or written Burmese prose directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack. Paste is target-aware: if the focused window changes or native paste is unavailable, the transcript is retained without injecting text.
+**`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` transcribes spoken Burmese, English, and mixed Burmese-English technical audio into the selected dictation format or configured translation target directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack. Paste is target-aware: if the focused window changes or native paste is unavailable, the transcript is retained without injecting text.
 
 ---
 
@@ -61,10 +61,10 @@
   - Mail & Chat (`Slack`, `Mail`) ➔ `email_polish` (Polished English)
 - **`careful`**: Deep proofreading and semantic reasoning while preserving the speaker's intent.
 - **`code_comment`**: Software engineering specification mode.
-- **`burmese_written`**: Formal Burmese written prose.
+- **`burmese_written`**: Natural written prose in the original spoken language, preserving embedded English technical terms.
 - **`email_polish`**: Refined professional communication.
 - **Auto-Translation**: Optional translation mode using the configured target language; the legacy `translate` preset enables this mode while preserving the selected target language.
-- **`fast`**: Raw verbatim Burmese transcription.
+- **`fast`**: Fast natural bilingual transcription in the original spoken language.
 
 ### 4. 🔊 Notification Audio Chimes Settings
 - 6 curated macOS system sound options: **Glass (Classic)**, **Ping (Metallic)**, **Pop (Bubble)**, **Tink (High Chime)**, **Submarine (Sonar)**, and **Hero (Triumph)**.
