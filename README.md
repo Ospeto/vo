@@ -3,9 +3,9 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Ospeto/vo)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Platform](https://img.shields.io/badge/platform-macOS_Apple_Silicon-black.svg)](https://github.com/Ospeto/vo)
-[![Tests](https://img.shields.io/badge/tests-227%2F227_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
+[![Tests](https://img.shields.io/badge/tests-230%2F230_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
 
-**`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` seamlessly transcribes spoken Burmese audio into clean, technical English software specifications or written Burmese prose directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack.
+**`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` seamlessly transcribes spoken Burmese audio into clean, technical English software specifications or written Burmese prose directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack. Paste is target-aware: if the focused window changes or native paste is unavailable, the transcript is retained without injecting text.
 
 ---
 
@@ -33,7 +33,7 @@
 │                                      │                                      │
 │                                      ▼                                      │
 │                       [ NATIVE PASTE INJECTION ]                            │
-│                       (pi-paste macOS Carbon Helper)                        │
+│                      (Target-Aware Native Paste)                            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -115,7 +115,7 @@ cd vo
 # Install dependencies
 bun install
 
-# Run unit test suite (227 tests)
+# Run unit test suite (230 tests)
 bun test
 
 # Build production bundle

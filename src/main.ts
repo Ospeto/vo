@@ -14,7 +14,7 @@ import { HotkeyService } from "./services/hotkey-service.js";
 import { captureActiveSelection, restoreClipboard } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
 import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-paste-addon.js";
-import { createMacSafePasteService, SafePasteService, type ClipboardAdapter } from "./services/safe-paste.js";
+import { createMacSafePasteService, type ClipboardAdapter } from "./services/safe-paste.js";
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import logger from "./services/logger.js";
@@ -32,7 +32,6 @@ process.on("unhandledRejection", (reason) => {
 
 const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const nativePasteBin = join(projectRoot, "bin", "pi-paste");
 
 const recordingLifecycle = new RecordingLifecycle();
 const addonPath = resolveNativePastePath(projectRoot);
