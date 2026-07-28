@@ -129,13 +129,14 @@ function startMetering() {
     let sumSquares = 0;
     for (let i = 0; i < buffer.length; i++) {
       const val = buffer[i] ?? 0;
-      const absVal = Math.abs(val);
+      const qualityVal = currentGainValue > 0 ? val / currentGainValue : val;
+      const absVal = Math.abs(qualityVal);
       if (mediaRecorder && mediaRecorder.state === "recording") {
         if (absVal > sessionMaxAbs) sessionMaxAbs = absVal;
         if (absVal >= 0.99) sessionClippedSamples++;
         sessionTotalSamples++;
       }
-      sumSquares += val * val;
+      sumSquares += qualityVal * qualityVal;
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
     if (mediaRecorder && mediaRecorder.state === "recording") {
