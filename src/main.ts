@@ -88,6 +88,7 @@ function setState(state: AppState, message?: string) {
       if (currentState === "stopping") {
         logger.warn("Stopping state timed out, auto-resetting state machine to idle");
         recordingLifecycle.reset();
+        restoreCapturedSelection();
         setState("idle", "Ready");
       }
     }, 2500);
@@ -636,6 +637,7 @@ function setupIpcHandlers() {
     if (!validateIpcSender(event)) return;
     logger.warn({ error }, "Recording warning");
     recordingLifecycle.reset();
+    restoreCapturedSelection();
     setState("error", error);
   });
 
