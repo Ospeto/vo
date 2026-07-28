@@ -139,7 +139,7 @@ describe.serial("macOS safety reliability integration smoke", () => {
     lifecycle.acknowledgeStart(start.sequenceId, true);
     const stop = lifecycle.requestStop();
     lifecycle.acknowledgeStop(stop.sequenceId, true);
-    const coordinator = new PasteCoordinator((text) => paste.paste(text));
+    const coordinator = new PasteCoordinator((text, isCurrent) => paste.paste(text, isCurrent));
     const result = await coordinator.pasteText("retained transcript");
     expect(result).toMatchObject({ status: "denied" });
     expect(lifecycle.finishTranscription(stop.sequenceId, false)).toMatchObject({ accepted: true, state: "error" });
@@ -164,7 +164,7 @@ describe.serial("macOS safety reliability integration smoke", () => {
     };
     const paste = new SafePasteService(
       () => target,
-      async () => { await pendingPaste; injected++; },
+      async (_expected, isCurrent) => { await pendingPaste; if (isCurrent()) injected++; },
       clipboard,
     );
     paste.captureTarget();
@@ -177,7 +177,7 @@ describe.serial("macOS safety reliability integration smoke", () => {
     release();
 
     expect(await pending).toEqual({ status: "stale", reason: "Paste invalidated; transcript was retained" });
-    expect(injected).toBe(1);
+    expect(injected).toBe(0);
     expect(lifecycle.finishTranscription(stop.sequenceId, true).accepted).toBe(false);
     expect(lifecycle.snapshot()).toEqual(teardownSnapshot);
   });

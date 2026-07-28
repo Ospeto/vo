@@ -91,6 +91,7 @@ function setState(state: AppState, message?: string) {
     stoppingSafetyTimer = setTimeout(() => {
       if (currentState === "stopping") {
         logger.warn("Stopping state timed out, auto-resetting state machine to idle");
+        pasteCoordinator.invalidate();
         recordingLifecycle.reset();
         restoreCapturedSelection();
         setState("idle", "Ready");
@@ -543,6 +544,7 @@ function setupIpcHandlers() {
     if (currentState !== "recording" && currentState !== "stopping") return;
 
     if (data.byteLength < 1000) {
+      pasteCoordinator.invalidate();
       recordingLifecycle.reset();
       restoreCapturedSelection();
       setState("idle", "Recording too short");
@@ -652,6 +654,7 @@ function setupIpcHandlers() {
   ipcMain.on(IPC.RECORDING_ERROR, (event, error: string) => {
     if (!validateIpcSender(event)) return;
     logger.warn({ error }, "Recording warning");
+    pasteCoordinator.invalidate();
     recordingLifecycle.reset();
     restoreCapturedSelection();
     setState("error", error);
@@ -784,6 +787,7 @@ async function startRecordingFlow() {
     return;
   }
 
+  pasteCoordinator.invalidate();
   safePasteService.captureTarget();
   setState("starting", "Starting...");
 
@@ -836,6 +840,7 @@ function handleHotkeyUp() {
   const pressDuration = Date.now() - keyHoldPressStartTime;
   if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
     if (currentState === "starting") {
+      pasteCoordinator.invalidate();
       recordingLifecycle.reset();
       setState("idle", "Ready");
     } else if (currentState === "recording") {
@@ -888,6 +893,7 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
 
 function gracefulShutdown() {
   logger.info("Shutting down...");
+  pasteCoordinator.invalidate();
   hotkeyService?.stop();
   stopDaemonServer();
   removeRuntimeState();

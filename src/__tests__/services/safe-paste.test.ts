@@ -151,16 +151,16 @@ describe("SafePasteService", () => {
 
   test("calls native injection directly and restores after an actual native failure", async () => {
     const events: string[] = [];
-    const received: TargetIdentity[][] = [];
+    const received: TargetIdentity[] = [];
     const service = new SafePasteService(
       () => target(),
-      async (...args: [TargetIdentity]) => { received.push(args); throw Object.assign(new Error("native failure"), { reason: "injection_failed" }); },
+      async (expected) => { received.push(expected); throw Object.assign(new Error("native failure"), { reason: "injection_failed" }); },
       clipboardFixture(events),
       async () => {},
     );
     service.captureTarget();
     expect(await service.paste("secret")).toEqual({ ok: false, reason: "injection_failed" });
-    expect(received).toEqual([[target()]]);
+    expect(received).toEqual([target()]);
     expect(events).toEqual(["snapshot", "write", "restore"]);
   });
 
