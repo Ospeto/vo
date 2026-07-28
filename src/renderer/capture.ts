@@ -33,6 +33,7 @@ let sessionTotalFrames = 0;
 let sessionSpeechFrames = 0;
 let sessionClippingFrames = 0;
 let autoEndpointTriggered = false;
+let finalizedRecordingGeneration = -1;
 
 let sessionMaxAbs = 0;
 let sessionClippedSamples = 0;
@@ -161,7 +162,8 @@ function startMetering() {
       }
       sumSquares += qualityVal * qualityVal;
     }
-    const metrics = analyzePcmFrame(buffer, 0.008, 0.003, 0.99);
+    const gain = Math.max(currentGainValue, 0.0001);
+    const metrics = analyzePcmFrame(buffer, 0.008 * gain, 0.003 * gain, 0.99 * gain);
     sessionTotalFrames++;
     sessionMaxRms = Math.max(sessionMaxRms, metrics.rms);
     sessionPeakAmplitude = Math.max(sessionPeakAmplitude, metrics.peak);
@@ -227,6 +229,64 @@ function triggerAutoStop() {
   }, 250);
 }
 
+async function finalizeRecording(generation: number) {
+  if (generation !== recordingGeneration || finalizedRecordingGeneration === generation) return;
+  finalizedRecordingGeneration = generation;
+
+  if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
+    window.electronIPC?.sendRecordingError("Microphone disconnected");
+    audioChunks = [];
+    return;
+  }
+
+  const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
+  if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
+    window.electronIPC?.sendRecordingError("Microphone input clipped");
+    audioChunks = [];
+    return;
+  }
+
+  if (sessionMaxAbs < 0.008 && sessionMaxRms < 0.003) {
+    window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
+    audioChunks = [];
+    return;
+  }
+
+  const durationMs = Date.now() - recordingStartTime;
+  const stats: AudioRecordingStats = {
+    durationMs,
+    maxRms: sessionMaxRms,
+    peakAmplitude: sessionPeakAmplitude,
+    speechFrames: sessionSpeechFrames,
+    totalFrames: sessionTotalFrames,
+    clippingFrames: sessionClippingFrames,
+    hasSpeech: endpointDetector.getStatus().hasDetectedSpeech,
+  };
+
+  const diag = diagnoseAudioStats(stats);
+  if (diag.status === "clipped") {
+    window.electronIPC?.sendRecordingError("Microphone input clipped or distorted");
+    audioChunks = [];
+    return;
+  }
+  if (diag.status === "near_silence") {
+    window.electronIPC?.sendRecordingError("No speech detected (silent audio)");
+    audioChunks = [];
+    return;
+  }
+  if (diag.status === "too_short") {
+    window.electronIPC?.sendRecordingError("Recording too short");
+    audioChunks = [];
+    return;
+  }
+
+  const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  if (generation !== recordingGeneration) return;
+  window.electronIPC?.sendRecordingData(arrayBuffer);
+  audioChunks = [];
+}
+
 (window as any).getAnalyserNode = () => analyserNode;
 
 (window.electronIPC as any)?.onGainUpdate((newGain: number) => {
@@ -238,6 +298,7 @@ function triggerAutoStop() {
 
 window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
   const generation = ++recordingGeneration;
+  finalizedRecordingGeneration = -1;
   audioChunks = [];
   currentGainValue = inputGain;
   recordingStartTime = Date.now();
@@ -284,59 +345,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
           audioChunks.push(event.data);
         }
       };
-      mediaRecorder.onstop = async () => {
-        if (generation !== recordingGeneration) return;
-        if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
-          window.electronIPC?.sendRecordingError("Microphone disconnected");
-          audioChunks = [];
-          return;
-        }
-
-        const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
-        if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
-          window.electronIPC?.sendRecordingError("Microphone input clipped");
-          audioChunks = [];
-          return;
-        }
-
-        if (sessionMaxAbs < 0.008 && sessionMaxRms < 0.003) {
-          window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
-          audioChunks = [];
-          return;
-        }
-        const durationMs = Date.now() - recordingStartTime;
-        const stats: AudioRecordingStats = {
-          durationMs,
-          maxRms: sessionMaxRms,
-          peakAmplitude: sessionPeakAmplitude,
-          speechFrames: sessionSpeechFrames,
-          totalFrames: sessionTotalFrames,
-          clippingFrames: sessionClippingFrames,
-          hasSpeech: endpointDetector.getStatus().hasDetectedSpeech,
-        };
-
-        const diag = diagnoseAudioStats(stats);
-        if (diag.status === "clipped") {
-          window.electronIPC?.sendRecordingError("Microphone input clipped or distorted");
-          audioChunks = [];
-          return;
-        }
-        if (diag.status === "near_silence") {
-          window.electronIPC?.sendRecordingError("No speech detected (silent audio)");
-          audioChunks = [];
-          return;
-        }
-        if (diag.status === "too_short") {
-          window.electronIPC?.sendRecordingError("Recording too short");
-          audioChunks = [];
-          return;
-        }
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        if (generation !== recordingGeneration) return;
-        window.electronIPC?.sendRecordingData(arrayBuffer);
-        audioChunks = [];
-      };
+      mediaRecorder.onstop = () => { void finalizeRecording(generation); };
       mediaRecorder.start(100);
     }
   } catch (err: any) {
@@ -375,31 +384,7 @@ window.electronIPC?.onStopRecording(() => {
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
           mediaRecorder.stop();
         } else {
-          if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
-            window.electronIPC?.sendRecordingError("Microphone disconnected");
-            audioChunks = [];
-            return;
-          }
-
-          const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
-          if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
-            window.electronIPC?.sendRecordingError("Microphone input clipped");
-            audioChunks = [];
-            return;
-          }
-
-          if (sessionMaxAbs < 0.008 && sessionMaxRms < 0.003) {
-            window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
-            audioChunks = [];
-            return;
-          }
-
-          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-          audioBlob.arrayBuffer().then((buf) => {
-            if (generation !== recordingGeneration) return;
-            window.electronIPC?.sendRecordingData(buf);
-            audioChunks = [];
-          });
+          void finalizeRecording(generation);
         }
       }, 300);
     };
