@@ -812,11 +812,14 @@ footer {
   display: flex;
   gap: 6px;
   margin-top: 4px;
+  align-items: center;
+  width: 100%;
 }
 
 .apiKey-settings-row input,
 .vocab-input-row input {
-  flex: 1;
+  flex: 1 1 0px;
+  min-width: 0;
   height: 28px;
   padding: 0 10px;
   font-size: 11.5px;
@@ -825,6 +828,7 @@ footer {
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
   transition: border-color 0.15s ease, background 0.15s ease;
+  text-overflow: ellipsis;
 }
 
 .apiKey-settings-row input:focus,
@@ -843,6 +847,8 @@ footer {
   background: rgba(16, 185, 129, 0.2);
   color: #10b981;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .action-btn-sm:hover {
   background: rgba(16, 185, 129, 0.35);
@@ -855,9 +861,6 @@ footer {
 }
 .action-btn-blue:hover {
   background: rgba(0, 122, 255, 0.35);
-}
-.action-btn-sm:hover {
-  background: rgba(16, 185, 129, 0.35);
 }
 
 .vocab-tags {
