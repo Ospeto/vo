@@ -194,7 +194,23 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
     expect(cfg2.inputGain).toBe(1.5);
   });
 
-  test("6. Cancellation & Abort Safety: Aborted STT request fails fast and does not process response", async () => {
+  test("6. Persistence migration: Updating a legacy translate config keeps translation enabled", () => {
+    const configDir = join(tempDir, ".pi");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      join(configDir, "pi-voice.json"),
+      JSON.stringify({ dictationPreset: "translate", targetLanguage: "Japanese" }),
+      "utf-8",
+    );
+
+    const updated = updateConfig(tempDir, { inputGain: 1.5 });
+
+    expect(updated.dictationPreset).toBe("careful");
+    expect(updated.translateEnabled).toBe(true);
+    expect(updated.targetLanguage).toBe("Japanese");
+  });
+
+  test("7. Cancellation & Abort Safety: Aborted STT request fails fast and does not process response", async () => {
     const controller = new AbortController();
     controller.abort();
 

@@ -509,20 +509,17 @@ async function transcribeGemini(
   let isTranslationActive = translateEnabled;
   let resolvedTargetLang = targetLanguage;
 
-  if (isTranslationActive === undefined || !resolvedTargetLang) {
-    try {
-      const { loadConfig } = await import("./config.js");
-      const cfg = loadConfig();
-      if (appMappings === undefined) {
-        appMappings = cfg.appPresetMappings;
-      }
-      if (isTranslationActive === undefined) {
-        isTranslationActive = cfg.translateEnabled ?? false;
-      }
-      if (!resolvedTargetLang) {
-        resolvedTargetLang = cfg.targetLanguage || "English";
-      }
-    } catch {}
+  try {
+    const { loadConfig } = await import("./config.js");
+    const cfg = loadConfig();
+    appMappings = cfg.appPresetMappings;
+    if (isTranslationActive === undefined) {
+      isTranslationActive = cfg.translateEnabled ?? false;
+    }
+    if (!resolvedTargetLang) {
+      resolvedTargetLang = cfg.targetLanguage || "English";
+    }
+  } catch {}
   }
   if (!resolvedTargetLang) {
     resolvedTargetLang = "English";

@@ -525,6 +525,10 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     } catch {}
   }
 
+  if (existingJson.dictationPreset === "translate" && existingJson.translateEnabled === undefined) {
+    existingJson = { ...existingJson, dictationPreset: "careful", translateEnabled: true };
+  }
+
   // Encrypt secrets if provided in patch
   if (patch.geminiApiKey !== undefined) {
     patch.geminiApiKey = encryptSecret(patch.geminiApiKey);
