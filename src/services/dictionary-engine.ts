@@ -13,6 +13,7 @@ interface Candidate {
   order: number;
   boundary: boolean;
   legacyWhitespace: boolean;
+  preset?: string;
 }
 
 const LATIN_BOUNDARY = "A-Za-z0-9_";
@@ -34,23 +35,26 @@ export class DictionaryEngine {
   private readonly candidates: Candidate[];
   private readonly matcher: RegExp | null;
 
-  constructor(entries: DictionaryEntry[]) {
+  constructor(entries: DictionaryEntry[], activePreset?: string) {
     const candidates: Candidate[] = [];
-    entries.filter((entry) => entry.enabled).forEach((entry, entryIndex) => {
-      const aliases = [entry.phrase, ...entry.spokenAliases];
-      aliases.forEach((alias, aliasIndex) => {
-        const value = alias.trim();
-        if (!value) return;
-        candidates.push({
-          alias: value,
-          phrase: entry.phrase,
-          entryId: entry.id,
-          order: entryIndex * 100000 + aliasIndex,
-          boundary: /[A-Za-z0-9_]/.test(value),
-          legacyWhitespace: entry.legacyWhitespace === true,
+    entries
+      .filter((entry) => entry.enabled && (!entry.preset || !activePreset || activePreset === "all" || entry.preset === activePreset))
+      .forEach((entry, entryIndex) => {
+        const aliases = [entry.phrase, ...entry.spokenAliases];
+        aliases.forEach((alias, aliasIndex) => {
+          const value = alias.trim();
+          if (!value) return;
+          candidates.push({
+            alias: value,
+            phrase: entry.phrase,
+            entryId: entry.id,
+            order: entryIndex * 100000 + aliasIndex,
+            boundary: /[A-Za-z0-9_]/.test(value),
+            legacyWhitespace: entry.legacyWhitespace === true,
+            preset: entry.preset,
+          });
         });
       });
-    });
 
     candidates.sort((a, b) => b.alias.length - a.alias.length || a.order - b.order);
     this.candidates = candidates;
@@ -86,7 +90,7 @@ export class DictionaryEngine {
 }
 
 export function validateDictionaryEntries(entries: DictionaryEntry[]): DictionaryValidationError[] {
-  const aliases: Array<{ phrase: string; ids: string[]; original: string; key: string; legacyWhitespace: boolean }> = [];
+  const aliases: Array<{ phrase: string; ids: string[]; original: string; key: string; legacyWhitespace: boolean; preset?: string }> = [];
   const errors: DictionaryValidationError[] = [];
   for (const entry of entries) {
     if (!entry.enabled) continue;
@@ -95,9 +99,13 @@ export function validateDictionaryEntries(entries: DictionaryEntry[]): Dictionar
       if (!alias) continue;
       const key = normalizeAlias(alias);
       const compactKey = key.replace(/\s+/g, "");
-      const existing = aliases.find((item) => item.key === key || ((item.legacyWhitespace || entry.legacyWhitespace === true) && item.key.replace(/\s+/g, "") === compactKey));
+      const existing = aliases.find((item) => {
+        const scopeOverlap = !item.preset || !entry.preset || item.preset === entry.preset;
+        if (!scopeOverlap) return false;
+        return item.key === key || ((item.legacyWhitespace || entry.legacyWhitespace === true) && item.key.replace(/\s+/g, "") === compactKey);
+      });
       if (!existing) {
-        aliases.push({ phrase: entry.phrase, ids: [entry.id], original: alias, key, legacyWhitespace: entry.legacyWhitespace === true });
+        aliases.push({ phrase: entry.phrase, ids: [entry.id], original: alias, key, legacyWhitespace: entry.legacyWhitespace === true, preset: entry.preset });
       } else if (normalizeAlias(existing.phrase) !== normalizeAlias(entry.phrase)) {
         const ids = Array.from(new Set([...existing.ids, entry.id]));
         if (!errors.some((error) => error.alias === existing.original)) {
@@ -114,6 +122,6 @@ export function validateDictionaryEntries(entries: DictionaryEntry[]): Dictionar
   return errors;
 }
 
-export function applyDictionary(text: string, entries: DictionaryEntry[]): string {
-  return new DictionaryEngine(entries).process(text);
+export function applyDictionary(text: string, entries: DictionaryEntry[], activePreset?: string): string {
+  return new DictionaryEngine(entries, activePreset).process(text);
 }

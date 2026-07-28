@@ -128,7 +128,7 @@
       <div class="modal-tabs-bar">
         <button class="modal-tab-btn active" data-tab="tab-general">General</button>
         <button class="modal-tab-btn" data-tab="tab-apikeys">API Keys</button>
-        <button class="modal-tab-btn" data-tab="tab-dictionary">Dictionary & Rules</button>
+        <button class="modal-tab-btn" data-tab="tab-dictionary">Vocabulary & Text Rules</button>
       </div>
 
       <div class="modal-body">
@@ -298,55 +298,69 @@
           </div>
         </div>
 
-        <!-- TAB 3: DICTIONARY & SMART RULES -->
+        <!-- TAB 3: VOCABULARY & TEXT RULES -->
         <div id="tab-dictionary" class="tab-pane hidden">
           <div class="modal-section-group" style="border-color: rgba(34, 197, 94, 0.3); background: rgba(34, 197, 94, 0.05);">
-            <label class="section-label" style="color: #86efac;">Trusted Dictionary</label>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <label class="section-label" style="color: #86efac; margin-bottom: 0;">Vocabulary & Text Rules</label>
+              <span id="vocabTotalCountBadge" class="cost-badge" style="background: rgba(34, 197, 94, 0.15); color: #86efac;">0 Entries</span>
+            </div>
+
+            <!-- Add / Edit Entry Form -->
             <div class="vocab-input-row">
-              <input type="text" id="dictionaryPhraseInput" placeholder="Write as (e.g. SarYayKaung)" aria-label="Write as">
+              <input type="text" id="dictionaryPhraseInput" placeholder="Write as (e.g. SarYayKaung, Aung Aung)" aria-label="Write as">
               <input type="text" id="dictionaryAliasesInput" placeholder="Heard as (comma-separated)" aria-label="Heard as">
-              <button id="addDictionaryEntryBtn" type="button" class="action-btn-sm">+ Add</button>
             </div>
-            <div id="dictionaryValidation" role="alert" style="color:#fca5a5;font-size:10px;min-height:14px;"></div>
-            <div id="dictionaryEntriesContainer" class="vocab-tags" style="margin-top:6px;max-height:130px;overflow-y:auto;"></div>
-            <label for="dictionaryPreviewInput" class="section-label" style="display:block;margin-top:8px;">Live preview</label>
-            <input type="text" id="dictionaryPreviewInput" placeholder="Type text to test corrections" aria-label="Dictionary preview input" style="width:100%;">
-            <div id="dictionaryPreviewOutput" style="font-size:11px;color:#d4d4d8;margin-top:4px;white-space:pre-wrap;"></div>
-          </div>
-          <!-- Dedicated Person Names Dictionary Card -->
-          <div class="modal-section-group" style="border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05);">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <label class="section-label" style="margin-bottom: 0; color: #60a5fa;">👤 Person Names Dictionary (လူနာမည်များ)</label>
-              <span id="personNamesCountBadge" class="cost-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa;">0 Names</span>
-            </div>
-            <div class="vocab-input-row">
-              <input type="text" id="personNameInput" placeholder="Add name (e.g. Aung Aung, Kaung Myat)..." aria-label="Add person name">
-              <button id="addPersonNameBtn" class="action-btn-sm action-btn-blue">+ Add Name</button>
-            </div>
-            <div id="personNamesContainer" class="vocab-tags" style="margin-top: 6px; max-height: 100px; overflow-y: auto;"></div>
-          </div>
-
-          <!-- Preset Mode Vocabulary Section -->
-          <div class="modal-section-group" style="margin-top: 10px;">
-            <div class="field-group">
-              <label for="modalPresetSelect" class="section-label">Preset Mode Vocabulary</label>
-              <select id="modalPresetSelect" aria-label="Preset Vocabulary Mode" class="chime-select">
-                <option value="careful" selected>Conversation</option>
-                <option value="code_comment">Coding</option>
-                <option value="burmese_written">Burmese</option>
-                <option value="translate">Translate (EN)</option>
-                <option value="fast">Fast</option>
+            <div class="vocab-input-row" style="margin-top: 6px;">
+              <select id="dictionaryCategorySelect" class="chime-select" style="flex: 1;" aria-label="Category">
+                <option value="general">Category: General</option>
+                <option value="person_name">Category: Person Name (လူနာမည်)</option>
+                <option value="technical">Category: Technical</option>
               </select>
+              <select id="dictionaryPresetSelect" class="chime-select" style="flex: 1;" aria-label="Preset Scope">
+                <option value="">Scope: All Presets (Global)</option>
+                <option value="careful">Scope: Conversation</option>
+                <option value="code_comment">Scope: Coding</option>
+                <option value="burmese_written">Scope: Burmese</option>
+                <option value="translate">Scope: Translate (EN)</option>
+                <option value="fast">Scope: Fast</option>
+                <option value="email_polish">Scope: Email Polish</option>
+              </select>
+              <button id="addDictionaryEntryBtn" type="button" class="action-btn-sm">+ Add Entry</button>
             </div>
-            <div class="vocab-input-row">
-              <input type="text" id="vocabInput" placeholder="Type term (e.g. TypeScript)..." aria-label="Add custom term">
-              <button id="addVocabBtn" class="action-btn-sm">+ Add</button>
+            <div id="dictionaryValidation" role="alert" style="color:#fca5a5;font-size:10px;min-height:14px;margin-top:4px;"></div>
+
+            <!-- Useful Filters Bar -->
+            <div id="dictionaryFilterBar" style="display: flex; gap: 6px; margin-top: 10px; margin-bottom: 6px; overflow-x: auto;">
+              <button type="button" class="vocab-filter-btn active" data-filter="all">All</button>
+              <button type="button" class="vocab-filter-btn" data-filter="person_name">Person Names</button>
+              <button type="button" class="vocab-filter-btn" data-filter="technical">Technical</button>
+              <button type="button" class="vocab-filter-btn" data-filter="preset_scoped">Preset-scoped</button>
             </div>
-            <div id="vocabTagsContainer" class="vocab-tags" style="margin-top: 6px; max-height: 100px; overflow-y: auto;"></div>
+
+            <!-- Unified Entries Container -->
+            <div id="dictionaryEntriesContainer" class="vocab-tags" style="margin-top:6px;max-height:160px;overflow-y:auto;"></div>
+
+            <!-- Live Preview -->
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <label for="dictionaryPreviewInput" class="section-label" style="display:block; margin-bottom: 0;">Live Preview</label>
+                <select id="previewPresetSelect" class="chime-select" style="font-size: 10px; padding: 2px 6px;" aria-label="Preview Preset Scope">
+                  <option value="">Preset: Global / All</option>
+                  <option value="careful">Preset: Conversation</option>
+                  <option value="code_comment">Preset: Coding</option>
+                  <option value="burmese_written">Preset: Burmese</option>
+                  <option value="translate">Preset: Translate (EN)</option>
+                  <option value="fast">Preset: Fast</option>
+                  <option value="email_polish">Preset: Email Polish</option>
+                </select>
+              </div>
+              <input type="text" id="dictionaryPreviewInput" placeholder="Type text to test corrections" aria-label="Dictionary preview input" style="width:100%;">
+              <div id="dictionaryPreviewOutput" style="font-size:11px;color:#d4d4d8;margin-top:4px;white-space:pre-wrap;"></div>
+            </div>
           </div>
 
-
-
+          
           <!-- Dynamic Workspace Symbol Scanner Toggle Section -->
           <div class="modal-section-group" style="margin-top: 10px;">
             <div class="sound-setting-row" style="display: flex; align-items: center; justify-content: space-between;">
