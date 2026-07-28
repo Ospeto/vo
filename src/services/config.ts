@@ -464,7 +464,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     : migrateVocabulary(mergedCustomVocab, mergedPresetVocab, persistedVocab.entries || []);
   const dictionaryErrors = validateDictionaryEntries(mergedDictionaryEntries);
   if (dictionaryErrors.length > 0) {
-    logger.warn({ dictionaryErrors }, "Dictionary contains conflicting aliases; conflicting rules remain visible but are not accepted by CRUD");
+    throw new ConfigError(configPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
   }
 
   logger.info(
@@ -539,7 +539,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     : (persistedVocab.entries || migrateVocabulary(finalCustomVocab, mergedPresetVocab));
   const dictionaryErrors = validateDictionaryEntries(finalDictionaryEntries);
   if (dictionaryErrors.length > 0) {
-    throw new ConfigError(configPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\\n"));
+    throw new ConfigError(configPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
   }
 
   savePersistedVocabulary({

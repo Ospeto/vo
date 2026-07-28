@@ -403,7 +403,7 @@ export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
     const aliases = Array.from(new Set(entry.spokenAliases.filter(Boolean)));
     return `- Heard as: ${aliases.join(" | ")} -> Write exactly: ${entry.phrase}`;
   });
-  return `\nMANDATORY PERSON NAMES & VOCABULARY DICTIONARY:\n${lines.join("\n")}\n`;
+  return `\nDICTIONARY HINTS (soft help only; deterministic local correction runs after transcription):\n${lines.join("\n")}\n`;
 }
 
 export function buildCustomVocabularyPromptPart(terms: string[]): string {
