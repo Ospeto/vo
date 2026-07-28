@@ -297,18 +297,18 @@ CRITICAL: You MUST transcribe and proofread EVERY SINGLE WORD spoken from beginn
 const SAFE_ENGLISH_REPEAT_WORDS =
   "the|a|an|and|or|but|in|on|at|to|for|of|with|by|from|is|are|was|were|be|been|being|have|has|will|would|should|could|can|this|these|those|it|its|they|them|their|we|our|us|you|your|my";
 const SAFE_REPEAT_WORD_REGEX = new RegExp(`\\b(${SAFE_ENGLISH_REPEAT_WORDS})[ \\t]+\\1\\b`, "gi");
-const CODE_REGION_REGEX = /(```[\\s\\S]*?```|`[^`\\n]*`)/g;
+const CODE_REGION_REGEX = /(```[\s\S]*?```|`[^`\n]*`)/g;
 
 function removeSpokenRepeats(text: string): string {
   const removeRepeats = (segment: string) => {
-    let cleanedSegment = segment.replace(/\\b(ဒီ|ဟို|အာ)[ \\t]+\\1\\b/gi, "$1");
+    let cleanedSegment = segment.replace(/\b(ဒီ|ဟို|အာ)[ \t]+\1\b/gi, "$1");
     cleanedSegment = cleanedSegment.replace(SAFE_REPEAT_WORD_REGEX, "$1");
-    return cleanedSegment.replace(/(?:^|[ \\t]+)([^\\s\\.,\\?!\\:;။၊]+(?:[ \\t]+[^\\s\\.,\\?!\\:;။၊]+){0,4})(?:[ \\t]+\\1)+(?=[ \\t]|[\\.,\\?!\\:;။၊]|$)/gi, (match, fragment) => {
+    return cleanedSegment.replace(/(?:^|[ \t]+)([^\s\.,\?!\:;။၊]+(?:[ \t]+[^\s\.,\?!\:;။၊]+){0,4})(?:[ \t]+\1)+(?=[ \t]|[\.,\?!\:;။၊]|$)/gi, (match, fragment) => {
       const norm = fragment.trim().toLowerCase();
       if (norm === "that" || norm === "had") {
         return match;
       }
-      const leadingSpace = match.startsWith(" ") || match.startsWith("\\t") ? " " : "";
+      const leadingSpace = match.startsWith(" ") || match.startsWith("\t") ? " " : "";
       return leadingSpace + fragment;
     });
   };
