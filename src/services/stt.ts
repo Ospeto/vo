@@ -299,6 +299,17 @@ const SAFE_ENGLISH_REPEAT_WORDS =
 const SAFE_REPEAT_WORD_REGEX = new RegExp(`\\b(${SAFE_ENGLISH_REPEAT_WORDS})[ \\t]+\\1\\b`, "gi");
 const CODE_REGION_REGEX = /(```[\s\S]*?```|`[^`\n]*`)/g;
 
+function transformOutsideCodeRegions(text: string, transform: (segment: string) => string): string {
+  let result = "";
+  let lastIndex = 0;
+  for (const match of text.matchAll(CODE_REGION_REGEX)) {
+    const index = match.index ?? 0;
+    result += transform(text.slice(lastIndex, index)) + match[0];
+    lastIndex = index + match[0].length;
+  }
+  return result + transform(text.slice(lastIndex));
+}
+
 function removeSpokenRepeats(text: string): string {
   const removeRepeats = (segment: string) => {
     let cleanedSegment = segment.replace(/\b(ဒီ|ဟို|အာ)[ \t]+\1\b/gi, "$1");
@@ -313,14 +324,7 @@ function removeSpokenRepeats(text: string): string {
     });
   };
 
-  let result = "";
-  let lastIndex = 0;
-  for (const match of text.matchAll(CODE_REGION_REGEX)) {
-    const index = match.index ?? 0;
-    result += removeRepeats(text.slice(lastIndex, index)) + match[0];
-    lastIndex = index + match[0].length;
-  }
-  return result + removeRepeats(text.slice(lastIndex));
+  return transformOutsideCodeRegions(text, removeRepeats);
 }
 
 export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[]): string {
@@ -374,12 +378,13 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = removeSpokenRepeats(cleaned);
 
   // 7. Collapse multi-spaces & clean double punctuation
-  cleaned = cleaned.replace(/[ \t]+/g, " ");
-  cleaned = cleaned.replace(/။+/g, "။");
-  cleaned = cleaned.replace(/၊+/g, "၊");
-  cleaned = cleaned.replace(/\?+/g, "?");
-  cleaned = cleaned.replace(/!+/g, "!");
-  cleaned = cleaned.replace(/,+/g, ",");
+  cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment
+    .replace(/[ \t]+/g, " ")
+    .replace(/။+/g, "။")
+    .replace(/၊+/g, "၊")
+    .replace(/\?+/g, "?")
+    .replace(/!+/g, "!")
+    .replace(/,+/g, ","));
 
   // 8. Convert spoken task checklist command ("task: <text>" -> "- [ ] <text>")
   if (/^(task:|တာဝန်:)\s*/i.test(cleaned)) {
@@ -407,18 +412,19 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   }
 
   // 11. Fix spacing around punctuation (remove spaces before punctuation, ensure single space after punctuation)
-  cleaned = cleaned.replace(/\s+([,\.\?\!\:;\u104E\u104F])/g, "$1");
+  cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment.replace(/\s+([,\.\?\!\:;\u104E\u104F])/g, "$1"));
 
   // 12. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
   if (!/^(https?:\/\/|ftp:\/\/|git@)/i.test(cleaned)) {
-    cleaned = cleaned.replace(/(^|\n\s*|\n\s*-\s*|[။\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase());
+    cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment.replace(/(^|\n\s*|\n\s*-\s*|[។\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase()));
   }
 
   // 13. Fix spacing around Burmese full stop (။) and Burmese comma (၊)
-  cleaned = cleaned.replace(/။([^\s\n"'\)\]\}])/g, "။ $1");
-  cleaned = cleaned.replace(/၊([^\s\n"'\)\]\}])/g, "၊ $1");
-  cleaned = cleaned.replace(/\s+။/g, "။");
-  cleaned = cleaned.replace(/\s+၊/g, "၊");
+  cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment
+    .replace(/။([^\s\n"'\)\]\}])/g, "။ $1")
+    .replace(/၊([^\s\n"'\)\]\}])/g, "၊ $1")
+    .replace(/\s+။/g, "။")
+    .replace(/\s+၊/g, "၊"));
 
   // Dictionary is deliberately last: every provider receives the same local, exact result.
   return applyDictionary(cleaned.trim(), effectiveDictionaryEntries).trim();

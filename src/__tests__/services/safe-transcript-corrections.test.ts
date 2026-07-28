@@ -55,8 +55,9 @@ describe("VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post
     test("preserves repeated lines and code regions", () => {
       const repeatedLines = "const x = 1\nconst x = 1";
       expect(sanitizeTranscribedText(repeatedLines)).toBe("Const x = 1\nConst x = 1");
-      expect(sanitizeTranscribedText("```\nconst x = 1\nconst x = 1\n```")).toBe("```\nConst x = 1\nConst x = 1\n```");
+      expect(sanitizeTranscribedText("```\nconst x = 1\nconst x = 1\n```")).toBe("```\nconst x = 1\nconst x = 1\n```");
       expect(sanitizeTranscribedText("run `the the command` now")).toBe("Run `the the command` now");
+      expect(sanitizeTranscribedText("```\nconst s = \"hello , world\";\n```")).toBe("```\nconst s = \"hello , world\";\n```");
     });
 
     test("preserves redoubled Burmese words without spaces (e.g. ကောင်းကောင်း, မြန်မြန်)", () => {
