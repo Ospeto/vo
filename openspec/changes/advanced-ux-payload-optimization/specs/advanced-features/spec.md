@@ -10,10 +10,15 @@ The `sanitizeTranscribedText` function MUST strip Burmese hesitation fillers (`á
 - **When** `sanitizeTranscribedText` processes the string
 - **Then** all hesitation artifacts MUST be removed and trailing punctuation normalized.
 
-### Requirement: Hybrid Tap-and-Hold Hotkey Detection
-The hotkey service MUST support both Tap-to-Talk (single press to start, single press to stop) and Hold-to-Talk (hold key to record, release to stop).
+### Requirement: Configured Tap-and-Hold Hotkey Modes
+The application MUST support both Toggle Mode (single press to start, single press to stop) and Hold Mode (hold key to record, release to stop), selected by the persisted `dictationMode` setting.
 
-#### Scenario: Key Release Auto-Stop
-- **Given** the user holds down the hotkey for >350ms
+#### Scenario: Hold Mode Key Release Auto-Stop
+- **Given** `dictationMode` is set to `hold`
 - **When** the hotkey is released
 - **Then** recording MUST automatically stop and transcribe without requiring a second key press.
+
+#### Scenario: Toggle Mode Key Release
+- **Given** `dictationMode` is set to `toggle`
+- **When** the hotkey is released
+- **Then** recording MUST remain active until the next hotkey press or configured auto-endpointing.

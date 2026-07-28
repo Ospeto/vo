@@ -49,7 +49,7 @@
 - Applies a safe local post-transcription correction pass for spoken punctuation, accidental repeats, and spacing while preserving code regions, URLs, identifiers, and intentional repeated lines.
 - Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
 - Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
-- Starts capture before recording-state handoff to reduce clipped first phonemes, stops after confirmed speech silence, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
+- Starts capture before recording-state handoff to reduce clipped first phonemes, optionally stops after a configurable confirmed-speech silence gap, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
 - Automatically scans exported functions, classes, interfaces, and file names from your active project workspace.
@@ -94,6 +94,7 @@
 | Setting | Default Value | Description |
 | :--- | :--- | :--- |
 | **Dictation Hotkey** | `Ctrl + Cmd + Option + V` | Global shortcut to start/stop dictation |
+| **Dictation Mode** | `toggle` | Tap once to start and again to stop; set to `hold` to stop when the hotkey is released |
 | **Cancel Dictation** | `Escape` or the dictation hotkey | Cancels active recording or transcription and returns vo to idle without pasting the result |
 | **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text; preserves clipboard formats while capturing and restoring the selection |
 | **Dictation Preset** | `careful` | Default proofreading and semantic reasoning preset |
@@ -101,6 +102,8 @@
 | **Target Translation Language** | `English` | Language used when auto-translation is enabled |
 | **Default Model** | `gemini-3.1-flash-lite` | Ultra-fast multimodal STT model |
 | **Audio Input** | `System Default Microphone` | Select a configured microphone; connected-device changes refresh automatically |
+| **Auto-Endpointing** | `true` (ON) | Automatically stop recording after the configured silence gap; disable for manual-only stopping |
+| **Transcription Delay** | `0.5` seconds | Silence gap required before auto-endpointing stops recording; accepts `0`–`10` seconds |
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |
 
