@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Ospeto/vo)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Platform](https://img.shields.io/badge/platform-macOS_Apple_Silicon-black.svg)](https://github.com/Ospeto/vo)
-[![Tests](https://img.shields.io/badge/tests-225%2F225_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
+[![Tests](https://img.shields.io/badge/tests-227%2F227_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
 
 **`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` seamlessly transcribes spoken Burmese audio into clean, technical English software specifications or written Burmese prose directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack.
 
@@ -88,8 +88,9 @@
 
 | Setting | Default Value | Description |
 | :--- | :--- | :--- |
-| **Global Hotkey** | `Ctrl + Cmd + Option + V` | Global shortcut to start/stop dictation |
-| **Dictation Preset** | `auto` | Smart app auto-detection preset |
+| **Dictation Hotkey** | `Ctrl + Cmd + Option + V` | Global shortcut to start/stop dictation |
+| **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text |
+| **Dictation Preset** | `careful` | Default proofreading and semantic reasoning preset |
 | **Default Model** | `gemini-3.1-flash-lite` | Ultra-fast multimodal STT model |
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |
@@ -114,7 +115,7 @@ cd vo
 # Install dependencies
 bun install
 
-# Run unit test suite (225 tests)
+# Run unit test suite (227 tests)
 bun test
 
 # Build production bundle
