@@ -120,7 +120,7 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
           workspacePath: tempDir,
         });
 
-        expect(res.text).toBe("The database is ready.");
+        expect(res.text).toBe("The database is ready");
         expect(capturedSystemInstruction).toContain("original spoken language");
         expect(capturedSystemInstruction).not.toContain("into fluent, natural Burmese written prose");
       } finally {

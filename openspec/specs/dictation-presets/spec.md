@@ -8,7 +8,7 @@ The system SHALL provide a preset mode dropdown in the Menu Bar GUI popover allo
 
 #### Scenario: User selects Code Comment preset
 - **WHEN** the user selects "Code Comment" from the preset dropdown
-- **THEN** the system SHALL persist the selection in configuration and append code comment formatting instructions to subsequent Gemini STT requests
+- **THEN** the system SHALL persist the selection and append code comment formatting instructions to subsequent Gemini STT requests; translation occurs only when `translateEnabled` is active
 
 #### Scenario: User selects Email Polish preset
 - **WHEN** the user selects "Email Polish" from the preset dropdown
@@ -16,7 +16,7 @@ The system SHALL provide a preset mode dropdown in the Menu Bar GUI popover allo
 
 #### Scenario: User selects Burmese Written preset
 - **WHEN** the user selects "Burmese Written" from the preset dropdown
-- **THEN** the system SHALL persist the selection in configuration and append Burmese formal written tone formatting instructions to subsequent Gemini STT requests
+- **THEN** the system SHALL persist the selection in configuration and append natural written-prose instructions that preserve the original spoken language and embedded English technical terms to subsequent Gemini STT requests
 
 ### Requirement: Recent Dictation History
 The system SHALL maintain a ring buffer of the last 5 transcriptions with one-click copy and clear history functionality in the popover UI.
@@ -46,6 +46,8 @@ The system SHALL accept user-defined custom vocabulary terms and supply them to 
 ### Requirement: Auto-Translation Mode
 The system SHALL support an independent `translateEnabled` mode and `targetLanguage` setting for translating speech into the configured target language during Speech-to-Text transcription. The legacy `translate` preset SHALL remain accepted for compatibility and SHALL resolve to the `careful` preset with translation enabled without overwriting `targetLanguage`.
 
+When `translateEnabled` is false, dictation SHALL preserve the original spoken language; `targetLanguage` SHALL not force translation.
+
 #### Scenario: User enables translation and speaks Burmese
 - **WHEN** the user enables auto-translation and speaks Burmese audio
 - **THEN** Gemini STT translates the audio into the configured target language.
@@ -54,16 +56,16 @@ The system SHALL support an independent `translateEnabled` mode and `targetLangu
 - **WHEN** configuration contains `dictationPreset: "translate"` without an explicit `translateEnabled` value
 - **THEN** the system persists or resolves `dictationPreset: "careful"`, enables translation, and preserves the configured `targetLanguage`.
 
-### Requirement: AI Coding Prompt Enhancer for Code Preset
-The system SHALL use a Systematic AI Coding Prompt Enhancer prompt instruction for `code_comment` preset to expand spoken Burmese technical intent into detailed, actionable English AI coding prompts.
+### Requirement: Code Preset Language and Formatting
+The system SHALL use a Systematic Code Dictation prompt for the `code_comment` preset. With translation disabled, it SHALL preserve the spoken language while applying syntax-friendly technical formatting; with translation enabled, it SHALL produce a detailed, actionable prompt in the configured target language.
 
-#### Scenario: User dictates Burmese coding idea in Code preset
-- **WHEN** user selects `code_comment` preset and dictates a coding requirement in Burmese
-- **THEN** Gemini STT transcribes and expands the intent into a professional, single-paragraph English AI coding prompt.
+#### Scenario: User dictates a coding idea in Code preset
+- **WHEN** user selects `code_comment` preset and dictates a coding requirement
+- **THEN** Gemini STT preserves the spoken language and formats the intent as a syntax-friendly technical instruction; with translation enabled, it outputs the configured target language.
 
 #### Scenario: Prompt instructions formatting for code preset
 - **WHEN** `getPresetPromptInstructions("code_comment")` is called
-- **THEN** the system returns instructions for rewriting and expanding Burmese technical intent into a systematic English AI coding prompt.
+- **THEN** the system returns instructions for syntax-friendly technical dictation that preserve the spoken language unless translation is enabled.
 
 ### Requirement: Smart Auto Preset Resolution
 The system SHALL support `auto` in `DictationPreset` to dynamically resolve effective dictation presets based on frontmost active application metadata.
