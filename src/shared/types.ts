@@ -7,7 +7,6 @@ export interface DictionaryEntry {
   enabled: boolean;
   legacyWhitespace?: boolean;
   category?: VocabularyCategory;
-  preset?: string;
 }
 
 /** Application state machine */
@@ -71,7 +70,6 @@ export const IPC = {
   TOGGLE_DICTATION: "toggle-dictation",
   TEST_API_KEY: "test-api-key",
   PREVIEW_CHIME: "preview-chime",
-  PREVIEW_DICTIONARY: "preview-dictionary",
 } as const;
 
 /** Audio stream metadata sent at the start of a streaming TTS session */

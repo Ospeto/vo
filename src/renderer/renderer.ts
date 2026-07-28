@@ -1,5 +1,5 @@
 import type { AppState, StatePayload, GeminiModelChoice, DictionaryEntry, VocabularyCategory } from "../shared/types.js";
-import { DictionaryEngine, validateDictionaryEntries } from "../services/dictionary-engine.js";
+import { validateDictionaryEntries } from "../services/dictionary-engine.js";
 import type { DictationPreset, DictationMode, ChimeSoundChoice } from "../services/config.js";
 import type { HistoryEntry } from "../services/history-service.js";
 
@@ -43,14 +43,10 @@ const personNamesCountBadge = document.getElementById("personNamesCountBadge") a
 const dictionaryPhraseInput = document.getElementById("dictionaryPhraseInput") as HTMLInputElement;
 const dictionaryAliasesInput = document.getElementById("dictionaryAliasesInput") as HTMLInputElement;
 const dictionaryCategorySelect = document.getElementById("dictionaryCategorySelect") as HTMLSelectElement;
-const dictionaryPresetSelect = document.getElementById("dictionaryPresetSelect") as HTMLSelectElement;
 const addDictionaryEntryBtn = document.getElementById("addDictionaryEntryBtn") as HTMLButtonElement;
 const dictionaryValidation = document.getElementById("dictionaryValidation") as HTMLElement;
 const dictionaryEntriesContainer = document.getElementById("dictionaryEntriesContainer") as HTMLElement;
 const vocabTotalCountBadge = document.getElementById("vocabTotalCountBadge") as HTMLElement;
-const previewPresetSelect = document.getElementById("previewPresetSelect") as HTMLSelectElement;
-const dictionaryPreviewInput = document.getElementById("dictionaryPreviewInput") as HTMLInputElement;
-const dictionaryPreviewOutput = document.getElementById("dictionaryPreviewOutput") as HTMLElement;
 let dictionaryEntries: DictionaryEntry[] = [];
 let editingDictionaryId: string | null = null;
 let currentVocabFilter = "all";
@@ -485,9 +481,9 @@ function renderDictionaryEntries(highlightId?: string) {
   }
 
   const filteredEntries = dictionaryEntries.filter((entry) => {
+    if (currentVocabFilter === "general") return entry.category === "general";
     if (currentVocabFilter === "person_name") return entry.category === "person_name";
     if (currentVocabFilter === "technical") return entry.category === "technical";
-    if (currentVocabFilter === "preset_scoped") return Boolean(entry.preset);
     return true;
   });
 
@@ -495,7 +491,6 @@ function renderDictionaryEntries(highlightId?: string) {
     dictionaryEntriesContainer.textContent = dictionaryEntries.length === 0
       ? "No trusted entries yet"
       : "No entries match current filter";
-    renderDictionaryPreview();
     return;
   }
 
@@ -519,11 +514,9 @@ function renderDictionaryEntries(highlightId?: string) {
     let catBadge = "";
     if (entry.category === "person_name") catBadge = " [Person]";
     else if (entry.category === "technical") catBadge = " [Tech]";
+    else if (entry.category === "general") catBadge = " [General]";
 
-    let presetBadge = "";
-    if (entry.preset) presetBadge = ` [Preset: ${entry.preset}]`;
-
-    label.textContent = `${entry.phrase} ← ${entry.spokenAliases.join(", ")}${catBadge}${presetBadge}`;
+    label.textContent = `${entry.phrase} ← ${entry.spokenAliases.join(", ")}${catBadge}`;
     row.appendChild(label);
     const toggle = document.createElement("button");
     toggle.textContent = entry.enabled ? "Disable" : "Enable";
@@ -536,7 +529,6 @@ function renderDictionaryEntries(highlightId?: string) {
       dictionaryPhraseInput.value = entry.phrase;
       dictionaryAliasesInput.value = entry.spokenAliases.join(", ");
       if (dictionaryCategorySelect) dictionaryCategorySelect.value = entry.category || "general";
-      if (dictionaryPresetSelect) dictionaryPresetSelect.value = entry.preset || "";
       editingDictionaryId = entry.id;
       addDictionaryEntryBtn.textContent = "Save";
       showDictionaryMessage("");
@@ -548,8 +540,6 @@ function renderDictionaryEntries(highlightId?: string) {
     row.appendChild(remove);
     dictionaryEntriesContainer.appendChild(row);
   }
-
-  renderDictionaryPreview();
 
   if (highlightedElement) {
     highlightedElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -581,7 +571,6 @@ async function saveDictionaryEntry() {
   const phrase = dictionaryPhraseInput?.value.trim();
   const aliases = (dictionaryAliasesInput?.value || "").split(",").map((alias) => alias.trim()).filter(Boolean);
   const category = (dictionaryCategorySelect?.value as VocabularyCategory) || "general";
-  const preset = dictionaryPresetSelect?.value || undefined;
 
   if (!phrase) {
     showDictionaryError("Write as is required");
@@ -591,7 +580,7 @@ async function saveDictionaryEntry() {
 
   const normPhrase = phrase.normalize("NFKC").toLocaleLowerCase();
   const existingEntry = !editingDictionaryId
-    ? dictionaryEntries.find((entry) => entry.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase && entry.preset === preset)
+    ? dictionaryEntries.find((entry) => entry.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase)
     : null;
 
   const targetId = editingDictionaryId || existingEntry?.id || crypto.randomUUID();
@@ -605,7 +594,6 @@ async function saveDictionaryEntry() {
     spokenAliases: mergedAliases,
     enabled: true,
     category,
-    ...(preset ? { preset } : {}),
     ...(existingEntry?.legacyWhitespace ? { legacyWhitespace: true } : {}),
   };
 
@@ -621,15 +609,8 @@ async function saveDictionaryEntry() {
     if (dictionaryPhraseInput) dictionaryPhraseInput.value = "";
     if (dictionaryAliasesInput) dictionaryAliasesInput.value = "";
     if (dictionaryCategorySelect) dictionaryCategorySelect.value = "general";
-    if (dictionaryPresetSelect) dictionaryPresetSelect.value = "";
     if (addDictionaryEntryBtn) addDictionaryEntryBtn.textContent = "+ Add Entry";
   }
-}
-
-function renderDictionaryPreview() {
-  if (!dictionaryPreviewOutput || !dictionaryPreviewInput) return;
-  const activePreset = previewPresetSelect?.value || undefined;
-  dictionaryPreviewOutput.textContent = new DictionaryEngine(dictionaryEntries, activePreset).process(dictionaryPreviewInput.value);
 }
 
 function renderAppRules() {
@@ -1060,8 +1041,6 @@ dictionaryAliasesInput?.addEventListener("keydown", (e) => {
 
 dictionaryPhraseInput?.addEventListener("input", () => showDictionaryError(""));
 dictionaryAliasesInput?.addEventListener("input", () => showDictionaryError(""));
-dictionaryPreviewInput?.addEventListener("input", renderDictionaryPreview);
-previewPresetSelect?.addEventListener("change", renderDictionaryPreview);
 
 document.querySelectorAll(".vocab-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
