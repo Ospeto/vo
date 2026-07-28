@@ -1,5 +1,5 @@
 import { describe, test, expect, afterEach } from "bun:test";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadPersistedVocabulary, savePersistedVocabulary } from "../../services/vocabulary-service.js";
@@ -11,6 +11,32 @@ describe("vocabulary-service", () => {
     try {
       rmSync(join(tmpdir(), "pi-voice-test-vocab"), { recursive: true, force: true });
     } catch {}
+  });
+
+  test("migrates legacy terms, seeds hardcoded corrections, and is idempotent", () => {
+    mkdirSync(join(tmpdir(), "pi-voice-test-vocab"), { recursive: true });
+    const dictionaryFile = join(tmpdir(), "pi-voice-test-vocab", "dictionary.txt");
+    const legacyFile = join(tmpdir(), "pi-voice-test-vocab", "legacy.json");
+    writeFileSync(legacyFile, JSON.stringify({ customVocabulary: ["userId", "SarYayKaung (စာရေးကောင်း)"], presetVocabulary: { code_comment: ["kubectl"] } }));
+    writeFileSync(dictionaryFile, "TBH\\n");
+    const first = loadPersistedVocabulary(legacyFile, dictionaryFile);
+    expect(first.version).toBe(2);
+    expect(first.entries?.some((entry) => entry.phrase === "MAS 141")).toBe(true);
+    expect(first.entries?.some((entry) => entry.phrase === "userId")).toBe(true);
+    expect(first.entries?.some((entry) => entry.phrase === "kubectl")).toBe(true);
+    const before = readFileSync(legacyFile, "utf8");
+    const second = loadPersistedVocabulary(legacyFile, dictionaryFile);
+    expect(second.entries).toEqual(first.entries);
+    expect(readFileSync(legacyFile, "utf8")).toBe(before);
+  });
+
+  test("leaves malformed vocabulary data untouched", () => {
+    mkdirSync(join(tmpdir(), "pi-voice-test-vocab"), { recursive: true });
+    const malformed = join(tmpdir(), "pi-voice-test-vocab", "malformed.json");
+    const original = '{"customVocabulary":"not-an-array"}';
+    writeFileSync(malformed, original);
+    expect(loadPersistedVocabulary(malformed).entries).toBeUndefined();
+    expect(readFileSync(malformed, "utf8")).toBe(original);
   });
 
   test("savePersistedVocabulary writes vocabulary.json and loadPersistedVocabulary restores it", () => {

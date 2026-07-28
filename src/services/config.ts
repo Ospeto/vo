@@ -4,7 +4,9 @@ import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
 import logger from "./logger.js";
-import { loadPersistedVocabulary, savePersistedVocabulary } from "./vocabulary-service.js";
+import { loadPersistedVocabulary, savePersistedVocabulary, migrateVocabulary } from "./vocabulary-service.js";
+import { validateDictionaryEntries } from "./dictionary-engine.js";
+import type { DictionaryEntry } from "../shared/types.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -40,6 +42,7 @@ export interface PiVoiceConfig {
   symbolScannerEnabled: boolean;
   customVocabulary: string[];
   presetVocabulary: Partial<Record<DictationPreset, string[]>>;
+  dictionaryEntries: DictionaryEntry[];
   appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
   geminiFallbackApiKey?: string;
@@ -62,6 +65,7 @@ export interface PiVoiceConfigPatch {
   symbolScannerEnabled?: boolean;
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
+  dictionaryEntries?: DictionaryEntry[];
   appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
   geminiFallbackApiKey?: string;
@@ -303,6 +307,7 @@ function defaultConfig(): PiVoiceConfig {
     symbolScannerEnabled: true,
     customVocabulary: [],
     presetVocabulary: {},
+    dictionaryEntries: migrateVocabulary([], {}),
     appPresetMappings: DEFAULT_APP_PRESET_MAPPINGS,
   };
 }
@@ -356,6 +361,7 @@ export const configFileSchema = z.object({
   symbolScannerEnabled: z.boolean().optional().default(true),
   customVocabulary: z.array(z.string()).optional().default([]),
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
+  dictionaryEntries: z.array(z.object({ id: z.string(), phrase: z.string(), spokenAliases: z.array(z.string()), enabled: z.boolean() })).optional().default([]),
   appPresetMappings: z.record(z.string(), z.string()).optional().default(DEFAULT_APP_PRESET_MAPPINGS),
   geminiApiKey: z.string().optional(),
   geminiFallbackApiKey: z.string().optional(),
@@ -443,7 +449,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, dictionaryEntries, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
   const editKeyBinding = parseKeyBinding(editKeyStr);
 
@@ -453,6 +459,13 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     ...persistedVocab.presetVocabulary,
     ...(presetVocabulary || {}),
   };
+  const mergedDictionaryEntries = dictionaryEntries.length > 0
+    ? dictionaryEntries
+    : migrateVocabulary(mergedCustomVocab, mergedPresetVocab, persistedVocab.entries || []);
+  const dictionaryErrors = validateDictionaryEntries(mergedDictionaryEntries);
+  if (dictionaryErrors.length > 0) {
+    logger.warn({ dictionaryErrors }, "Dictionary contains conflicting aliases; conflicting rules remain visible but are not accepted by CRUD");
+  }
 
   logger.info(
     { configPath, key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
@@ -477,6 +490,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     symbolScannerEnabled,
     customVocabulary: mergedCustomVocab,
     presetVocabulary: mergedPresetVocab,
+    dictionaryEntries: mergedDictionaryEntries,
     appPresetMappings: (appPresetMappings || DEFAULT_APP_PRESET_MAPPINGS) as Record<string, DictationPreset>,
     geminiApiKey: decryptSecret(geminiApiKey),
     geminiFallbackApiKey: decryptSecret(geminiFallbackApiKey),
@@ -509,13 +523,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     patch.geminiFallbackApiKey = encryptSecret(patch.geminiFallbackApiKey);
   }
 
-  // Sanitize custom terms
-  const sanitizedVocabulary = patch.customVocabulary !== undefined
-    ? patch.customVocabulary
-        .map((term) => term.trim().slice(0, 40))
-        .filter((term) => term.length > 0)
-        .slice(0, 50)
-    : undefined;
+  // Keep legacy vocabulary lossless; the dictionary editor validates its structured entries.
 
   const persistedVocab = loadPersistedVocabulary();
   const existingPresetVocab = (existingJson.presetVocabulary as Record<string, string[]>) || {};
@@ -523,11 +531,21 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ? { ...persistedVocab.presetVocabulary, ...existingPresetVocab, ...patch.presetVocabulary }
     : { ...persistedVocab.presetVocabulary, ...existingPresetVocab };
 
-  const finalCustomVocab = sanitizedVocabulary !== undefined ? sanitizedVocabulary : Array.from(new Set([...persistedVocab.customVocabulary, ...((existingJson.customVocabulary as string[]) || [])]));
+  const finalCustomVocab = patch.customVocabulary !== undefined
+    ? patch.customVocabulary.map((term) => term.trim()).filter(Boolean)
+    : Array.from(new Set([...persistedVocab.customVocabulary, ...((existingJson.customVocabulary as string[]) || [])]));
+  const finalDictionaryEntries = patch.dictionaryEntries !== undefined
+    ? patch.dictionaryEntries
+    : (persistedVocab.entries || migrateVocabulary(finalCustomVocab, mergedPresetVocab));
+  const dictionaryErrors = validateDictionaryEntries(finalDictionaryEntries);
+  if (dictionaryErrors.length > 0) {
+    throw new ConfigError(configPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\\n"));
+  }
 
   savePersistedVocabulary({
     customVocabulary: finalCustomVocab,
     presetVocabulary: mergedPresetVocab,
+    entries: finalDictionaryEntries,
   });
 
   const existingAppMappings = (existingJson.appPresetMappings as Record<string, DictationPreset>) || DEFAULT_APP_PRESET_MAPPINGS;
@@ -553,6 +571,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ...(patch.symbolScannerEnabled !== undefined ? { symbolScannerEnabled: patch.symbolScannerEnabled } : {}),
     customVocabulary: finalCustomVocab,
     presetVocabulary: mergedPresetVocab,
+    dictionaryEntries: finalDictionaryEntries,
     appPresetMappings: mergedAppMappings,
     ...(patch.geminiApiKey !== undefined ? { geminiApiKey: patch.geminiApiKey.trim() } : {}),
     ...(patch.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patch.geminiFallbackApiKey.trim() } : {}),

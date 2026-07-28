@@ -1,3 +1,10 @@
+export interface DictionaryEntry {
+  id: string;
+  phrase: string;
+  spokenAliases: string[];
+  enabled: boolean;
+}
+
 /** Application state machine */
 export type AppState =
   | "idle"
@@ -59,6 +66,7 @@ export const IPC = {
   TOGGLE_DICTATION: "toggle-dictation",
   TEST_API_KEY: "test-api-key",
   PREVIEW_CHIME: "preview-chime",
+  PREVIEW_DICTIONARY: "preview-dictionary",
 } as const;
 
 /** Audio stream metadata sent at the start of a streaming TTS session */
