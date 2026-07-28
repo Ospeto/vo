@@ -168,7 +168,7 @@ describe.serial("macOS safety reliability integration smoke", () => {
       clipboard,
     );
     paste.captureTarget();
-    const coordinator = new PasteCoordinator((text) => paste.paste(text));
+    const coordinator = new PasteCoordinator((text, isCurrent) => paste.paste(text, isCurrent));
     const pending = coordinator.pasteText("teardown transcript");
 
     expect(lifecycle.shutdown().accepted).toBe(true);
