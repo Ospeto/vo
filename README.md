@@ -45,7 +45,8 @@
 ### 1. ⚡ Multimodal Speech-to-Text & Translation Engine
 - Supports **Gemini 3.6 Flash**, **Gemini 3.5 Flash Lite**, **Gemini 3.1 Flash Lite**, and **Gemini 2.5 Pro**.
 - Automatically translates spoken Burmese instructions into pure Senior Software Engineer English specifications.
-- Applies enabled trusted-dictionary aliases locally after transcription with exact, deterministic matching across supported speech providers.
+- Sends a bounded, deduplicated list of enabled trusted vocabulary and spoken aliases as soft hints to Gemini and OpenAI, then applies the enabled dictionary locally with exact, deterministic matching across supported speech providers.
+- Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
 - Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
