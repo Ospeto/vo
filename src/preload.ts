@@ -21,6 +21,9 @@ const api = {
   onAudioLevelUpdate: (callback: (payload: any) => void) => {
     ipcRenderer.on(IPC.AUDIO_LEVEL_UPDATE, (_event, payload: any) => callback(payload));
   },
+  onAudioLevel: (callback: (payload: any) => void) => {
+    ipcRenderer.on(IPC.AUDIO_LEVEL_UPDATE, (_event, payload: any) => callback(payload));
+  },
   onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => {
     ipcRenderer.on(IPC.PLAY_AUDIO_STREAM_START, (_event, meta: AudioStreamMeta) => callback(meta));
   },

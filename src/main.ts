@@ -71,7 +71,12 @@ function isCurrentTranscription(sequenceId: number): boolean {
 let activeSTTAbortController: AbortController | null = null;
 
 function cancelDictation(reason: string = "Cancelled") {
-  if (currentState === "idle") return;
+  if (currentState === "idle") {
+    if (hudWindow && hudWindow.isVisible()) {
+      hudWindow.hide();
+    }
+    return;
+  }
 
   logger.info({ state: currentState, reason }, "Interrupting/cancelling active dictation flow");
 
@@ -128,14 +133,22 @@ function setState(state: AppState, message?: string) {
 
   if (hudWindow) {
     hudWindow.webContents.send(IPC.STATE_CHANGED, payload);
-    if (state === "recording" || state === "stopping" || state === "transcribing" || state === "starting") {
+    if (state === "recording" || state === "stopping" || state === "transcribing" || state === "starting" || state === "thinking" || state === "speaking" || state === "error") {
       hudWindow.showInactive();
-    } else {
+    }
+    if (state === "idle") {
       hudHideTimer = setTimeout(() => {
-        if (currentState === "idle" || currentState === "error") {
+        if (currentState === "idle") {
           hudWindow?.hide();
         }
       }, 1500);
+    } else if (state === "error") {
+      hudHideTimer = setTimeout(() => {
+        if (currentState === "error") {
+          recordingLifecycle.settle();
+          setState("idle");
+        }
+      }, 6000);
     }
   }
 
@@ -386,8 +399,8 @@ let customHudPosition: { x: number; y: number } | null = null;
 function createHudWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const screenBounds = primaryDisplay.workArea;
-  const width = 82;
-  const height = 26;
+  const width = 280;
+  const height = 36;
   const defaultX = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
   const defaultY = screenBounds.y + 6;
 
@@ -553,11 +566,12 @@ function createTray() {
   });
 }
 
-function validateIpcSender(event: IpcMainInvokeEvent | Electron.IpcMainEvent): boolean {
+function validateIpcSender(event: IpcMainInvokeEvent | Electron.IpcMainEvent, allowHud = false): boolean {
   const senderId = event.sender.id;
   const isCapture = captureWindow && senderId === captureWindow.webContents.id;
   const isPopover = popoverWindow && senderId === popoverWindow.webContents.id;
-  return Boolean(isCapture || isPopover);
+  const isHud = allowHud && hudWindow && senderId === hudWindow.webContents.id;
+  return Boolean(isCapture || isPopover || isHud);
 }
 
 function setupIpcHandlers() {
@@ -674,7 +688,7 @@ function setupIpcHandlers() {
           recordingLifecycle.settle();
           setState("idle");
         }
-      }, 1500);
+      }, 6000);
     } finally {
       if (activeSTTAbortController === sttAbortController) {
         activeSTTAbortController = null;
@@ -683,7 +697,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on(IPC.CANCEL_DICTATION, (event) => {
-    if (!validateIpcSender(event)) return;
+    if (!validateIpcSender(event, true)) return;
     cancelDictation("Cancelled via user interface");
   });
 
