@@ -12,6 +12,7 @@ function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
     const electron = require("electron");
     const clip = electron.clipboard || electron.default?.clipboard || null;
     if (!clip) return null;
+    const hasCustomBufferSupport = typeof clip.writeBuffer === "function";
     return {
       readText: () => clip.readText(),
       writeText: (text) => clip.writeText(text),
@@ -22,8 +23,8 @@ function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
       readImage: () => clip.readImage?.(),
       availableFormats: () => clip.availableFormats?.() || [],
       readBuffer: (format) => clip.readBuffer?.(format) || Buffer.alloc(0),
-      writeBuffer: (format, data) => clip.writeBuffer?.(format, data),
-      writeBufferIsAdditive: true,
+      writeBuffer: hasCustomBufferSupport ? (format, data) => clip.writeBuffer(format, data) : undefined,
+      writeBufferIsAdditive: hasCustomBufferSupport,
     };
   } catch {
     return null;
