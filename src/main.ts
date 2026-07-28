@@ -11,10 +11,10 @@ import { IPC, type AppState, type StatePayload } from "./shared/types.js";
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
 import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonResponse } from "./services/daemon-ipc.js";
 import { HotkeyService } from "./services/hotkey-service.js";
-import { captureActiveSelection, restoreClipboard } from "./services/selection-service.js";
+import { captureActiveSelection, createElectronClipboardAdapter, getClipboardPort, restoreClipboard } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
 import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-paste-addon.js";
-import { createMacSafePasteService, type ClipboardAdapter } from "./services/safe-paste.js";
+import { createMacSafePasteService, type ClipboardAdapter, type ClipboardSnapshot } from "./services/safe-paste.js";
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import logger from "./services/logger.js";
@@ -38,6 +38,7 @@ const addonPath = resolveNativePastePath(projectRoot);
 const addon = loadNativePasteAddon(addonPath);
 const safePasteService = createMacSafePasteService(addon, clipboard as unknown as ClipboardAdapter<any>);
 const pasteCoordinator = new PasteCoordinator((text, isCurrent) => safePasteService.paste(text, isCurrent));
+const selectionClipboardPort = getClipboardPort(createElectronClipboardAdapter(addon?.writeClipboardBuffer));
 
 let captureWindow: BrowserWindow | null = null;
 let popoverWindow: BrowserWindow | null = null;
@@ -51,13 +52,13 @@ let lastPastedText = "";
 let lastPasteTime = 0;
 
 let activeSelectionText = "";
-let previousClipboardContent = "";
+let previousClipboardContent: ClipboardSnapshot | string = "";
 let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
 function restoreCapturedSelection() {
-  if (selectionCaptured) restoreClipboard(previousClipboardContent);
+  if (selectionCaptured) restoreClipboard(previousClipboardContent, selectionClipboardPort);
   previousClipboardContent = "";
   activeSelectionText = "";
   selectionCaptured = false;
@@ -69,8 +70,15 @@ function isCurrentTranscription(sequenceId: number): boolean {
 }
 
 let activeSTTAbortController: AbortController | null = null;
+let activeSelectionAbortController: AbortController | null = null;
+
+function abortSelectionCapture() {
+  activeSelectionAbortController?.abort();
+  activeSelectionAbortController = null;
+}
 
 function cancelDictation(reason: string = "Cancelled") {
+  abortSelectionCapture();
   if (currentState === "idle") {
     if (hudWindow && hudWindow.isVisible()) {
       hudWindow.hide();
@@ -851,10 +859,25 @@ async function startRecordingFlow() {
   safePasteService.captureTarget();
   setState("starting", "Starting...");
 
-  const selection = await captureActiveSelection(350);
+  const selectionAbortController = new AbortController();
+  activeSelectionAbortController = selectionAbortController;
+  let selection: Awaited<ReturnType<typeof captureActiveSelection>>;
+  try {
+    selection = await captureActiveSelection(350, { signal: selectionAbortController.signal, port: selectionClipboardPort ?? undefined });
+  } catch (err: any) {
+    if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
+    const snapshot = recordingLifecycle.snapshot();
+    if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
+    pasteCoordinator.invalidate();
+    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
+    logger.error({ err: err?.message || String(err) }, "Selection capture failed");
+    setState("error", "Selection capture failed");
+    return;
+  }
+  if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
-    if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard);
+    if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard, selectionClipboardPort);
     return;
   }
 
@@ -906,6 +929,7 @@ function handleHotkeyUp() {
   const pressDuration = Date.now() - keyHoldPressStartTime;
   if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
     if (currentState === "starting") {
+      abortSelectionCapture();
       pasteCoordinator.invalidate();
       recordingLifecycle.reset();
       setState("idle", "Ready");

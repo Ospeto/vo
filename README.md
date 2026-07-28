@@ -91,7 +91,7 @@
 | :--- | :--- | :--- |
 | **Dictation Hotkey** | `Ctrl + Cmd + Option + V` | Global shortcut to start/stop dictation |
 | **Cancel Dictation** | `Escape` or the dictation hotkey | Cancels active recording or transcription and returns vo to idle without pasting the result |
-| **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text |
+| **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text; preserves clipboard formats while capturing and restoring the selection |
 | **Dictation Preset** | `careful` | Default proofreading and semantic reasoning preset |
 | **Default Model** | `gemini-3.1-flash-lite` | Ultra-fast multimodal STT model |
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |

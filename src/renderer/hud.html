@@ -237,7 +237,10 @@
       border: 1.5px solid rgba(192, 132, 252, 0.75);
       box-shadow: 0 0 16px rgba(168, 85, 247, 0.55), 0 4px 16px rgba(0, 0, 0, 0.35);
     }
-    .hud-capsule.has-selection.recording .hud-bar {
+    .hud-capsule.has-selection.recording .hud-bar,
+    .hud-capsule.has-selection.starting .hud-bar,
+    .hud-capsule.has-selection.stopping .hud-bar,
+    .hud-capsule.has-selection.transcribing .hud-bar {
       background: #C084FC;
       box-shadow: 0 0 8px rgba(192, 132, 252, 0.9);
     }
@@ -386,8 +389,12 @@
       }
 
       // Pick single subtitle line
-      if (hasSelection && state === "recording") {
-        hudTitle.textContent = "EDITING";
+      const isActiveSelectionState = hasSelection && (state === "recording" || state === "starting" || state === "stopping" || state === "transcribing");
+      if (state === "error") {
+        hudTitle.textContent = msg || defaultTitles.error || "ERROR";
+        hudDetail.textContent = msg || defaultDetails.error || "";
+      } else if (isActiveSelectionState) {
+        hudTitle.textContent = msg || "EDITING";
         hudDetail.textContent = msg || "Transform selection";
       } else if (hasSelection && state === "idle") {
         hudTitle.textContent = "SELECTION";

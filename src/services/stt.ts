@@ -477,6 +477,11 @@ export function getFallbackModelChain(
   return Array.from(new Set([preferredModel, ...filtered]));
 }
 
+export function formatSelectedTextForPrompt(text: string): string {
+  const safeText = text.replace(/<\/selected_text>/gi, "&lt;/selected_text&gt;");
+  return `<selected_text>\n${safeText}\n</selected_text>`;
+}
+
 async function transcribeGemini(
   audioBuffer: Buffer,
   preferredModel: GeminiModelChoice = "gemini-3.1-flash-lite",
@@ -546,14 +551,19 @@ async function transcribeGemini(
   let userPromptText = "Transcribe the spoken audio accurately in Burmese script.";
 
   if (hasSelectedText) {
-    sttBasePrompt = `You are an expert AI Dual-Mode Voice Editor and Dictation Assistant. Your task is to analyze the spoken audio together with the provided [SELECTED TEXT].
+    const translationDirective = isTranslationActive
+      ? `\nTRANSLATION DIRECTIVE: Translation mode is ACTIVE. Target language is ${resolvedTargetLang}. If the spoken audio is an editing or translation command, or if translating the selected text, produce the result in ${resolvedTargetLang}.`
+      : `\nTARGET LANGUAGE PREFERENCE: ${resolvedTargetLang}. If a translation command specifies or implies translation, target language is ${resolvedTargetLang}.`;
+
+    sttBasePrompt = `You are an expert AI Dual-Mode Voice Editor and Dictation Assistant. Your task is to analyze the spoken audio together with the provided [SELECTED TEXT].${translationDirective}
 
 EVALUATION RULES:
-1. ACTION INSTRUCTION: If the spoken audio contains an editing or translation command (e.g. "translate into English", "fix grammar", "make bullet points", "rephrase", "summarize", "make shorter", "rewrite"), apply that command to the [SELECTED TEXT] and return ONLY the modified replacement text.
+1. ACTION INSTRUCTION: If the spoken audio contains an editing or translation command (e.g. "translate into English", "translate into ${resolvedTargetLang}", "fix grammar", "make bullet points", "rephrase", "summarize", "make shorter", "rewrite"), apply that command to the [SELECTED TEXT] and return ONLY the modified replacement text.
 2. NEW DICTATION: If the spoken audio is new text or dictation content, ignore the [SELECTED TEXT] and return ONLY the clean transcription of the new spoken audio.
 
 OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductory phrases, or explanatory commentary.`;
-    userPromptText = `[SELECTED TEXT]:\n"""\n${selectedText?.trim()}\n"""\n\nSPOKEN AUDIO: Listen to the audio. If it's an editing/translation command, transform the selected text. If it's new dictation content, transcribe the new audio directly. Output ONLY the final text.`;
+    const formattedSelectedText = formatSelectedTextForPrompt(selectedText!.trim());
+    userPromptText = `[SELECTED TEXT]:\n${formattedSelectedText}\n\nSPOKEN AUDIO: Listen to the audio. If it's an editing/translation command, transform the selected text. If it's new dictation content, transcribe the new audio directly. Output ONLY the final text.`;
   } else if (isCodePreset) {
     if (isTranslationActive) {
       sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting.`;
