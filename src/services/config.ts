@@ -361,7 +361,7 @@ export const configFileSchema = z.object({
   symbolScannerEnabled: z.boolean().optional().default(true),
   customVocabulary: z.array(z.string()).optional().default([]),
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
-  dictionaryEntries: z.array(z.object({ id: z.string(), phrase: z.string(), spokenAliases: z.array(z.string()), enabled: z.boolean(), legacyWhitespace: z.boolean().optional() })).optional().default([]),
+  dictionaryEntries: z.array(z.object({ id: z.string(), phrase: z.string(), spokenAliases: z.array(z.string()), enabled: z.boolean(), legacyWhitespace: z.boolean().optional(), category: z.enum(["general", "person_name", "technical"]).optional(), preset: z.string().optional() })).optional().default([]),
   appPresetMappings: z.record(z.string(), z.string()).optional().default(DEFAULT_APP_PRESET_MAPPINGS),
   geminiApiKey: z.string().optional(),
   geminiFallbackApiKey: z.string().optional(),

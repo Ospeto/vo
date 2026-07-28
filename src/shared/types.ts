@@ -1,9 +1,13 @@
+export type VocabularyCategory = "general" | "person_name" | "technical";
+
 export interface DictionaryEntry {
   id: string;
   phrase: string;
   spokenAliases: string[];
   enabled: boolean;
   legacyWhitespace?: boolean;
+  category?: VocabularyCategory;
+  preset?: string;
 }
 
 /** Application state machine */

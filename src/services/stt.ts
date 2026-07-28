@@ -365,7 +365,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = cleaned.replace(/\s+။/g, "။");
 
   // Dictionary is deliberately last: every provider receives the same local, exact result.
-  return applyDictionary(cleaned.trim(), effectiveDictionaryEntries).trim();
+  return applyDictionary(cleaned.trim(), effectiveDictionaryEntries, effectivePreset).trim();
 }
 
 let openaiClient: OpenAI | null = null;
@@ -393,11 +393,13 @@ CRITICAL RULES:
 `.trim();
 
 function migrateLegacyHintEntries(terms: string[]): DictionaryEntry[] {
-  return terms.map(dictionaryEntryFromTerm).filter((entry): entry is DictionaryEntry => Boolean(entry));
+  return terms.map((term) => dictionaryEntryFromTerm(term)).filter((entry): entry is DictionaryEntry => Boolean(entry));
 }
 
-export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
-  const active = entries.filter((entry) => entry.enabled && entry.phrase.trim());
+export function buildDictionaryPromptPart(entries: DictionaryEntry[], activePreset?: string): string {
+  const active = entries.filter(
+    (entry) => entry.enabled !== false && entry.phrase.trim() && (!entry.preset || !activePreset || activePreset === "all" || entry.preset === activePreset)
+  );
   if (active.length === 0) return "";
   const lines = active.map((entry) => {
     const aliases = Array.from(new Set([entry.phrase, ...entry.spokenAliases].map((s) => s.trim()).filter(Boolean)));
@@ -526,7 +528,7 @@ async function transcribeGemini(
   const allCustomTerms = Array.from(new Set([...diskTerms, ...(customVocabulary || []), ...presetTerms].map((term) => term.trim()).filter(Boolean)));
 
   const dictPromptPart = dictionaryEntries.length > 0
-    ? buildDictionaryPromptPart(hintEntries)
+    ? buildDictionaryPromptPart(hintEntries, effectivePreset)
     : buildCustomVocabularyPromptPart(allCustomTerms);
 
   let workspacePromptPart = "";
