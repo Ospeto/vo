@@ -397,6 +397,7 @@ function migrateLegacyHintEntries(terms: string[]): DictionaryEntry[] {
 }
 
 export const MAX_HINT_ENTRIES = 50;
+export const MAX_HINT_TERMS = 200;
 
 /**
  * Prepares a bounded, deduplicated list of enabled trusted dictionary entries
@@ -404,9 +405,12 @@ export const MAX_HINT_ENTRIES = 50;
  */
 export function prepareHintEntries(
   entries: DictionaryEntry[],
-  maxEntries: number = MAX_HINT_ENTRIES
+  maxEntries: number = MAX_HINT_ENTRIES,
+  maxTerms: number = MAX_HINT_TERMS
 ): DictionaryEntry[] {
-  if (!entries || entries.length === 0) return [];
+  const entryLimit = Math.max(0, Math.floor(maxEntries));
+  const termLimit = Math.max(0, Math.floor(maxTerms));
+  if (!entries || entries.length === 0 || entryLimit === 0 || termLimit === 0) return [];
 
   // 1. Filter enabled entries with non-empty canonical phrase
   const enabled = entries.filter(
@@ -443,6 +447,7 @@ export function prepareHintEntries(
   // 3. Build deduplicated entry list without conflicting aliases
   const prepared: DictionaryEntry[] = [];
   const seenPhrases = new Set<string>();
+  let termCount = 0;
 
   for (const entry of enabled) {
     const phrase = entry.phrase.trim();
@@ -472,23 +477,28 @@ export function prepareHintEntries(
         for (const alias of validAliases) {
           const normAlias = alias.normalize("NFKC").toLocaleLowerCase();
           if (!existing.spokenAliases.some((a) => a.normalize("NFKC").toLocaleLowerCase() === normAlias)) {
+            if (termCount >= termLimit) break;
             existing.spokenAliases.push(alias);
+            termCount += 1;
           }
         }
       }
     } else {
+      const boundedAliases = validAliases.slice(0, termLimit - termCount);
+      if (boundedAliases.length === 0) break;
       seenPhrases.add(normPhrase);
+      termCount += boundedAliases.length;
       prepared.push({
         id: entry.id,
         phrase,
-        spokenAliases: validAliases.filter((a) => a.normalize("NFKC").toLocaleLowerCase() !== normPhrase),
+        spokenAliases: boundedAliases.filter((a) => a.normalize("NFKC").toLocaleLowerCase() !== normPhrase),
         enabled: true,
         category: entry.category,
         ...(entry.legacyWhitespace ? { legacyWhitespace: true } : {}),
       });
     }
 
-    if (prepared.length >= maxEntries) {
+    if (prepared.length >= entryLimit || termCount >= termLimit) {
       break;
     }
   }

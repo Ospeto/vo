@@ -5,6 +5,7 @@ import {
   buildCustomVocabularyPromptPart,
   buildOpenAIVocabularyPrompt,
   MAX_HINT_ENTRIES,
+  MAX_HINT_TERMS,
   sanitizeTranscribedText,
   getAppContextPromptHint,
   resolveEffectivePreset,
@@ -92,6 +93,25 @@ describe("VO Contextual Transcription Hints & Correction Safety Suite", () => {
     const prepared = prepareHintEntries(oversizedEntries);
     expect(prepared.length).toBe(MAX_HINT_ENTRIES);
     expect(prepared.length).toBe(50);
+  });
+
+  test("5b. Bounding & Capping: Bounds aliases as well as canonical entries", () => {
+    const entries: DictionaryEntry[] = [
+      {
+        id: "entry-0",
+        phrase: "Term_0",
+        spokenAliases: Array.from({ length: MAX_HINT_TERMS * 2 }, (_, i) => `alias_${i}`),
+        enabled: true,
+        category: "general",
+      },
+    ];
+
+    const prepared = prepareHintEntries(entries);
+    const emittedTerms = prepared.flatMap((entry) => [entry.phrase, ...entry.spokenAliases]);
+
+    expect(emittedTerms.length).toBe(MAX_HINT_TERMS);
+    expect(new Set(emittedTerms.map((term) => term.normalize("NFKC").toLocaleLowerCase())).size).toBe(MAX_HINT_TERMS);
+    expect(buildOpenAIVocabularyPrompt(entries).split(", ").length).toBe(MAX_HINT_TERMS);
   });
 
   test("6. Category Handling: Preserves general, person_name, and technical categories seamlessly", () => {
