@@ -5,7 +5,7 @@
  * The CLI connects as a client, sends a JSON command, and receives a JSON response.
  *
  * Protocol (newline-delimited JSON):
- *   → { "command": "status" | "stop" | "show" | "shutdown" }
+ *   → { "command": "status" | "stop" | "show" | "shutdown" | "cancel" | "interrupt" }
  *   ← { "ok": true, ...payload } | { "ok": false, "error": "..." }
  */
 
@@ -16,7 +16,7 @@ import logger from "./logger.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type DaemonCommand = "status" | "stop" | "show" | "shutdown";
+export type DaemonCommand = "status" | "stop" | "show" | "shutdown" | "cancel" | "interrupt";
 
 export interface DaemonRequest {
   command: DaemonCommand;
