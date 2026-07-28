@@ -35,6 +35,7 @@ export const IPC = {
   // main -> renderer
   START_RECORDING: "start-recording",
   STOP_RECORDING: "stop-recording",
+  CANCEL_RECORDING: "cancel-recording",
   GAIN_UPDATE: "gain-update",
   STATE_SNAPSHOT: "state-snapshot",
   STATE_CHANGED: "state-changed",
@@ -44,6 +45,7 @@ export const IPC = {
   PLAY_AUDIO_STREAM_END: "play-audio-stream-end",
 
   // renderer -> main
+  CANCEL_DICTATION: "cancel-dictation",
   RECORDING_DATA: "recording-data",
   RECORDING_ERROR: "recording-error",
   PLAYBACK_DONE: "playback-done",
@@ -68,8 +70,10 @@ export interface AudioStreamMeta {
 
 /** Exposed API in renderer via contextBridge */
 export interface PiVoiceAPI {
-  onStartRecording: (callback: (format: RecordingFormat) => void) => void;
+  onStartRecording: (callback: (format: RecordingFormat, inputGain?: number) => void) => void;
   onStopRecording: (callback: () => void) => void;
+  onCancelRecording: (callback: () => void) => void;
+  cancelDictation: () => void;
   onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => void;
   onPlayAudioStreamChunk: (callback: (pcmData: ArrayBuffer) => void) => void;
   onPlayAudioStreamEnd: (callback: () => void) => void;

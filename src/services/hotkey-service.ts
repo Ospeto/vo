@@ -6,6 +6,7 @@ import logger from "./logger.js";
 export interface HotkeyCallbacks {
   onDown: (mode: "dictate" | "edit") => void;
   onUp?: (mode: "dictate" | "edit") => void;
+  onCancel?: () => void;
 }
 
 export interface IHotkeyService {
@@ -33,11 +34,14 @@ export class HotkeyService implements IHotkeyService {
       globalShortcut.unregisterAll();
     } catch {}
 
+    const onCancel = typeof callbacks === "function" ? undefined : callbacks.onCancel;
+
     // 1. Register native Fn hook via uiohook-napi
     this.fnHook = new FnHook(
       {
         onFnDown: (mode) => this.onDownCallback?.(mode),
         onFnUp: (mode) => this.onUpCallback?.(mode),
+        onCancel: () => onCancel?.(),
       },
       binding,
       this.currentDisplay,
@@ -57,6 +61,7 @@ export class HotkeyService implements IHotkeyService {
       try {
         globalShortcut.register("Control+Command+Option+V", () => this.onDownCallback?.("dictate"));
         globalShortcut.register("Control+Command+Option+E", () => this.onDownCallback?.("edit"));
+        globalShortcut.register("Escape", () => onCancel?.());
       } catch (err) {
         logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
       }
@@ -96,10 +101,13 @@ export class HotkeyService implements IHotkeyService {
       const onDown = typeof callbacks === "function" ? callbacks : callbacks.onDown;
       const onUp = typeof callbacks === "function" ? undefined : callbacks.onUp;
 
+      const onCancel = typeof callbacks === "function" ? undefined : callbacks.onCancel;
+
       this.fnHook = new FnHook(
         {
           onFnDown: (mode) => onDown(mode),
           onFnUp: (mode) => onUp?.(mode),
+          onCancel: () => onCancel?.(),
         },
         candidateBinding,
         display,
@@ -118,6 +126,7 @@ export class HotkeyService implements IHotkeyService {
         try {
           globalShortcut.register("Control+Command+Option+V", () => onDown("dictate"));
           globalShortcut.register("Control+Command+Option+E", () => onDown("edit"));
+          globalShortcut.register("Escape", () => onCancel?.());
         } catch (err) {
           logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
         }

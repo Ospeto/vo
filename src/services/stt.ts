@@ -443,6 +443,7 @@ export interface TranscribeOptions {
   symbolScannerEnabled?: boolean;
   workspacePath?: string;
   selectedText?: string;
+  abortSignal?: AbortSignal;
 }
 
 export function getPresetTemperature(preset?: DictationPreset): number {
@@ -473,8 +474,12 @@ async function transcribeGemini(
   workspacePath?: string,
   translateEnabled?: boolean,
   targetLanguage: string = "English",
-  selectedText?: string
+  selectedText?: string,
+  abortSignal?: AbortSignal
 ): Promise<{ rawText: string; activeApp: string; usedPaidKey?: boolean }> {
+  if (abortSignal?.aborted) {
+    throw new Error("Transcription aborted");
+  }
   const client = getGeminiClient();
   const base64Audio = audioBuffer.toString("base64");
 
@@ -556,8 +561,12 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
   let paidFallbackInFlight: Promise<unknown> | null = null;
 
   for (const model of modelsToTry) {
+    if (abortSignal?.aborted) {
+      throw new Error("Transcription aborted");
+    }
     try {
       const runPrimary = async () => {
+        if (abortSignal?.aborted) throw new Error("Transcription aborted");
         const response = await client.models.generateContent({
           model,
           contents: [
@@ -573,6 +582,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
             systemInstruction: fullPrompt,
             temperature: targetTemperature,
             maxOutputTokens: 8192,
+            abortSignal,
           },
         });
         const text = response.text?.trim() ?? "";
@@ -586,6 +596,10 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 
       let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
       const fallbackAbortController = new AbortController();
+      if (abortSignal) {
+        if (abortSignal.aborted) fallbackAbortController.abort();
+        else abortSignal.addEventListener("abort", () => fallbackAbortController.abort(), { once: true });
+      }
 
       if (fallbackClient && !paidFallbackInFlight) {
         let timerId: ReturnType<typeof setTimeout> | undefined;
@@ -664,6 +678,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
             contents: `You are a Senior Software Engineer. Translate the following Burmese dictation into a clean, precise English technical specification for an AI coding assistant. Output ONLY pure English text without any Burmese script:\n\n${text}`,
             config: {
               temperature: 0.0,
+              abortSignal,
             },
           });
           const translatedText = translateRes.text?.trim();
@@ -685,14 +700,18 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
   throw new Error("All Gemini STT models failed to transcribe audio");
 }
 
-async function transcribeOpenAI(audioBuffer: Buffer): Promise<string> {
+async function transcribeOpenAI(audioBuffer: Buffer, abortSignal?: AbortSignal): Promise<string> {
+  if (abortSignal?.aborted) throw new Error("Transcription aborted");
   const client = getOpenAIClient();
 
   const file = await toFile(audioBuffer, "recording.webm");
-  const transcription = await client.audio.transcriptions.create({
-    model: "gpt-4o-mini-transcribe",
-    file,
-  });
+  const transcription = await client.audio.transcriptions.create(
+    {
+      model: "gpt-4o-mini-transcribe",
+      file,
+    },
+    { signal: abortSignal }
+  );
 
   return transcription.text?.trim() ?? "";
 }
@@ -709,7 +728,8 @@ function getElevenLabsClient(): ElevenLabsClient {
   return elevenlabsClient;
 }
 
-async function transcribeElevenLabs(audioBuffer: Buffer): Promise<string> {
+async function transcribeElevenLabs(audioBuffer: Buffer, abortSignal?: AbortSignal): Promise<string> {
+  if (abortSignal?.aborted) throw new Error("Transcription aborted");
   const client = getElevenLabsClient();
 
   const result = await client.speechToText.convert({
@@ -719,7 +739,7 @@ async function transcribeElevenLabs(audioBuffer: Buffer): Promise<string> {
       contentType: "audio/webm",
     },
     modelId: "scribe_v2",
-  });
+  }, { abortSignal });
 
   if ("text" in result) {
     return (result.text ?? "").trim();
@@ -730,7 +750,8 @@ async function transcribeElevenLabs(audioBuffer: Buffer): Promise<string> {
   return "";
 }
 
-async function transcribeLocal(audioData: ArrayBuffer): Promise<string> {
+async function transcribeLocal(audioData: ArrayBuffer, abortSignal?: AbortSignal): Promise<string> {
+  if (abortSignal?.aborted) throw new Error("Transcription aborted");
   try {
     const { Whisper, WhisperFullParams, WhisperSamplingStrategy } = await import("@napi-rs/whisper");
     const { resolveModelPath } = await import("./whisper-model.js");
@@ -773,17 +794,18 @@ export async function transcribeDetailed(
   const translateEnabled = typeof providerOrOptions === "object" ? providerOrOptions.translateEnabled : undefined;
   const targetLanguage = typeof providerOrOptions === "object" ? (providerOrOptions.targetLanguage ?? "English") : "English";
   const selectedText = typeof providerOrOptions === "object" ? providerOrOptions.selectedText : undefined;
+  const abortSignal = typeof providerOrOptions === "object" ? providerOrOptions.abortSignal : undefined;
 
   switch (provider) {
     case "local":
-      rawText = await transcribeLocal(audioData);
+      rawText = await transcribeLocal(audioData, abortSignal);
       break;
     case "openai":
-      rawText = await transcribeOpenAI(Buffer.from(audioData));
+      rawText = await transcribeOpenAI(Buffer.from(audioData), abortSignal);
       usedPaidKey = true;
       break;
     case "elevenlabs":
-      rawText = await transcribeElevenLabs(Buffer.from(audioData));
+      rawText = await transcribeElevenLabs(Buffer.from(audioData), abortSignal);
       usedPaidKey = true;
       break;
     case "gemini":
@@ -798,7 +820,8 @@ export async function transcribeDetailed(
         workspacePath,
         translateEnabled,
         targetLanguage,
-        selectedText
+        selectedText,
+        abortSignal
       );
       rawText = res.rawText;
       usedPaidKey = res.usedPaidKey ?? false;

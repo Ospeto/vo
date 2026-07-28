@@ -7,6 +7,7 @@ import logger from "./logger.js";
 export type FnHookCallbacks = {
   onFnDown: (mode: "dictate" | "edit") => void;
   onFnUp: (mode: "dictate" | "edit") => void;
+  onCancel?: () => void;
 };
 
 /**
@@ -70,6 +71,11 @@ export class FnHook {
     }
 
     uIOhook.on("keydown", (e: UiohookKeyboardEvent) => {
+      if (e.keycode === UiohookKey.Escape) {
+        this.callbacks.onCancel?.();
+        return;
+      }
+
       if (this.activeMode !== null) return; // already active, ignore repeats
 
       // 1. Check Dictation Key Binding

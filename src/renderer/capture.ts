@@ -10,6 +10,7 @@ let audioChunks: Blob[] = [];
 let meterInterval: number | null = null;
 let currentGainValue = 1.0;
 let recordingStartTime = 0;
+let recordingGeneration = 0;
 
 async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
@@ -75,19 +76,6 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
       mimeType: "audio/webm;codecs=opus",
       audioBitsPerSecond: 24000,
     });
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunks.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      window.electronIPC?.sendRecordingData(arrayBuffer);
-      audioChunks = [];
-    };
 
     startMetering();
     return true;
@@ -159,13 +147,14 @@ function stopMetering() {
 });
 
 window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
+  const generation = ++recordingGeneration;
   audioChunks = [];
   currentGainValue = inputGain;
   recordingStartTime = Date.now();
 
   if (!mediaStream) {
     const ok = await setupAudioPipeline(inputGain);
-    if (!ok) return;
+    if (!ok || generation !== recordingGeneration) return;
   } else if (gainNode && audioCtx) {
     gainNode.gain.setValueAtTime(inputGain, audioCtx.currentTime);
   }
@@ -174,8 +163,23 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
     await audioCtx.resume();
   }
 
+  if (generation !== recordingGeneration) return;
+
   try {
     if (mediaRecorder && mediaRecorder.state === "inactive") {
+      mediaRecorder.ondataavailable = (event) => {
+        if (generation === recordingGeneration && event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+      mediaRecorder.onstop = async () => {
+        if (generation !== recordingGeneration) return;
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        if (generation !== recordingGeneration) return;
+        window.electronIPC?.sendRecordingData(arrayBuffer);
+        audioChunks = [];
+      };
       mediaRecorder.start(100);
     }
   } catch (err: any) {
@@ -183,7 +187,20 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   }
 });
 
+(window.electronIPC as any)?.onCancelRecording(() => {
+  recordingGeneration++;
+  try {
+    if (mediaRecorder) {
+      if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    }
+  } catch {}
+  audioChunks = [];
+});
+
 window.electronIPC?.onStopRecording(() => {
+  const generation = recordingGeneration;
   try {
     if (!mediaRecorder) {
       window.electronIPC?.sendRecordingError("No media recorder instance");
@@ -193,11 +210,13 @@ window.electronIPC?.onStopRecording(() => {
     const doStop = () => {
       // Allow 150ms for final WebAudio speech tail chunk to flush into MediaRecorder
       setTimeout(() => {
+        if (generation !== recordingGeneration) return;
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
           mediaRecorder.stop();
         } else {
           const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
           audioBlob.arrayBuffer().then((buf) => {
+            if (generation !== recordingGeneration) return;
             window.electronIPC?.sendRecordingData(buf);
             audioChunks = [];
           });
@@ -207,7 +226,9 @@ window.electronIPC?.onStopRecording(() => {
 
     const elapsed = Date.now() - recordingStartTime;
     if (elapsed < 300) {
-      setTimeout(doStop, 300 - elapsed);
+      setTimeout(() => {
+        if (generation === recordingGeneration) doStop();
+      }, 300 - elapsed);
     } else {
       doStop();
     }
