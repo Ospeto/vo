@@ -858,6 +858,10 @@ async function startRecordingFlow() {
   pasteCoordinator.invalidate();
   safePasteService.captureTarget();
   setState("starting", "Starting...");
+  playStartChime();
+
+  // Start pre-roll audio capture immediately in starting state to prevent first-phoneme clipping
+  captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
 
   const selectionAbortController = new AbortController();
   activeSelectionAbortController = selectionAbortController;
@@ -870,6 +874,7 @@ async function startRecordingFlow() {
     if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
     pasteCoordinator.invalidate();
     recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
+    captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
     logger.error({ err: err?.message || String(err) }, "Selection capture failed");
     setState("error", "Selection capture failed");
     return;
@@ -877,6 +882,7 @@ async function startRecordingFlow() {
   if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
+    captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
     if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard, selectionClipboardPort);
     return;
   }
@@ -894,8 +900,6 @@ async function startRecordingFlow() {
   logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
   setState("recording", "Recording...");
   recordingLifecycle.acknowledgeStart(reqRes.sequenceId, true);
-  playStartChime();
-  captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
 }
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
@@ -932,6 +936,7 @@ function handleHotkeyUp() {
       abortSelectionCapture();
       pasteCoordinator.invalidate();
       recordingLifecycle.reset();
+      captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
       setState("idle", "Ready");
     } else if (currentState === "recording") {
       logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Auto-Detect)");

@@ -1,5 +1,137 @@
 import { describe, test, expect } from "bun:test";
-import { downsample, convertToMono, analyzeAudioQuality } from "../../shared/audio-utils.js";
+import {
+  downsample,
+  convertToMono,
+  analyzeAudioQuality,
+  analyzePcmFrame,
+  SpeechEndpointDetector,
+  diagnoseAudioStats,
+} from "../../shared/audio-utils.js";
+
+describe("analyzePcmFrame", () => {
+  test("returns zero metrics for empty buffer", () => {
+    const metrics = analyzePcmFrame(new Float32Array([]));
+    expect(metrics.rms).toBe(0);
+    expect(metrics.peak).toBe(0);
+    expect(metrics.isSilent).toBe(true);
+    expect(metrics.isSpeech).toBe(false);
+    expect(metrics.isClipped).toBe(false);
+  });
+
+  test("calculates RMS and identifies speech frame", () => {
+    const samples = new Float32Array(128).fill(0.1);
+    const metrics = analyzePcmFrame(samples, 0.01, 0.004);
+    expect(metrics.rms).toBeCloseTo(0.1, 4);
+    expect(metrics.peak).toBeCloseTo(0.1, 4);
+    expect(metrics.isSpeech).toBe(true);
+    expect(metrics.isSilent).toBe(false);
+  });
+
+  test("identifies clipped frame", () => {
+    const samples = new Float32Array(128).fill(1.0);
+    const metrics = analyzePcmFrame(samples);
+    expect(metrics.isClipped).toBe(true);
+  });
+});
+
+describe("SpeechEndpointDetector", () => {
+  test("does not endpoint without detected speech", () => {
+    const detector = new SpeechEndpointDetector({ confirmSilenceMs: 200, frameIntervalMs: 50 });
+    for (let i = 0; i < 10; i++) {
+      const res = detector.processFrame(0.001);
+      expect(res.hasDetectedSpeech).toBe(false);
+      expect(res.isEndpointed).toBe(false);
+    }
+  });
+
+  test("detects speech and endpoints on confirmed silence", () => {
+    const detector = new SpeechEndpointDetector({
+      minSpeechDurationMs: 100,
+      confirmSilenceMs: 150,
+      frameIntervalMs: 50,
+    });
+
+    // 3 speech frames (150ms >= 100ms)
+    detector.processFrame(0.05);
+    detector.processFrame(0.05);
+    const speechRes = detector.processFrame(0.05);
+    expect(speechRes.hasDetectedSpeech).toBe(true);
+    expect(speechRes.isEndpointed).toBe(false);
+
+    // 3 silence frames (150ms >= 150ms)
+    detector.processFrame(0.001);
+    detector.processFrame(0.001);
+    const finalRes = detector.processFrame(0.001);
+    expect(finalRes.hasDetectedSpeech).toBe(true);
+    expect(finalRes.isEndpointed).toBe(true);
+  });
+
+  test("resets state cleanly", () => {
+    const detector = new SpeechEndpointDetector({ minSpeechDurationMs: 50, frameIntervalMs: 50 });
+    detector.processFrame(0.05);
+    expect(detector.getStatus().hasDetectedSpeech).toBe(true);
+
+    detector.reset();
+    expect(detector.getStatus().hasDetectedSpeech).toBe(false);
+    expect(detector.getStatus().isEndpointed).toBe(false);
+  });
+});
+
+describe("diagnoseAudioStats", () => {
+  test("diagnoses short recording", () => {
+    const diag = diagnoseAudioStats({
+      durationMs: 150,
+      maxRms: 0.1,
+      peakAmplitude: 0.1,
+      speechFrames: 3,
+      totalFrames: 3,
+      clippingFrames: 0,
+      hasSpeech: true,
+    });
+    expect(diag.status).toBe("too_short");
+  });
+
+  test("diagnoses near-silence input", () => {
+    const diag = diagnoseAudioStats({
+      durationMs: 1500,
+      maxRms: 0.002,
+      peakAmplitude: 0.003,
+      speechFrames: 0,
+      totalFrames: 30,
+      clippingFrames: 0,
+      hasSpeech: false,
+    });
+    expect(diag.status).toBe("near_silence");
+    expect(diag.message).toContain("No speech detected");
+  });
+
+  test("diagnoses clipped audio", () => {
+    const diag = diagnoseAudioStats({
+      durationMs: 1500,
+      maxRms: 0.99,
+      peakAmplitude: 1.0,
+      speechFrames: 30,
+      totalFrames: 30,
+      clippingFrames: 20,
+      hasSpeech: true,
+    });
+    expect(diag.status).toBe("clipped");
+    expect(diag.message).toContain("clipped");
+  });
+
+  test("accepts valid speech", () => {
+    const diag = diagnoseAudioStats({
+      durationMs: 1500,
+      maxRms: 0.15,
+      peakAmplitude: 0.3,
+      speechFrames: 20,
+      totalFrames: 30,
+      clippingFrames: 0,
+      hasSpeech: true,
+    });
+    expect(diag.status).toBe("valid_speech");
+  });
+});
 
 describe("downsample", () => {
   test("returns same buffer when sample rates match", () => {
