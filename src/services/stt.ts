@@ -525,7 +525,11 @@ async function transcribeGemini(
     resolvedTargetLang = "English";
   }
 
-  const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp, appMappings);
+  const resolvedPreset = resolveEffectivePreset(dictationPreset, activeApp, appMappings);
+  const effectivePreset = resolvedPreset === "translate" ? "careful" : resolvedPreset;
+  if (resolvedPreset === "translate") {
+    isTranslationActive = true;
+  }
   const presetHint = getPresetPromptInstructions(effectivePreset);
   const targetTemperature = getPresetTemperature(effectivePreset);
 
