@@ -48,7 +48,7 @@
 - Sends a bounded, deduplicated list of enabled trusted vocabulary and spoken aliases as soft hints to Gemini and OpenAI, then applies the enabled dictionary locally with exact, deterministic matching across supported speech providers.
 - Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
 - Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
-- Starts capture before recording-state handoff to reduce clipped first phonemes, stops after confirmed speech silence, and reports silent, clipped, unavailable, or too-short microphone input instead of submitting it.
+- Starts capture before recording-state handoff to reduce clipped first phonemes, stops after confirmed speech silence, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
 - Automatically scans exported functions, classes, interfaces, and file names from your active project workspace.
