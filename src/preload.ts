@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type AudioStreamMeta, type RecordingFormat, type StatePayload, type GeminiModelChoice } from "./shared/types.js";
+import { IPC, type AudioStreamMeta, type RecordingFormat, type StatePayload } from "./shared/types.js";
+import type { PiVoiceConfigPatch } from "./services/config.js";
 
 const api = {
   onStartRecording: (callback: (format: RecordingFormat, inputGain: number) => void) => {
@@ -39,7 +40,7 @@ const api = {
     ipcRenderer.send(IPC.PLAYBACK_DONE);
   },
   getConfig: () => ipcRenderer.invoke(IPC.GET_CONFIG),
-  saveConfig: (patch: { geminiModel?: GeminiModelChoice; inputGain?: number; key?: string; dictationPreset?: string; dictationMode?: string; audioChimesEnabled?: boolean }) => ipcRenderer.invoke(IPC.SAVE_CONFIG, patch),
+  saveConfig: (patch: PiVoiceConfigPatch) => ipcRenderer.invoke(IPC.SAVE_CONFIG, patch),
   registerHotkey: (newKeyStr: string) => ipcRenderer.invoke(IPC.REGISTER_HOTKEY, newKeyStr),
   registerEditHotkey: (newKeyStr: string) => ipcRenderer.invoke(IPC.REGISTER_EDIT_HOTKEY, newKeyStr),
   getHistory: () => ipcRenderer.invoke(IPC.GET_HISTORY),

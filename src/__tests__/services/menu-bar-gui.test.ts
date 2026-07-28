@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { getPresetPromptInstructions, getPresetTemperature, resolveEffectivePreset, getFallbackModelChain } from "../../services/stt.js";
+import { configFileSchema } from "../../services/config.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, setHistoryDirForTests } from "../../services/history-service.js";
 import { tmpdir } from "node:os";
 import { mkdirSync } from "node:fs";
@@ -242,6 +243,11 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
   });
 
   describe("6. Dictation Presets & Custom Vocabulary Contracts", () => {
+    test("accepts translate dictation preset in config and resolves prompt", () => {
+      expect(configFileSchema.safeParse({ dictationPreset: "translate" }).success).toBe(true);
+      expect(getPresetPromptInstructions("translate")).toContain("TRANSLATE TO ENGLISH");
+    });
+
     test("returns correct prompt instructions and temperature for each dictation preset", () => {
       expect(getPresetPromptInstructions("code_comment")).toContain("SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION");
       expect(getPresetPromptInstructions("code_comment")).toContain("FAITHFUL TRANSLATION & ZERO IMPROVISATION");

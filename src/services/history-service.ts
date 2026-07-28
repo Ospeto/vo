@@ -179,7 +179,8 @@ export function addHistoryEntry(
   if (!trimmed) return getHistoryEntries();
 
   const now = Date.now();
-  const computedCost = cost !== undefined ? cost : calculateDictationCost(audioDurationSec || 5, trimmed.length, modelUsed);
+  const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(trimmed);
+  const computedCost = cost !== undefined ? cost : calculateDictationCost(audioDurationSec || 5, trimmed.length, modelUsed, !isBurmeseText);
 
   // Time-Window Deduplication Mutex: Block duplicate text & cost entries within 3000ms
   if (trimmed === lastAddedText && Math.abs(computedCost - lastAddedCost) < 0.0000001 && now - lastAddedTime < 3000) {

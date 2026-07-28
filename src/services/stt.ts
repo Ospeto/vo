@@ -583,48 +583,65 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       const { getGeminiFallbackClient } = await import("./gemini-client.js");
       const fallbackClient = getGeminiFallbackClient();
 
-      let fastestPromise: Promise<{ text: string; usedPaidKey: boolean }>;
+      let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
 
       if (fallbackClient) {
-        // Speculative Parallel Fallback: If Primary Key takes > 2000ms or fails, launch Paid Fallback Key
+        let timerId: ReturnType<typeof setTimeout> | undefined;
         const primaryDelayTimer = new Promise<never>((_, reject) => {
-          const t = setTimeout(() => reject(new Error("Primary Key delay > 2000ms")), 2000);
-          if (t && typeof t === "object" && "unref" in t) (t as any).unref();
+          timerId = setTimeout(() => reject(new Error("Primary Key delay > 2000ms")), 2000);
+          if (timerId && typeof timerId === "object" && "unref" in timerId) (timerId as any).unref();
         });
 
-        const speculativeFallback = Promise.race([primaryPromise, primaryDelayTimer]).catch(async () => {
-          logger.info({ model }, "Primary API Key took >2000ms or errored; triggering Parallel Paid Fallback Key");
-          const fbResponse = await fallbackClient.models.generateContent({
-            model,
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { inlineData: { mimeType: "audio/webm", data: base64Audio } },
-                  { text: userPromptText },
+        resultPromise = (async () => {
+          try {
+            const res = await Promise.race([primaryPromise, primaryDelayTimer]);
+            if (timerId) clearTimeout(timerId);
+            return res;
+          } catch (primaryErr: any) {
+            if (timerId) clearTimeout(timerId);
+            logger.info({ model, err: primaryErr?.message }, "Primary API Key took >2000ms or errored; triggering Parallel Paid Fallback Key");
+            try {
+              const fbResponse = await fallbackClient.models.generateContent({
+                model,
+                contents: [
+                  {
+                    role: "user",
+                    parts: [
+                      { inlineData: { mimeType: "audio/webm", data: base64Audio } },
+                      { text: userPromptText },
+                    ],
+                  },
                 ],
-              },
-            ],
-            config: {
-              systemInstruction: fullPrompt,
-              temperature: targetTemperature,
-              maxOutputTokens: 8192,
-            },
-          });
-          const fbText = fbResponse.text?.trim() ?? "";
-          return { text: fbText, usedPaidKey: true };
-        });
-
-        fastestPromise = Promise.race([primaryPromise, speculativeFallback]);
+                config: {
+                  systemInstruction: fullPrompt,
+                  temperature: targetTemperature,
+                  maxOutputTokens: 8192,
+                },
+              });
+              const fbText = fbResponse.text?.trim() ?? "";
+              return { text: fbText, usedPaidKey: true };
+            } catch (fbErr: any) {
+              logger.warn({ model, fbErr: fbErr?.message }, "Paid Fallback Key also failed");
+              throw fbErr;
+            }
+          }
+        })();
       } else {
-        fastestPromise = primaryPromise;
+        resultPromise = primaryPromise;
       }
 
+      let timeoutTimerId: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Model ${model} timed out after ${dynamicTimeoutMs}ms`)), dynamicTimeoutMs);
+        timeoutTimerId = setTimeout(() => reject(new Error(`Model ${model} timed out after ${dynamicTimeoutMs}ms`)), dynamicTimeoutMs);
+        if (timeoutTimerId && typeof timeoutTimerId === "object" && "unref" in timeoutTimerId) (timeoutTimerId as any).unref();
       });
 
-      const winner = await Promise.race([fastestPromise, timeoutPromise]);
+      let winner: { text: string; usedPaidKey: boolean };
+      try {
+        winner = await Promise.race([resultPromise, timeoutPromise]);
+      } finally {
+        if (timeoutTimerId) clearTimeout(timeoutTimerId);
+      }
       let text = winner.text;
 
       // Bulletproof Fallback: If Code preset was requested but response contains Burmese script, run fast text translation

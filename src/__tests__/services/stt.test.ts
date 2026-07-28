@@ -14,12 +14,19 @@ mock.module("../../services/logger.js", () => ({
 const mockGenerateContent = mock(async () => ({
   text: "gemini transcription",
 }));
+let mockFallbackGenerateContent: any = null;
+
 mock.module("../../services/gemini-client.js", () => ({
   getGeminiClient: () => ({
     models: {
       generateContent: mockGenerateContent,
     },
   }),
+  getGeminiFallbackClient: () => (mockFallbackGenerateContent ? {
+    models: {
+      generateContent: mockFallbackGenerateContent,
+    },
+  } : null),
   _resetGeminiClient: () => {},
 }));
 
@@ -229,5 +236,37 @@ describe("transcribe", () => {
     expect(resolveEffectivePreset("auto", "Xcode", customMappings)).toBe("code_comment");
     expect(resolveEffectivePreset("auto", "Discord", customMappings)).toBe("email_polish");
     expect(resolveEffectivePreset("auto", "UnknownApp", customMappings)).toBe("careful");
+  });
+
+  test("uses fallback client when primary gemini key rejects fast", async () => {
+    mockGenerateContent.mockImplementationOnce(async () => {
+      throw new Error("429 Rate Limit");
+    });
+    mockFallbackGenerateContent = mock(async () => ({
+      text: "paid fallback transcription",
+    }));
+
+    const data = new ArrayBuffer(10);
+    const result = await transcribe(data, "gemini");
+    expect(result).toBe("Paid fallback transcription");
+    expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
+
+    mockFallbackGenerateContent = null;
+  });
+
+  test("does not invoke fallback client when primary gemini key succeeds fast", async () => {
+    mockGenerateContent.mockImplementationOnce(async () => ({
+      text: "primary fast result",
+    }));
+    mockFallbackGenerateContent = mock(async () => ({
+      text: "paid fallback transcription",
+    }));
+
+    const data = new ArrayBuffer(10);
+    const result = await transcribe(data, "gemini");
+    expect(result).toBe("Primary fast result");
+    expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(0);
+
+    mockFallbackGenerateContent = null;
   });
 });

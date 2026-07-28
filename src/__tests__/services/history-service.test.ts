@@ -38,6 +38,21 @@ describe("history-service cost audit", () => {
     expect(costPro).toBeGreaterThan(costLite);
   });
 
+  test("calculateDictationCost uses Burmese token ratio (0.65) when isEnglishOutput is false", () => {
+    const englishCost = calculateDictationCost(5, 100, "gemini-3.1-flash-lite", true);
+    const burmeseCost = calculateDictationCost(5, 100, "gemini-3.1-flash-lite", false);
+    expect(burmeseCost).toBeGreaterThan(englishCost);
+  });
+
+  test("addHistoryEntry detects Burmese script in output text and computes Burmese cost ratio", () => {
+    clearHistory();
+    const text = "မြန်မာစာ စမ်းသပ်ချက်";
+    addHistoryEntry(text, "Obsidian", undefined, 5, "gemini-3.1-flash-lite");
+    const ledger = loadCostLedger();
+    const expectedCost = calculateDictationCost(5, text.length, "gemini-3.1-flash-lite", false);
+    expect(ledger.lifetimeCost).toBeCloseTo(expectedCost, 5);
+  });
+
   test("getMonthlyTotalCost sums monthly entries and records in cost-ledger.json", () => {
     clearHistory();
     addHistoryEntry("Test line 1", "VSCode", 0.00005, 5, "gemini-3.1-flash-lite");

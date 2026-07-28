@@ -15,6 +15,10 @@ mock.module("electron", () => ({
   systemPreferences: {
     isTrustedAccessibilityClient: mock(() => true),
   },
+  globalShortcut: {
+    register: mock(() => true),
+    unregisterAll: mock(() => {}),
+  },
 }));
 
 // Mock uiohook-napi

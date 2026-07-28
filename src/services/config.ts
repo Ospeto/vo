@@ -295,7 +295,7 @@ function defaultConfig(): PiVoiceConfig {
   };
 }
 
-const configFileSchema = z.object({
+export const configFileSchema = z.object({
   key: z
     .string()
     .refine(

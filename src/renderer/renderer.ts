@@ -1,5 +1,5 @@
 import type { AppState, StatePayload, GeminiModelChoice } from "../shared/types.js";
-import type { DictationPreset, DictationMode } from "../services/config.js";
+import type { DictationPreset, DictationMode, ChimeSoundChoice } from "../services/config.js";
 import type { HistoryEntry } from "../services/history-service.js";
 
 const statusDot = document.getElementById("statusDot") as HTMLElement;
@@ -371,8 +371,8 @@ async function initUI() {
     if (keycapDisplay) {
       keycapDisplay.textContent = config.keyDisplay;
     }
-    if (editKeycapDisplay && (config as any).editKeyDisplay) {
-      editKeycapDisplay.textContent = (config as any).editKeyDisplay;
+    if (editKeycapDisplay && config.editKeyDisplay) {
+      editKeycapDisplay.textContent = config.editKeyDisplay;
     }
     audioChimesEnabled = config.audioChimesEnabled ?? true;
     updateChimeBtnUI();
@@ -382,37 +382,37 @@ async function initUI() {
       targetLanguageSelect.value = config.targetLanguage;
     }
 
-    if ((config as any).customVocabulary) {
-      currentCustomVocab = [...((config as any).customVocabulary as string[])];
+    if (config.customVocabulary) {
+      currentCustomVocab = [...config.customVocabulary];
     }
     if (config.presetVocabulary) {
       currentPresetVocabMap = config.presetVocabulary as Record<string, string[]>;
     }
-    if ((config as any).appPresetMappings) {
-      currentAppMappings = { ...(config as any).appPresetMappings };
+    if (config.appPresetMappings) {
+      currentAppMappings = { ...(config.appPresetMappings as any) };
     }
-    if ((config as any).geminiApiKey) {
-      const keys = String((config as any).geminiApiKey).split(/[,\n]+/).map((k) => k.trim());
+    if (config.geminiApiKey) {
+      const keys = String(config.geminiApiKey).split(/[,\n]+/).map((k) => k.trim());
       if (geminiApiKey1Input && keys[0]) geminiApiKey1Input.value = keys[0];
       if (geminiApiKey2Input && keys[1]) geminiApiKey2Input.value = keys[1];
       if (geminiApiKey3Input && keys[2]) geminiApiKey3Input.value = keys[2];
     }
-    if (geminiFallbackApiKeyInput && (config as any).geminiFallbackApiKey) {
-      geminiFallbackApiKeyInput.value = (config as any).geminiFallbackApiKey;
+    if (geminiFallbackApiKeyInput && config.geminiFallbackApiKey) {
+      geminiFallbackApiKeyInput.value = config.geminiFallbackApiKey;
     }
-    if (chimeStartSelect && (config as any).chimeSoundStart) {
-      chimeStartSelect.value = (config as any).chimeSoundStart;
+    if (chimeStartSelect && config.chimeSoundStart) {
+      chimeStartSelect.value = config.chimeSoundStart;
     }
-    if (chimeEndSelect && (config as any).chimeSoundEnd) {
-      chimeEndSelect.value = (config as any).chimeSoundEnd;
+    if (chimeEndSelect && config.chimeSoundEnd) {
+      chimeEndSelect.value = config.chimeSoundEnd;
     }
-    if (symbolScannerToggle && (config as any).symbolScannerEnabled !== undefined) {
-      symbolScannerToggle.checked = (config as any).symbolScannerEnabled;
+    if (symbolScannerToggle && config.symbolScannerEnabled !== undefined) {
+      symbolScannerToggle.checked = config.symbolScannerEnabled;
     }
     if (settingModelSelect && config.geminiModel) {
       settingModelSelect.value = config.geminiModel;
     }
-    await populateAudioDevices((config as any).audioDeviceId);
+    await populateAudioDevices(config.audioDeviceId);
     renderAppRules();
     renderPersonNames();
     renderVocabTags();
@@ -728,7 +728,7 @@ document.querySelectorAll(".model-pill-btn").forEach((btn) => {
     updateModelPills(selectedModel);
     if (modelSelect) modelSelect.value = selectedModel;
     if (settingModelSelect) settingModelSelect.value = selectedModel;
-    await window.electronIPC?.saveConfig({ geminiModel: selectedModel as any });
+    await window.electronIPC?.saveConfig({ geminiModel: selectedModel as GeminiModelChoice });
   });
 });
 
@@ -912,11 +912,11 @@ saveFallbackApiKeyBtn?.addEventListener("click", async () => {
 });
 
 chimeStartSelect?.addEventListener("change", async () => {
-  await window.electronIPC?.saveConfig({ chimeSoundStart: chimeStartSelect.value as any });
+  await window.electronIPC?.saveConfig({ chimeSoundStart: chimeStartSelect.value as ChimeSoundChoice });
 });
 
 chimeEndSelect?.addEventListener("change", async () => {
-  await window.electronIPC?.saveConfig({ chimeSoundEnd: chimeEndSelect.value as any });
+  await window.electronIPC?.saveConfig({ chimeSoundEnd: chimeEndSelect.value as ChimeSoundChoice });
 });
 
 symbolScannerToggle?.addEventListener("change", async () => {
@@ -924,11 +924,11 @@ symbolScannerToggle?.addEventListener("change", async () => {
 });
 
 previewStartChimeBtn?.addEventListener("click", async () => {
-  await (window.electronIPC as any)?.previewChime(chimeStartSelect.value);
+  await window.electronIPC?.previewChime(chimeStartSelect.value);
 });
 
 previewEndChimeBtn?.addEventListener("click", async () => {
-  await (window.electronIPC as any)?.previewChime(chimeEndSelect.value);
+  await window.electronIPC?.previewChime(chimeEndSelect.value);
 });
 
 resetShortcutBtn?.addEventListener("click", async () => {

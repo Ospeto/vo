@@ -610,7 +610,8 @@ function setupIpcHandlers() {
         pasteTextToFocusedField(text);
         const activeApp = getActiveAppName();
         const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
-        const isEnglish = currentConfig.dictationPreset !== "burmese_written" && currentConfig.dictationPreset !== "fast";
+        const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
+        const isEnglish = !isBurmeseText;
         const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
       }
