@@ -19,6 +19,8 @@ export function resolveNativePastePath(projectRoot: string): string {
     join(projectRoot, "out", "native", "pi_paste.node"),
     join(projectRoot, "resources", "native", "pi_paste.node"),
     join(projectRoot, "native", "pi_paste.node"),
+    ...(process.resourcesPath ? [join(process.resourcesPath, "native", "pi" + "-paste.node")] : []),
+    ...(process.resourcesPath ? [join(process.resourcesPath, "native", "pi_paste.node")] : []),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;

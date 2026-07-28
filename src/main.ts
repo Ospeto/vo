@@ -53,8 +53,16 @@ let lastPasteTime = 0;
 
 let activeSelectionText = "";
 let previousClipboardContent = "";
+let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+
+function restoreCapturedSelection() {
+  if (selectionCaptured) restoreClipboard(previousClipboardContent);
+  previousClipboardContent = "";
+  activeSelectionText = "";
+  selectionCaptured = false;
+}
 
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,6 +87,7 @@ function setState(state: AppState, message?: string) {
     stoppingSafetyTimer = setTimeout(() => {
       if (currentState === "stopping") {
         logger.warn("Stopping state timed out, auto-resetting state machine to idle");
+        recordingLifecycle.reset();
         setState("idle", "Ready");
       }
     }, 2500);
@@ -530,6 +539,7 @@ function setupIpcHandlers() {
 
     if (data.byteLength < 1000) {
       recordingLifecycle.reset();
+      restoreCapturedSelection();
       setState("idle", "Recording too short");
       return;
     }
@@ -557,6 +567,7 @@ function setupIpcHandlers() {
 
       if (!text || text.trim().length === 0) {
         recordingLifecycle.finishTranscription(currentSeq, true);
+        restoreCapturedSelection();
         setState("idle", "No speech detected");
         return;
       }
@@ -578,6 +589,7 @@ function setupIpcHandlers() {
       const isUndo = handleVoiceUndoCheck(text);
       if (isUndo) {
         recordingLifecycle.finishTranscription(currentSeq, true);
+        restoreCapturedSelection();
         setState("idle", "Voice undo executed");
         return;
       }
@@ -592,6 +604,7 @@ function setupIpcHandlers() {
 
       if (pasteResult.status === "submitted") {
         recordingLifecycle.finishTranscription(currentSeq, true);
+        restoreCapturedSelection();
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
         lastPastedText = text;
         lastPasteTime = Date.now();
@@ -599,12 +612,15 @@ function setupIpcHandlers() {
         setState("idle", `Dictated: "${text}"`);
       } else {
         recordingLifecycle.finishTranscription(currentSeq, false);
+        recordingLifecycle.settle();
+        restoreCapturedSelection();
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
         logger.warn({ pasteResult }, "Target window changed or paste denied - transcript saved to history");
         setState("idle", "Target changed - transcript saved to history");
       }
     } catch (err: any) {
       recordingLifecycle.finishTranscription(currentSeq, false);
+      restoreCapturedSelection();
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);
       setTimeout(() => {
@@ -754,6 +770,7 @@ async function startRecordingFlow() {
 
   const selection = await captureActiveSelection(350);
   previousClipboardContent = selection.previousClipboard;
+  selectionCaptured = selection.hasSelection;
 
   if (currentTriggerMode === "edit" && selection.hasSelection) {
     activeSelectionText = selection.selectedText;

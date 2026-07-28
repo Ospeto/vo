@@ -69,6 +69,12 @@
       "bin/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "native/pi-paste.node",
+        "to": "native/pi-paste.node"
+      }
+    ],
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "src/assets/icon.icns",
