@@ -351,7 +351,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = cleaned.replace(/(^|\n)\s*(\bbullet point\b|\bbullet\b|အချက်)\s+/gi, "$1- ");
 
   // 4. Convert spoken punctuation commands
-  cleaned = cleaned.replace(/\s*(စက်ဖြတ်|ပုဒ်မ|ပုဒ်မဖြတ်|\bfull stop\b)\s*/gi, "။ ");
+  cleaned = cleaned.replace(/\s*(စက်ဖြတ်|ပုဒ်မဖြတ်|ပုဒ်မ|\bfull stop\b)\s*/gi, "။ ");
   cleaned = cleaned.replace(/\s*(ကော်မာ|\bcomma\b)\s*/gi, ", ");
   cleaned = cleaned.replace(/\s*(ပုဒ်ဖြတ်|ပုဒ်ထီး)\s*/gi, "၊ ");
   cleaned = cleaned.replace(/\s*(မေးခွန်းသင်္ကေတ|\bquestion mark\b)\s*/gi, "? ");

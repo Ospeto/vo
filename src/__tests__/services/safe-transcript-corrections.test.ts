@@ -26,6 +26,7 @@ describe("VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post
 
     test("corrects spoken Burmese punctuation commands accurately", () => {
       expect(sanitizeTranscribedText("အကြောင်းအရာ ပုဒ်မ အဆင်ပြေပါတယ် ပုဒ်ဖြတ်")).toBe("အကြောင်းအရာ။ အဆင်ပြေပါတယ်၊");
+      expect(sanitizeTranscribedText("အကြောင်းအရာ ပုဒ်မဖြတ် နောက်တစ်ခု")).toBe("အကြောင်းအရာ။ နောက်တစ်ခု");
       expect(sanitizeTranscribedText("စက်ဖြတ် စာကြောင်း")).toBe("။ စာကြောင်း");
       expect(sanitizeTranscribedText("အဆင်ပြေလား မေးခွန်းသင်္ကေတ")).toBe("အဆင်ပြေလား?");
       expect(sanitizeTranscribedText("ဝမ်းသာပါတယ် အာမေဋိတ်")).toBe("ဝမ်းသာပါတယ်!");
