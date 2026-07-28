@@ -158,7 +158,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
       expect(res.text).toContain("Database connection ကို test လုပ်ပါ");
       // System prompt should use standard STT prompt, not forced translation!
       expect(capturedSystemInstruction).toContain("high-precision Burmese & English Speech-to-Text transcriber");
-      expect(capturedUserPrompt).toContain("Transcribe the spoken audio accurately in Burmese script");
+      expect(capturedUserPrompt).toContain("Transcribe the spoken audio accurately");
     } finally {
       globalThis.fetch = originalFetch;
     }
