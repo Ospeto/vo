@@ -293,7 +293,7 @@
 <body>
   <div id="hudCapsule" class="hud-capsule idle" role="status" aria-live="polite">
     <div id="hudIcon" class="hud-icon"></div>
-    
+
     <div class="hud-bars">
       <div class="hud-bar"></div>
       <div class="hud-bar"></div>
@@ -371,7 +371,7 @@
       const msg = payload.message || "";
 
       hudCapsule.className = "hud-capsule " + state + (hasSelection ? " has-selection" : "");
-      
+
       const isExpanded = state !== "idle" || hasSelection || Boolean(msg);
       if (isExpanded) {
         hudCapsule.classList.add("expanded");
