@@ -68,6 +68,28 @@ function isCurrentTranscription(sequenceId: number): boolean {
   return snapshot.sequenceId === sequenceId && snapshot.state === "transcribing";
 }
 
+let activeSTTAbortController: AbortController | null = null;
+
+function cancelDictation(reason: string = "Cancelled") {
+  if (currentState === "idle") return;
+
+  logger.info({ state: currentState, reason }, "Interrupting/cancelling active dictation flow");
+
+  if (activeSTTAbortController) {
+    activeSTTAbortController.abort();
+    activeSTTAbortController = null;
+  }
+
+  pasteCoordinator.invalidate();
+  recordingLifecycle.cancel();
+  restoreCapturedSelection();
+
+  captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
+
+  playUndoChime();
+  setState("idle", reason);
+}
+
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -558,6 +580,9 @@ function setupIpcHandlers() {
       return;
     }
 
+    const sttAbortController = new AbortController();
+    activeSTTAbortController = sttAbortController;
+
     try {
       setState("transcribing", "Transcribing...");
       const { text, usedPaidKey, modelUsed } = await transcribeDetailed(data, {
@@ -570,6 +595,7 @@ function setupIpcHandlers() {
         presetVocabulary: currentConfig.presetVocabulary,
         symbolScannerEnabled: currentConfig.symbolScannerEnabled,
         selectedText: activeSelectionText,
+        abortSignal: sttAbortController.signal,
       });
 
       const transcriptionSnapshot = recordingLifecycle.snapshot();
@@ -648,7 +674,16 @@ function setupIpcHandlers() {
           setState("idle");
         }
       }, 1500);
+    } finally {
+      if (activeSTTAbortController === sttAbortController) {
+        activeSTTAbortController = null;
+      }
     }
+  });
+
+  ipcMain.on(IPC.CANCEL_DICTATION, (event) => {
+    if (!validateIpcSender(event)) return;
+    cancelDictation("Cancelled via user interface");
   });
 
   ipcMain.on(IPC.RECORDING_ERROR, (event, error: string) => {
@@ -745,6 +780,11 @@ function setupIpcHandlers() {
       {
         onDown: (mode) => handleHotkeyDown(mode),
         onUp: () => handleHotkeyUp(),
+        onCancel: () => {
+          if (currentState !== "idle") {
+            cancelDictation("Cancelled via Escape key");
+          }
+        },
       },
       formatKeyBinding(currentConfig.editKey)
     );
@@ -766,6 +806,11 @@ function setupIpcHandlers() {
         {
           onDown: (mode) => handleHotkeyDown(mode),
           onUp: () => handleHotkeyUp(),
+          onCancel: () => {
+            if (currentState !== "idle") {
+              cancelDictation("Cancelled via Escape key");
+            }
+          },
         },
         currentConfig.editKey
       );
@@ -827,6 +872,12 @@ function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
 
   prewarmConnection();
 
+  if (currentState === "transcribing" || currentState === "stopping" || currentState === "starting") {
+    logger.info({ state: currentState }, "Hotkey down during active processing - cancelling dictation");
+    cancelDictation("Cancelled via hotkey");
+    return;
+  }
+
   if (currentConfig.dictationMode === "hold") {
     if (currentState === "idle" || currentState === "error") {
       startRecordingFlow();
@@ -864,6 +915,9 @@ function toggleRecordingState() {
       playToggleStopChime();
       captureWindow?.webContents.send(IPC.STOP_RECORDING);
     }
+  } else if (currentState === "transcribing" || currentState === "stopping" || currentState === "starting") {
+    logger.info({ state: currentState }, "Hotkey re-triggered during active state - cancelling dictation");
+    cancelDictation("Cancelled via hotkey");
   } else if (currentState === "idle" || currentState === "error") {
     startRecordingFlow();
   }
@@ -881,6 +935,10 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
       };
     case "show":
       togglePopover();
+      return { ok: true };
+    case "cancel":
+    case "interrupt":
+      cancelDictation("Cancelled via CLI command");
       return { ok: true };
     case "stop":
     case "shutdown":
@@ -928,6 +986,11 @@ app.whenReady().then(async () => {
     {
       onDown: (mode) => handleHotkeyDown(mode),
       onUp: () => handleHotkeyUp(),
+      onCancel: () => {
+        if (currentState !== "idle") {
+          cancelDictation("Cancelled via Escape key");
+        }
+      },
     },
     currentConfig.editKey
   );

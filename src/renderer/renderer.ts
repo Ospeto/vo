@@ -1091,4 +1091,10 @@ function hideEditHotkeyError() {
   }
 }
 
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !isRecordingHotkey && !isRecordingEditHotkey) {
+    window.electronIPC?.cancelDictation?.();
+  }
+});
+
 initUI();

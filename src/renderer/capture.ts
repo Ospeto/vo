@@ -183,6 +183,19 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   }
 });
 
+(window.electronIPC as any)?.onCancelRecording(() => {
+  try {
+    if (mediaRecorder) {
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.onstop = null;
+      if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    }
+  } catch {}
+  audioChunks = [];
+});
+
 window.electronIPC?.onStopRecording(() => {
   try {
     if (!mediaRecorder) {

@@ -62,6 +62,11 @@ export class RecordingLifecycle {
     return this.accept();
   }
 
+  /** Cancel any active recording or transcription, resetting back to idle and invalidating late events. */
+  cancel(): RecordingLifecycleResult {
+    return this.reset();
+  }
+
   settle(): RecordingLifecycleResult {
     if (this.state !== "error") return this.reject("Only an error can be settled.");
     return this.reset();

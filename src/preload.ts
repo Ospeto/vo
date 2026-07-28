@@ -9,6 +9,9 @@ const api = {
   onStopRecording: (callback: () => void) => {
     ipcRenderer.on(IPC.STOP_RECORDING, () => callback());
   },
+  onCancelRecording: (callback: () => void) => {
+    ipcRenderer.on(IPC.CANCEL_RECORDING, () => callback());
+  },
   onGainUpdate: (callback: (inputGain: number) => void) => {
     ipcRenderer.on(IPC.GAIN_UPDATE, (_event, inputGain: number) => callback(inputGain));
   },
@@ -32,6 +35,9 @@ const api = {
   },
   sendRecordingError: (error: string) => {
     ipcRenderer.send(IPC.RECORDING_ERROR, error);
+  },
+  cancelDictation: () => {
+    ipcRenderer.send(IPC.CANCEL_DICTATION);
   },
   sendAudioLevelUpdate: (payload: any) => {
     ipcRenderer.send(IPC.AUDIO_LEVEL_UPDATE, payload);
