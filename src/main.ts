@@ -63,6 +63,11 @@ function restoreCapturedSelection() {
   selectionCaptured = false;
 }
 
+function isCurrentTranscription(sequenceId: number): boolean {
+  const snapshot = recordingLifecycle.snapshot();
+  return snapshot.sequenceId === sequenceId && snapshot.state === "transcribing";
+}
+
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -565,6 +570,12 @@ function setupIpcHandlers() {
         selectedText: activeSelectionText,
       });
 
+      const transcriptionSnapshot = recordingLifecycle.snapshot();
+      if (transcriptionSnapshot.sequenceId !== currentSeq || transcriptionSnapshot.state !== "transcribing") {
+        logger.warn({ currentSeq, snapshot: transcriptionSnapshot }, "Discarding stale transcription result");
+        return;
+      }
+
       if (!text || text.trim().length === 0) {
         recordingLifecycle.finishTranscription(currentSeq, true);
         restoreCapturedSelection();
@@ -602,6 +613,11 @@ function setupIpcHandlers() {
 
       const pasteResult = await pasteCoordinator.pasteText(text);
 
+      if (!isCurrentTranscription(currentSeq)) {
+        logger.warn({ currentSeq }, "Discarding stale paste result");
+        return;
+      }
+
       if (pasteResult.status === "submitted") {
         recordingLifecycle.finishTranscription(currentSeq, true);
         restoreCapturedSelection();
@@ -619,6 +635,7 @@ function setupIpcHandlers() {
         setState("idle", "Target changed - transcript saved to history");
       }
     } catch (err: any) {
+      if (!isCurrentTranscription(currentSeq)) return;
       recordingLifecycle.finishTranscription(currentSeq, false);
       restoreCapturedSelection();
       logger.error({ err: err.message }, "Transcription failed");

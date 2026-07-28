@@ -18,6 +18,8 @@ export function resolveNativePastePath(projectRoot: string): string {
     join(projectRoot, "build", "Release", "pi_paste.node"),
     join(projectRoot, "out", "native", "pi_paste.node"),
     join(projectRoot, "resources", "native", "pi_paste.node"),
+    join(projectRoot, "native", "pi" + "-paste.node"),
+    join(projectRoot, "..", "native", "pi" + "-paste.node"),
     join(projectRoot, "native", "pi_paste.node"),
     ...(process.resourcesPath ? [join(process.resourcesPath, "native", "pi" + "-paste.node")] : []),
     ...(process.resourcesPath ? [join(process.resourcesPath, "native", "pi_paste.node")] : []),
