@@ -458,22 +458,6 @@ async function initUI() {
   await renderHistory();
   renderVocabTags();
   renderDictionaryEntries();
-  addDictionaryEntryBtn?.addEventListener("click", saveDictionaryEntry);
-  dictionaryPhraseInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      saveDictionaryEntry();
-    }
-  });
-  dictionaryAliasesInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      saveDictionaryEntry();
-    }
-  });
-  dictionaryPhraseInput?.addEventListener("input", () => showDictionaryError(""));
-  dictionaryAliasesInput?.addEventListener("input", () => showDictionaryError(""));
-  dictionaryPreviewInput?.addEventListener("input", renderDictionaryPreview);
 }
 
 function showDictionaryMessage(message = "", isError = true) {
@@ -1019,6 +1003,28 @@ vocabInput?.addEventListener("keydown", (e) => {
     addVocabTerm(modalPresetSelect.value, vocabInput.value);
   }
 });
+
+addDictionaryEntryBtn?.addEventListener("click", () => {
+  saveDictionaryEntry();
+});
+
+dictionaryPhraseInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveDictionaryEntry();
+  }
+});
+
+dictionaryAliasesInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveDictionaryEntry();
+  }
+});
+
+dictionaryPhraseInput?.addEventListener("input", () => showDictionaryError(""));
+dictionaryAliasesInput?.addEventListener("input", () => showDictionaryError(""));
+dictionaryPreviewInput?.addEventListener("input", renderDictionaryPreview);
 
 const testApiKeyBtn = document.getElementById("testApiKeyBtn") as HTMLButtonElement;
 
