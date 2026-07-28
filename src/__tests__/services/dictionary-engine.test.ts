@@ -24,6 +24,14 @@ describe("DictionaryEngine", () => {
     expect(engine.process("သူကစာရေးကောင်းပါ")).toBe("သူကSarYayKaungပါ");
   });
 
+  test("preserves legacy whitespace matching while honoring enabled state", () => {
+    const enabled = entry("mas", "MAS 141", ["မက်စ် ၁၄၁"], true);
+    enabled.legacyWhitespace = true;
+    const disabled = { ...enabled, enabled: false };
+    expect(new DictionaryEngine([enabled]).process("မက်စ်\u2003\u2003၁၄၁")).toBe("MAS 141");
+    expect(new DictionaryEngine([disabled]).process("မက်စ်\u2003\u2003၁၄၁")).toBe("မက်စ်\u2003\u2003၁၄၁");
+  });
+
   test("disabled entries do nothing and conflicts are surfaced", () => {
     expect(new DictionaryEngine([entry("off", "CAT", ["cat"], false)]).process("cat")).toBe("cat");
     expect(validateDictionaryEntries([entry("a", "A", ["spoken"]), entry("b", "B", ["SPOKEN"])]).length).toBe(1);

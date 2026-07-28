@@ -3,6 +3,7 @@ export interface DictionaryEntry {
   phrase: string;
   spokenAliases: string[];
   enabled: boolean;
+  legacyWhitespace?: boolean;
 }
 
 /** Application state machine */

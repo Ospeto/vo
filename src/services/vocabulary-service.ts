@@ -52,41 +52,7 @@ export function dictionaryEntryFromTerm(raw: string): DictionaryEntry | null {
 }
 
 function seededEntries(): DictionaryEntry[] {
-  return TRUSTED_SEEDS.map(([phrase, aliases]) => ({ id: stableId(phrase, aliases), phrase, spokenAliases: aliases, enabled: true }));
-}
-
-function isWhitespace(char: string): boolean {
-  return char.trim() === "";
-}
-
-export function applyLegacyWhitespaceCorrections(text: string): string {
-  let result = text;
-  for (const [phrase, aliases] of TRUSTED_SEEDS) {
-    const alias = aliases.find((value) => value.includes(" "));
-    if (!alias) continue;
-    const [left, right] = alias.split(" ");
-    if (!left || !right) continue;
-    let output = "";
-    let index = 0;
-    while (index < result.length) {
-      if (!result.startsWith(left, index)) {
-        output += result[index];
-        index += 1;
-        continue;
-      }
-      let end = index + left.length;
-      while (end < result.length && isWhitespace(result[end]!)) end += 1;
-      if (!result.startsWith(right, end)) {
-        output += result[index];
-        index += 1;
-        continue;
-      }
-      output += phrase;
-      index = end + right.length;
-    }
-    result = output;
-  }
-  return result;
+  return TRUSTED_SEEDS.map(([phrase, aliases]) => ({ id: stableId(phrase, aliases), phrase, spokenAliases: aliases, enabled: true, legacyWhitespace: true }));
 }
 
 function mergeEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
@@ -100,7 +66,7 @@ function mergeEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
     if (existing) {
       existing.spokenAliases = Array.from(new Set([...existing.spokenAliases, ...aliases, phrase]));
     } else {
-      merged.push({ id: raw.id || stableId(phrase, aliases), phrase, spokenAliases: Array.from(new Set([...aliases, phrase])), enabled: raw.enabled !== false });
+      merged.push({ id: raw.id || stableId(phrase, aliases), phrase, spokenAliases: Array.from(new Set([...aliases, phrase])), enabled: raw.enabled !== false, ...(raw.legacyWhitespace ? { legacyWhitespace: true } : {}) });
     }
   }
   return merged;

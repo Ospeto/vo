@@ -12,12 +12,17 @@ interface Candidate {
   entryId: string;
   order: number;
   boundary: boolean;
+  legacyWhitespace: boolean;
 }
 
 const LATIN_BOUNDARY = "A-Za-z0-9_";
 
 function normalizeAlias(value: string): string {
   return value.trim().normalize("NFKC").toLocaleLowerCase();
+}
+
+function normalizeLegacyAlias(value: string): string {
+  return normalizeAlias(value).replace(/\s+/g, " ");
 }
 
 function escapeRegExp(value: string): string {
@@ -42,6 +47,7 @@ export class DictionaryEngine {
           entryId: entry.id,
           order: entryIndex * 100000 + aliasIndex,
           boundary: /[A-Za-z0-9_]/.test(value),
+          legacyWhitespace: entry.legacyWhitespace === true,
         });
       });
     });
@@ -54,7 +60,9 @@ export class DictionaryEngine {
     }
 
     const alternatives = candidates.map((candidate) => {
-      const escaped = escapeRegExp(candidate.alias);
+      const escaped = candidate.legacyWhitespace
+        ? candidate.alias.split(/\s+/).filter(Boolean).map(escapeRegExp).join("\\s*")
+        : escapeRegExp(candidate.alias);
       return candidate.boundary
         ? `(?<![${LATIN_BOUNDARY}])${escaped}(?![${LATIN_BOUNDARY}])`
         : escaped;
@@ -65,8 +73,9 @@ export class DictionaryEngine {
   process(text: string): string {
     if (!text || !this.matcher) return text;
     return text.replace(this.matcher, (match) => {
-      const normalized = normalizeAlias(match);
-      const candidate = this.candidates.find((item) => normalizeAlias(item.alias) === normalized);
+      const candidate = this.candidates.find((item) => item.legacyWhitespace
+        ? normalizeLegacyAlias(item.alias) === normalizeLegacyAlias(match)
+        : normalizeAlias(item.alias) === normalizeAlias(match));
       return candidate?.phrase ?? match;
     });
   }
