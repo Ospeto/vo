@@ -396,52 +396,148 @@ function migrateLegacyHintEntries(terms: string[]): DictionaryEntry[] {
   return terms.map((term) => dictionaryEntryFromTerm(term)).filter((entry): entry is DictionaryEntry => Boolean(entry));
 }
 
-export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
-  const active = entries.filter(
-    (entry) => entry.enabled !== false && entry.phrase.trim()
+export const MAX_HINT_ENTRIES = 50;
+export const MAX_HINT_TERMS = 200;
+
+/**
+ * Prepares a bounded, deduplicated list of enabled trusted dictionary entries
+ * with conflicting aliases excluded, suitable for soft recognition hints.
+ */
+export function prepareHintEntries(
+  entries: DictionaryEntry[],
+  maxEntries: number = MAX_HINT_ENTRIES,
+  maxTerms: number = MAX_HINT_TERMS
+): DictionaryEntry[] {
+  const entryLimit = Math.max(0, Math.floor(maxEntries));
+  const termLimit = Math.max(0, Math.floor(maxTerms));
+  if (!entries || entries.length === 0 || entryLimit === 0 || termLimit === 0) return [];
+
+  // 1. Filter enabled entries with non-empty canonical phrase
+  const enabled = entries.filter(
+    (e) => e.enabled !== false && typeof e.phrase === "string" && e.phrase.trim().length > 0
   );
-  if (active.length === 0) return "";
-  const lines = active.map((entry) => {
+  if (enabled.length === 0) return [];
+
+  // 2. Identify conflicting aliases (alias mapping to multiple distinct canonical phrases)
+  const aliasToPhrases = new Map<string, Set<string>>();
+  for (const entry of enabled) {
+    const normPhrase = entry.phrase.trim().normalize("NFKC").toLocaleLowerCase();
+    const aliases = [entry.phrase, ...(entry.spokenAliases || [])];
+    for (const rawAlias of aliases) {
+      if (typeof rawAlias !== "string") continue;
+      const alias = rawAlias.trim();
+      if (!alias) continue;
+      const normAlias = alias.normalize("NFKC").toLocaleLowerCase();
+      let phrases = aliasToPhrases.get(normAlias);
+      if (!phrases) {
+        phrases = new Set();
+        aliasToPhrases.set(normAlias, phrases);
+      }
+      phrases.add(normPhrase);
+    }
+  }
+
+  const conflictingAliases = new Set<string>();
+  for (const [normAlias, phrases] of aliasToPhrases.entries()) {
+    if (phrases.size > 1) {
+      conflictingAliases.add(normAlias);
+    }
+  }
+
+  // 3. Build deduplicated entry list without conflicting aliases
+  const prepared: DictionaryEntry[] = [];
+  const seenPhrases = new Set<string>();
+  let termCount = 0;
+
+  for (const entry of enabled) {
+    const phrase = entry.phrase.trim();
+    const normPhrase = phrase.normalize("NFKC").toLocaleLowerCase();
+
+    const rawAliases = Array.isArray(entry.spokenAliases) ? entry.spokenAliases : [];
+    const validAliases: string[] = [];
+    const seenAliasNorms = new Set<string>();
+
+    for (const rawAlias of [phrase, ...rawAliases]) {
+      if (typeof rawAlias !== "string") continue;
+      const alias = rawAlias.trim();
+      if (!alias) continue;
+      const normAlias = alias.normalize("NFKC").toLocaleLowerCase();
+      if (conflictingAliases.has(normAlias)) continue;
+      if (!seenAliasNorms.has(normAlias)) {
+        seenAliasNorms.add(normAlias);
+        validAliases.push(alias);
+      }
+    }
+
+    if (seenPhrases.has(normPhrase)) {
+      const existing = prepared.find(
+        (e) => e.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase
+      );
+      if (existing) {
+        for (const alias of validAliases) {
+          const normAlias = alias.normalize("NFKC").toLocaleLowerCase();
+          if (!existing.spokenAliases.some((a) => a.normalize("NFKC").toLocaleLowerCase() === normAlias)) {
+            if (termCount >= termLimit) break;
+            existing.spokenAliases.push(alias);
+            termCount += 1;
+          }
+        }
+      }
+    } else {
+      const boundedAliases = validAliases.slice(0, termLimit - termCount);
+      if (boundedAliases.length === 0) break;
+      seenPhrases.add(normPhrase);
+      termCount += boundedAliases.length;
+      prepared.push({
+        id: entry.id,
+        phrase,
+        spokenAliases: boundedAliases.filter((a) => a.normalize("NFKC").toLocaleLowerCase() !== normPhrase),
+        enabled: true,
+        category: entry.category,
+        ...(entry.legacyWhitespace ? { legacyWhitespace: true } : {}),
+      });
+    }
+
+    if (prepared.length >= entryLimit || termCount >= termLimit) {
+      break;
+    }
+  }
+
+  return prepared;
+}
+
+export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
+  const prepared = prepareHintEntries(entries, MAX_HINT_ENTRIES);
+  if (prepared.length === 0) return "";
+
+  const lines = prepared.map((entry) => {
     const aliases = Array.from(new Set([entry.phrase, ...entry.spokenAliases].map((s) => s.trim()).filter(Boolean)));
-    return `- Spoken sound/word "${aliases.join('" or "')}" ➔ Output exact preferred spelling: "${entry.phrase}"`;
+    if (aliases.length > 1) {
+      return `- Spoken sound/word "${aliases.join('" or "')}" ➔ Preferred spelling: "${entry.phrase}"`;
+    }
+    return `- Preferred spelling: "${entry.phrase}"`;
   });
-  return `\nSTRICT DICTIONARY REPLACEMENT RULES (CRITICAL):\nWhen the speaker says any of these words or sounds, output the exact preferred spelling:\n${lines.join("\n")}\n`;
+
+  return `\nRECOGNITION VOCABULARY HINTS (soft guidance only; use only when supported by audio):\nWhen the speaker says any of these words or sounds, prefer these exact canonical spellings:\n${lines.join("\n")}\n`;
 }
 
 export function buildCustomVocabularyPromptPart(terms: string[]): string {
   if (!terms || terms.length === 0) return "";
+  const entries = migrateLegacyHintEntries(terms);
+  return buildDictionaryPromptPart(entries);
+}
 
-  const mappings: string[] = [];
-  const plainTerms: string[] = [];
-
-  for (const raw of terms) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-
-    if (trimmed.includes(" - ")) {
-      const [eng, bur] = trimmed.split(" - ").map((s) => s.trim());
-      if (eng && bur) {
-        mappings.push(`- Spoken sound/name "${eng}" or "${bur}" ➔ Output exact spelling: "${bur}"`);
-      }
-    } else if (trimmed.includes(" (") && trimmed.endsWith(")")) {
-      const bur = trimmed.split(" (")[0]?.trim();
-      const eng = trimmed.split(" (")[1]?.slice(0, -1).trim();
-      if (bur && eng) {
-        mappings.push(`- Spoken sound/name "${bur}" or "${eng}" ➔ Output exact spelling: "${bur}"`);
-      }
-    } else {
-      plainTerms.push(trimmed);
+export function buildOpenAIVocabularyPrompt(entries: DictionaryEntry[]): string {
+  const prepared = prepareHintEntries(entries, 30);
+  if (prepared.length === 0) return "";
+  const terms: string[] = [];
+  for (const entry of prepared) {
+    terms.push(entry.phrase);
+    for (const alias of entry.spokenAliases) {
+      terms.push(alias);
     }
   }
-
-  let result = "\nDICTIONARY HINTS (soft help only; use only when supported by the audio):\n";
-  if (mappings.length > 0) {
-    result += `POSSIBLE PHONETIC MAPPINGS:\n${mappings.join("\n")}\n`;
-  }
-  if (plainTerms.length > 0) {
-    result += `POSSIBLE TARGET SPELLINGS: ${plainTerms.join(", ")}\n`;
-  }
-  return result;
+  return Array.from(new Set(terms)).join(", ");
 }
 
 export interface TranscribeOptions {
@@ -537,11 +633,8 @@ async function transcribeGemini(
   const hintEntries = dictionaryEntries.length > 0
     ? dictionaryEntries
     : migrateLegacyHintEntries([...diskTerms, ...(customVocabulary || []), ...presetTerms]);
-  const allCustomTerms = Array.from(new Set([...diskTerms, ...(customVocabulary || []), ...presetTerms].map((term) => term.trim()).filter(Boolean)));
 
-  const dictPromptPart = dictionaryEntries.length > 0
-    ? buildDictionaryPromptPart(hintEntries)
-    : buildCustomVocabularyPromptPart(allCustomTerms);
+  const dictPromptPart = buildDictionaryPromptPart(hintEntries);
 
   let workspacePromptPart = "";
   if (symbolScannerEnabled !== false) {
@@ -726,7 +819,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
         }
       }
 
-      logger.info({ model, preferredModel, activeApp, customTermsCount: allCustomTerms.length, dictationPreset, text, byteLength: audioBuffer.length, usedPaidKey: winner.usedPaidKey }, "Gemini STT transcribed successfully");
+      logger.info({ model, preferredModel, activeApp, customTermsCount: hintEntries.length, dictationPreset, text, byteLength: audioBuffer.length, usedPaidKey: winner.usedPaidKey }, "Gemini STT transcribed successfully");
       return { rawText: text, activeApp, usedPaidKey: winner.usedPaidKey };
     } catch (err: any) {
       logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Model attempt failed, moving to next candidate");
@@ -736,7 +829,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
   throw new Error("All Gemini STT models failed to transcribe audio");
 }
 
-async function transcribeOpenAI(audioBuffer: Buffer, abortSignal?: AbortSignal): Promise<string> {
+async function transcribeOpenAI(audioBuffer: Buffer, promptText?: string, abortSignal?: AbortSignal): Promise<string> {
   if (abortSignal?.aborted) throw new Error("Transcription aborted");
   const client = getOpenAIClient();
 
@@ -745,6 +838,7 @@ async function transcribeOpenAI(audioBuffer: Buffer, abortSignal?: AbortSignal):
     {
       model: "gpt-4o-mini-transcribe",
       file,
+      ...(promptText ? { prompt: promptText } : {}),
     },
     { signal: abortSignal }
   );
@@ -840,10 +934,12 @@ export async function transcribeDetailed(
     case "local":
       rawText = await transcribeLocal(audioData, abortSignal);
       break;
-    case "openai":
-      rawText = await transcribeOpenAI(Buffer.from(audioData), abortSignal);
+    case "openai": {
+      const openaiPrompt = buildOpenAIVocabularyPrompt(dictionaryEntries);
+      rawText = await transcribeOpenAI(Buffer.from(audioData), openaiPrompt, abortSignal);
       usedPaidKey = true;
       break;
+    }
     case "elevenlabs":
       rawText = await transcribeElevenLabs(Buffer.from(audioData), abortSignal);
       usedPaidKey = true;
