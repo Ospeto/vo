@@ -492,7 +492,7 @@ async function transcribeGemini(
   symbolScannerEnabled: boolean = true,
   workspacePath?: string,
   translateEnabled?: boolean,
-  targetLanguage: string = "English",
+  targetLanguage?: string,
   selectedText?: string,
   abortSignal?: AbortSignal
 ): Promise<{ rawText: string; activeApp: string; usedPaidKey?: boolean }> {
@@ -506,20 +506,27 @@ async function transcribeGemini(
   const appContextHint = getAppContextPromptHint(activeApp);
 
   let appMappings: Record<string, DictationPreset> | undefined;
-  let isTranslationActive = translateEnabled ?? false;
+  let isTranslationActive = translateEnabled;
   let resolvedTargetLang = targetLanguage;
 
-  try {
-    const { loadConfig } = await import("./config.js");
-    const cfg = loadConfig();
-    appMappings = cfg.appPresetMappings;
-    if (translateEnabled === undefined) {
-      isTranslationActive = cfg.translateEnabled ?? false;
-    }
-    if (!targetLanguage || targetLanguage === "English") {
-      resolvedTargetLang = cfg.targetLanguage ?? "English";
-    }
-  } catch {}
+  if (isTranslationActive === undefined || !resolvedTargetLang) {
+    try {
+      const { loadConfig } = await import("./config.js");
+      const cfg = loadConfig();
+      if (appMappings === undefined) {
+        appMappings = cfg.appPresetMappings;
+      }
+      if (isTranslationActive === undefined) {
+        isTranslationActive = cfg.translateEnabled ?? false;
+      }
+      if (!resolvedTargetLang) {
+        resolvedTargetLang = cfg.targetLanguage || "English";
+      }
+    } catch {}
+  }
+  if (!resolvedTargetLang) {
+    resolvedTargetLang = "English";
+  }
 
   const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp, appMappings);
   const presetHint = getPresetPromptInstructions(effectivePreset);
@@ -696,7 +703,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       let text = winner.text;
 
       // Bulletproof Fallback: If Code preset was requested AND translation is active, but non-editing response contains Burmese script, run fast text translation
-      const isTranslationRequested = isTranslationActive || effectivePreset === "translate";
+      const isTranslationRequested = isTranslationActive === true;
       if (isCodePreset && isTranslationRequested && !hasSelectedText && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
         if (!abortSignal?.aborted) {
           logger.info({ model, rawTextWithBurmese: text }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
@@ -821,7 +828,7 @@ export async function transcribeDetailed(
   const symbolScannerEnabled = typeof providerOrOptions === "object" ? providerOrOptions.symbolScannerEnabled ?? true : true;
   const workspacePath = typeof providerOrOptions === "object" ? providerOrOptions.workspacePath : undefined;
   const translateEnabled = typeof providerOrOptions === "object" ? providerOrOptions.translateEnabled : undefined;
-  const targetLanguage = typeof providerOrOptions === "object" ? (providerOrOptions.targetLanguage ?? "English") : "English";
+  const targetLanguage = typeof providerOrOptions === "object" ? providerOrOptions.targetLanguage : undefined;
   const selectedText = typeof providerOrOptions === "object" ? providerOrOptions.selectedText : undefined;
   const abortSignal = typeof providerOrOptions === "object" ? providerOrOptions.abortSignal : undefined;
   const persistedVocabulary = loadPersistedVocabulary();
