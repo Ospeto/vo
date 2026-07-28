@@ -335,13 +335,13 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
     cleaned = cleaned.replace(/^(task:|တာဝန်:)\s*/i, "- [ ] ");
   }
 
-  // 10. Convert spoken code block command ("code: <text>" -> ```\n<text>\n```)
+  // 9. Convert spoken code block command ("code: <text>" -> ```\n<text>\n```)
   if (/^(code:|အကုဒ်:)\s*/i.test(cleaned)) {
     const codeBody = cleaned.replace(/^(code:|အကုဒ်:)\s*/i, "").trim();
     cleaned = "```\n" + codeBody + "\n```";
   }
 
-  // 11. Terminal / CLI Punctuation Sanitizer:
+  // 10. Terminal / CLI Punctuation Sanitizer:
   if (activeApp) {
     const lowerApp = activeApp.toLowerCase();
     if (
@@ -355,12 +355,12 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
     }
   }
 
-  // 12. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
+  // 11. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
   if (!/^(https?:\/\/|ftp:\/\/|git@)/i.test(cleaned)) {
     cleaned = cleaned.replace(/(^|[။\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase());
   }
 
-  // 13. Fix spacing around Burmese full stop (။)
+  // 12. Fix spacing around Burmese full stop (။)
   cleaned = cleaned.replace(/။([^\s\n])/g, "။ $1");
   cleaned = cleaned.replace(/\s+။/g, "။");
 
