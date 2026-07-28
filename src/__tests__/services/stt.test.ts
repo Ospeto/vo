@@ -294,4 +294,82 @@ describe("transcribe", () => {
 
     mockFallbackGenerateContent = null;
   });
+
+  describe("Editing mode & Translation Fallback Ownership Boundaries", () => {
+    test("preserves Burmese translation output during editing mode without executing English text translation fallback", async () => {
+      const { transcribeDetailed } = await import("../../services/stt.js");
+      mockGenerateContent.mockImplementationOnce(async () => ({
+        text: "မင်္ဂလာပါ ကမ္ဘာလောက",
+      }));
+
+      const data = new ArrayBuffer(10);
+      const res = await transcribeDetailed(data, {
+        provider: "gemini",
+        dictationPreset: "code_comment",
+        translateEnabled: false,
+        selectedText: "Hello world",
+      });
+
+      expect(res.text).toBe("မင်္ဂလာပါ ကမ္ဘာလောက");
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    });
+
+    test("preserves Burmese dictation in code preset when translation is not enabled", async () => {
+      const { transcribeDetailed } = await import("../../services/stt.js");
+      mockGenerateContent.mockImplementationOnce(async () => ({
+        text: "ဒီ function ကို refactor လုပ်မယ်",
+      }));
+
+      const data = new ArrayBuffer(10);
+      const res = await transcribeDetailed(data, {
+        provider: "gemini",
+        dictationPreset: "code_comment",
+        translateEnabled: false,
+      });
+
+      expect(res.text).toBe("ဒီ function ကို refactor လုပ်မယ်");
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    });
+
+    test("executes English text translation fallback in non-editing code preset when translation is enabled and Burmese text returned", async () => {
+      const { transcribeDetailed } = await import("../../services/stt.js");
+      mockGenerateContent
+        .mockImplementationOnce(async () => ({
+          text: "ဒီ function ကို refactor လုပ်မယ်",
+        }))
+        .mockImplementationOnce(async () => ({
+          text: "Refactor this function",
+        }));
+
+      const data = new ArrayBuffer(10);
+      const res = await transcribeDetailed(data, {
+        provider: "gemini",
+        dictationPreset: "code_comment",
+        translateEnabled: true,
+      });
+
+      expect(res.text).toBe("Refactor this function");
+      expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+    });
+
+    test("skips secondary text translation fallback when abortSignal is aborted", async () => {
+      const { transcribeDetailed } = await import("../../services/stt.js");
+      const controller = new AbortController();
+      mockGenerateContent.mockImplementationOnce(async () => {
+        controller.abort();
+        return { text: "မင်္ဂလာပါ" };
+      });
+
+      const data = new ArrayBuffer(10);
+      const res = await transcribeDetailed(data, {
+        provider: "gemini",
+        dictationPreset: "code_comment",
+        translateEnabled: true,
+        abortSignal: controller.signal,
+      });
+
+      expect(res.text).toBe("မင်္ဂလာပါ");
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -685,24 +685,27 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       }
       let text = winner.text;
 
-      // Bulletproof Fallback: If Code preset was requested but response contains Burmese script, run fast text translation
-      if (isCodePreset && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
-        logger.info({ model, rawTextWithBurmese: text }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
-        try {
-          const translateRes = await client.models.generateContent({
-            model: "gemini-3.1-flash-lite",
-            contents: `You are a Senior Software Engineer. Translate the following Burmese dictation into a clean, precise English technical specification for an AI coding assistant. Output ONLY pure English text without any Burmese script:\n\n${text}`,
-            config: {
-              temperature: 0.0,
-              abortSignal,
-            },
-          });
-          const translatedText = translateRes.text?.trim();
-          if (translatedText && !/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(translatedText)) {
-            text = translatedText;
+      // Bulletproof Fallback: If Code preset was requested AND translation is active, but non-editing response contains Burmese script, run fast text translation
+      const isTranslationRequested = isTranslationActive || effectivePreset === "translate";
+      if (isCodePreset && isTranslationRequested && !hasSelectedText && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
+        if (!abortSignal?.aborted) {
+          logger.info({ model, rawTextWithBurmese: text }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
+          try {
+            const translateRes = await client.models.generateContent({
+              model: "gemini-3.1-flash-lite",
+              contents: `You are a Senior Software Engineer. Translate the following Burmese dictation into a clean, precise English technical specification for an AI coding assistant. Output ONLY pure English text without any Burmese script:\n\n${text}`,
+              config: {
+                temperature: 0.0,
+                abortSignal,
+              },
+            });
+            const translatedText = translateRes.text?.trim();
+            if (translatedText && !/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(translatedText)) {
+              text = translatedText;
+            }
+          } catch (translateErr: any) {
+            logger.warn({ err: translateErr?.message || String(translateErr) }, "Text translation fallback failed");
           }
-        } catch (translateErr: any) {
-          logger.warn({ err: translateErr?.message || String(translateErr) }, "Text translation fallback failed");
         }
       }
 
