@@ -11,12 +11,16 @@ The system SHALL attempt to capture any highlighted text selection in the active
 - **WHEN** no text is highlighted and user triggers recording start
 - **THEN** the system SHALL proceed with standard dictation mode
 
+#### Scenario: Selection capture is cancelled or times out
+- **WHEN** capture is cancelled, the copy command fails, or the polling window expires without a changed clipboard text
+- **THEN** the system SHALL clean up the copy process, restore the prior clipboard snapshot including available formats, and proceed without a leaked sentinel or selection
+
 ### Requirement: Contextual Voice Selection Transformation Prompting
 The system SHALL construct a specialized prompt combining the captured selection text and spoken audio instruction.
 
 #### Scenario: Processing selection transformation instruction
 - **WHEN** audio transcription completes in selection mode
-- **THEN** Gemini 3.1 Flash Lite SHALL process the spoken instruction relative to the selection text and return only the replacement text
+- **THEN** Gemini 3.1 Flash Lite SHALL process the spoken instruction relative to delimiter-safe `<selected_text>` content, preserve the resolved target-language and translation settings, and return only the replacement text
 
 ### Requirement: In-Place Text Replacement
 The system SHALL replace the active selection with transformed text via clipboard injection.

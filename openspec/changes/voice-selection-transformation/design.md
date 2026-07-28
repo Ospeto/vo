@@ -19,19 +19,17 @@ To enable Voice Selection Transformation, `vo.app` needs to detect whether the u
 ## Decisions
 
 ### 1. Selected Text Detection Strategy
-- **Choice**: Execute a rapid clipboard copy (`cmd+c` simulation or `clipboard.readText()`) upon hotkey press. Compare text before and after. If new text is captured, store it as `activeSelection`. Restore original clipboard after operation.
+- **Choice**: Snapshot the clipboard through the shared `ClipboardPort`, including standard and custom formats, write a sentinel, then issue `cmd+c` through an `osascript` child process. Poll the clipboard text every 20ms until it changes, the bounded timeout expires, or capture is cancelled. Kill the child process and restore the full snapshot on non-selection paths.
 - **Alternative Considered**: macOS Accessibility API (`AXUIElementCopyAttributeValue` for `kAXSelectedTextAttribute`).
 - **Rationale**: Clipboard copy works reliably across 99% of macOS Electron, Native Cocoa, Web, and Terminal apps without demanding elevated Accessibility API entitlements.
 
 ### 2. Dual-Mode STT Routing
-- **Choice**: If `activeSelection` is present:
-  - System Prompt: `You are an AI Text Editor and Transformation Assistant. Perform the spoken instruction on the provided Selected Text. Output ONLY the transformed replacement text without wrapping quotes or commentary.`
-  - Content Payload: `[Selected Text]: "${activeSelection}" \n [Spoken Instruction]: (audio input)`
+- **Choice**: If `activeSelection` is present, include it between delimiter-safe `<selected_text>` tags (escaping embedded closing tags). Preserve the resolved target-language directive and translation-mode setting in the specialized edit prompt, and return only the transformed replacement text.
 - **Rationale**: Clear separation prevents Gemini from outputting conversational chatter.
 
 ## Risks / Trade-offs
 
-- **[Risk] Clipboard Overwrite**: Copying selected text alters user's clipboard temporarily.
-  - *Mitigation*: Save existing clipboard content before copy, and restore original content after paste completes.
-- **[Risk] Slow Selection Copy**: In laggy apps, `cmd+c` might take >50ms.
-  - *Mitigation*: Set a strict 50ms timeout for selection copy; if it times out, proceed seamlessly to standard dictation.
+- **[Risk] Clipboard Overwrite**: Copying selected text alters the user's clipboard temporarily.
+  - *Mitigation*: Save the complete format-preserving snapshot before copy, and restore it after capture or cancellation.
+- **[Risk] Slow or cancelled Selection Copy**: The foreground application or the user may prevent capture from completing.
+  - *Mitigation*: Poll for up to the bounded capture window, cancel through `AbortSignal`, clean up the `osascript` child process, and fall back to standard dictation without hiding errors from later recording/transcription states.

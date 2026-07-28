@@ -1,7 +1,7 @@
 ## 1. Selection Capture Service
 
 - [x] 1.1 Implement active text selection capture function using clipboard copy and restore in `src/services/selection-service.ts`
-- [x] 1.2 Add timeout-guarded text selection detection on hotkey press in `src/services/recording-lifecycle.ts`
+- [x] 1.2 Add cancellable, polling-based text selection detection on hotkey press in `src/services/selection-service.ts` and wire cancellation from `src/main.ts`
 
 ## 2. Gemini Selection Transformation STT Engine
 
