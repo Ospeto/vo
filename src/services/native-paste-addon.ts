@@ -9,6 +9,7 @@ export type NativePasteAddon = {
   capture(): NativePasteCapture;
   authorize(target: NativePasteTarget): { ok: true } | NativePasteFailure;
   inject(target: NativePasteTarget, options?: { dryRun?: boolean }): { ok: true; reason: "injection_requested" } | NativePasteFailure;
+  writeClipboardBuffer?(format: string, data: Buffer): boolean;
   selfCheck(): boolean;
   smokeFixture?(): NativePasteTarget;
 };

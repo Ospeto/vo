@@ -122,6 +122,22 @@ static napi_value inject(napi_env env, napi_callback_info info) {
     napi_value result; napi_create_object(env, &result); napi_value ok; napi_get_boolean(env, true, &ok); napi_set_named_property(env, result, "ok", ok); napi_set_named_property(env, result, "reason", string_value(env, "injection_requested")); return result;
 }
 
+static napi_value write_clipboard_buffer(napi_env env, napi_callback_info info) {
+    size_t argc = 2; napi_value argv[2];
+    napi_get_cb_info(env, info, &argc, argv, NULL, NULL);
+    if (argc != 2) { napi_value result; napi_get_boolean(env, false, &result); return result; }
+    char format[1024] = {0}; size_t formatLength = 0;
+    void *data = NULL; size_t dataLength = 0;
+    if (napi_get_value_string_utf8(env, argv[0], format, sizeof(format), &formatLength) != napi_ok ||
+        napi_get_buffer_info(env, argv[1], &data, &dataLength) != napi_ok || formatLength == 0) {
+        napi_value result; napi_get_boolean(env, false, &result); return result;
+    }
+    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+    NSData *payload = [NSData dataWithBytes:data length:dataLength];
+    BOOL written = [pasteboard setData:payload forType:[NSString stringWithUTF8String:format]];
+    napi_value result; napi_get_boolean(env, written, &result); return result;
+}
+
 static napi_value self_check(napi_env env, napi_callback_info info) { napi_value result; napi_get_boolean(env, true, &result); return result; }
 
 #ifdef PI_PASTE_TEST_MODE
@@ -139,14 +155,16 @@ static napi_value smoke_fixture(napi_env env, napi_callback_info info) {
 #endif
 
 NAPI_MODULE_INIT() {
-    napi_value captureFn, authorizeFn, injectFn, checkFn;
+    napi_value captureFn, authorizeFn, injectFn, writeBufferFn, checkFn;
     napi_create_function(env, "capture", NAPI_AUTO_LENGTH, capture, NULL, &captureFn);
     napi_create_function(env, "authorize", NAPI_AUTO_LENGTH, authorize, NULL, &authorizeFn);
     napi_create_function(env, "inject", NAPI_AUTO_LENGTH, inject, NULL, &injectFn);
+    napi_create_function(env, "writeClipboardBuffer", NAPI_AUTO_LENGTH, write_clipboard_buffer, NULL, &writeBufferFn);
     napi_create_function(env, "selfCheck", NAPI_AUTO_LENGTH, self_check, NULL, &checkFn);
     napi_set_named_property(env, exports, "capture", captureFn);
     napi_set_named_property(env, exports, "authorize", authorizeFn);
     napi_set_named_property(env, exports, "inject", injectFn);
+    napi_set_named_property(env, exports, "writeClipboardBuffer", writeBufferFn);
     napi_set_named_property(env, exports, "selfCheck", checkFn);
 #ifdef PI_PASTE_TEST_MODE
     napi_value fixtureFn;

@@ -7,12 +7,12 @@ import {
   type ClipboardSnapshot,
 } from "./safe-paste.js";
 
-function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
+export function createElectronClipboardAdapter(writeBuffer?: ClipboardAdapter<any>["writeBuffer"]): ClipboardAdapter<any> | null {
   try {
     const electron = require("electron");
     const clip = electron.clipboard || electron.default?.clipboard || null;
     if (!clip) return null;
-    const hasCustomBufferSupport = typeof clip.writeBuffer === "function";
+    const hasCustomBufferSupport = typeof writeBuffer === "function";
     return {
       readText: () => clip.readText(),
       writeText: (text) => clip.writeText(text),
@@ -23,12 +23,18 @@ function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
       readImage: () => clip.readImage?.(),
       availableFormats: () => clip.availableFormats?.() || [],
       readBuffer: (format) => clip.readBuffer?.(format) || Buffer.alloc(0),
-      writeBuffer: hasCustomBufferSupport ? (format, data) => clip.writeBuffer(format, data) : undefined,
+      writeBuffer: writeBuffer ? (format, data) => {
+        if (writeBuffer(format, data) === false) throw new Error("Native clipboard buffer write failed");
+      } : undefined,
       writeBufferIsAdditive: hasCustomBufferSupport,
     };
   } catch {
     return null;
   }
+}
+
+function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
+  return createElectronClipboardAdapter();
 }
 
 export function getClipboardPort(overrideAdapter?: ClipboardAdapter<any> | ClipboardPort<any> | null): ClipboardPort<any> | null {
