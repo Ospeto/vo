@@ -27,6 +27,18 @@ describe("RecordingLifecycle", () => {
     });
   });
 
+  test("accepts recorder data as an implicit stop", () => {
+    const lifecycle = new RecordingLifecycle();
+    const start = lifecycle.requestStart();
+    lifecycle.acknowledgeStart(start.sequenceId, true);
+
+    expect(lifecycle.acknowledgeStop(start.sequenceId, true)).toMatchObject({
+      accepted: true,
+      state: "transcribing",
+      sequenceId: start.sequenceId,
+    });
+  });
+
   test("rejects requests in transient and error states", () => {
     const lifecycle = new RecordingLifecycle();
     const start = lifecycle.requestStart();

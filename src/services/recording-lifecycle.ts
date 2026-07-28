@@ -41,7 +41,9 @@ export class RecordingLifecycle {
   }
 
   acknowledgeStop(sequenceId: number, success: boolean): RecordingLifecycleResult {
-    if (!this.matches(sequenceId, "stopping")) return this.reject("Stale stop acknowledgement.");
+    if (this.sequenceId !== sequenceId || (this.state !== "recording" && this.state !== "stopping")) {
+      return this.reject("Stale stop acknowledgement.");
+    }
     this.state = success ? "transcribing" : "error";
     return this.accept();
   }
