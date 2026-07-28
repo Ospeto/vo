@@ -61,6 +61,7 @@ export class HotkeyService implements IHotkeyService {
       try {
         globalShortcut.register("Control+Command+Option+V", () => this.onDownCallback?.("dictate"));
         globalShortcut.register("Control+Command+Option+E", () => this.onDownCallback?.("edit"));
+        globalShortcut.register("Escape", () => onCancel?.());
       } catch (err) {
         logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
       }
@@ -125,6 +126,7 @@ export class HotkeyService implements IHotkeyService {
         try {
           globalShortcut.register("Control+Command+Option+V", () => onDown("dictate"));
           globalShortcut.register("Control+Command+Option+E", () => onDown("edit"));
+          globalShortcut.register("Escape", () => onCancel?.());
         } catch (err) {
           logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
         }

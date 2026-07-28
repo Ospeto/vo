@@ -678,6 +678,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
             contents: `You are a Senior Software Engineer. Translate the following Burmese dictation into a clean, precise English technical specification for an AI coding assistant. Output ONLY pure English text without any Burmese script:\n\n${text}`,
             config: {
               temperature: 0.0,
+              abortSignal,
             },
           });
           const translatedText = translateRes.text?.trim();
@@ -738,7 +739,7 @@ async function transcribeElevenLabs(audioBuffer: Buffer, abortSignal?: AbortSign
       contentType: "audio/webm",
     },
     modelId: "scribe_v2",
-  });
+  }, { abortSignal });
 
   if ("text" in result) {
     return (result.text ?? "").trim();
