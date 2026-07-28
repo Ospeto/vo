@@ -96,10 +96,10 @@ describe("Interrupt and Cancellation Test Suite", () => {
       const coordinator = new PasteCoordinator(async (text, isCurrent) => {
         await new Promise((r) => setTimeout(r, 50));
         if (!isCurrent()) {
-          return { ok: false, reason: "target_window_changed" };
+          return { ok: false, reason: "target_mismatch" };
         }
         pasteExecuted = true;
-        return { ok: true, appName: "TextEdit" };
+        return { ok: true, reason: "injection_requested" };
       });
 
       const pastePromise = coordinator.pasteText("Test cancellation transcript");
@@ -119,9 +119,9 @@ describe("Interrupt and Cancellation Test Suite", () => {
       let isPasted = false;
       const coordinator = new PasteCoordinator(async (text, isCurrent) => {
         await new Promise((r) => setTimeout(r, 20));
-        if (!isCurrent()) return { ok: false, reason: "target_window_changed" };
+        if (!isCurrent()) return { ok: false, reason: "target_mismatch" };
         isPasted = true;
-        return { ok: true };
+        return { ok: true, reason: "injection_requested" };
       });
 
       // 1. Start and stop recording -> enter transcribing
