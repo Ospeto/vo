@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { daemonResponseMatchesState, prepareSpawnedDaemon, waitForDaemonReady, runStatus, runStop } from "../cli.js";
-import type { RuntimeStateReadResult } from "../../services/runtime-state.js";
+import type { RuntimeStateReadResult } from "../services/runtime-state.js";
 
 class FakeChild extends EventEmitter {
   kills = 0;
@@ -80,7 +80,7 @@ describe("CLI daemon readiness", () => {
 
 describe("CLI status and stop ownership flows", () => {
   const state = { version: 1 as const, instanceId: "00000000-0000-4000-8000-000000000001", pid: 42, cwd: "/tmp/project", startedAt: new Date(0).toISOString() };
-  const owned = (): RuntimeStateReadResult => ({ kind: "present", state, revision: "revision", liveness: "alive" });
+  const owned = (): RuntimeStateReadResult => ({ kind: "present", state, revision: 1, liveness: "alive" });
 
   test("status preserves state when IPC fails", async () => {
     const output: string[] = [];

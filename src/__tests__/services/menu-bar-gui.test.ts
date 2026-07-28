@@ -76,7 +76,8 @@ export function calculateAudioIntensity(samples: Float32Array, gain: number = 1.
 
   let sumSquares = 0;
   for (let i = 0; i < samples.length; i++) {
-    const amplified = samples[i] * gain;
+    const sample = samples[i] ?? 0;
+    const amplified = sample * gain;
     sumSquares += amplified * amplified;
   }
 
@@ -298,8 +299,8 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
 
       const entries = getHistoryEntries();
       expect(entries.length).toBe(5);
-      expect(entries[0].text).toBe("Entry 6");
-      expect(entries[4].text).toBe("Entry 2");
+      expect(entries[0]?.text).toBe("Entry 6");
+      expect(entries[4]?.text).toBe("Entry 2");
 
       clearHistory();
       expect(getHistoryEntries().length).toBe(0);

@@ -34,6 +34,7 @@ export function parseDiagnostics(kind: keyof Baseline, output: string): { diagno
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (line === undefined) continue;
     if (line === "" && i === lines.length - 1) continue;
 
     if (kind === "test:full") {

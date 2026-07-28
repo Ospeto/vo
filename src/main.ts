@@ -423,7 +423,9 @@ function createHudWindow() {
   hudWindow.on("moved", () => {
     if (hudWindow) {
       const [newX, newY] = hudWindow.getPosition();
-      customHudPosition = { x: newX, y: newY };
+      if (newX !== undefined && newY !== undefined) {
+        customHudPosition = { x: newX, y: newY };
+      }
     }
   });
 

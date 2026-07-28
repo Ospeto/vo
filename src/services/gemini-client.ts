@@ -59,7 +59,8 @@ export function resolveApiKeys(): string[] {
             if (trimmed.startsWith("#")) continue;
             const match = trimmed.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY)=(.+)/);
             if (match && match[1]) {
-              const key = match[1].trim().replace(/^["']|["']$/g, "").split("#")[0].trim();
+              const val = match[1];
+              const key = val.trim().replace(/^["']|["']$/g, "").split("#")[0]?.trim();
               if (key && !key.includes("your_") && !key.includes("your_gemini_key_here")) {
                 rawKeysString = key;
                 break;
@@ -103,8 +104,10 @@ function startKeepAliveHeartbeat(client: GoogleGenAI) {
 export function getGeminiClient(): GoogleGenAI {
   if (geminiClients.length > 0) {
     const client = geminiClients[currentKeyIndex];
-    currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;
-    return client;
+    if (client) {
+      currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;
+      return client;
+    }
   }
 
   const forceVertexOff = process.env.GOOGLE_GENAI_USE_VERTEXAI === "false";
@@ -121,8 +124,9 @@ export function getGeminiClient(): GoogleGenAI {
     geminiClients = apiKeys.map(
       (apiKey) => new GoogleGenAI({ apiKey, httpOptions: { headers: { Connection: "keep-alive" } } }),
     );
-    if (geminiClients.length > 0) {
-      startKeepAliveHeartbeat(geminiClients[0]);
+    const firstClient = geminiClients[0];
+    if (firstClient) {
+      startKeepAliveHeartbeat(firstClient);
     }
   } else {
     // Try fallback key before throwing
@@ -136,6 +140,9 @@ export function getGeminiClient(): GoogleGenAI {
   }
 
   const client = geminiClients[currentKeyIndex];
+  if (!client) {
+    throw new Error("Failed to initialize Gemini client");
+  }
   currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;
   return client;
 }

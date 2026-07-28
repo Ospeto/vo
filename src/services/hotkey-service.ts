@@ -63,7 +63,11 @@ export class HotkeyService implements IHotkeyService {
     }
   }
 
-  async replace(newBindingStr: string, callbacks: HotkeyCallbacks | (() => void)): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }> {
+  async replace(
+    newBindingStr: string,
+    callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void),
+    editBindingStr?: string,
+  ): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }> {
     let candidateBinding: KeyBinding;
     try {
       candidateBinding = parseKeyBinding(newBindingStr);
@@ -103,7 +107,7 @@ export class HotkeyService implements IHotkeyService {
       }
 
       if (!fnHookStarted) {
-        globalShortcut.register("Control+Command+Option+V", () => onDown());
+        globalShortcut.register("Control+Command+Option+V", () => onDown("dictate"));
       }
 
       this.currentBinding = candidateBinding;
