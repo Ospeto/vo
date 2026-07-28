@@ -37,7 +37,7 @@ const recordingLifecycle = new RecordingLifecycle();
 const addonPath = resolveNativePastePath(projectRoot);
 const addon = loadNativePasteAddon(addonPath);
 const safePasteService = createMacSafePasteService(addon, clipboard as unknown as ClipboardAdapter<any>);
-const pasteCoordinator = new PasteCoordinator((text) => safePasteService.paste(text));
+const pasteCoordinator = new PasteCoordinator((text, isCurrent) => safePasteService.paste(text, isCurrent));
 
 let captureWindow: BrowserWindow | null = null;
 let popoverWindow: BrowserWindow | null = null;
