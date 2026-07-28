@@ -520,7 +520,6 @@ async function transcribeGemini(
       resolvedTargetLang = cfg.targetLanguage || "English";
     }
   } catch {}
-  }
   if (!resolvedTargetLang) {
     resolvedTargetLang = "English";
   }
