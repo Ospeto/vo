@@ -14,7 +14,7 @@ import { HotkeyService } from "./services/hotkey-service.js";
 import { captureActiveSelection, restoreClipboard } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
 import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-paste-addon.js";
-import { createMacSafePasteService, type ClipboardAdapter } from "./services/safe-paste.js";
+import { createMacSafePasteService, type ClipboardAdapter, type ClipboardSnapshot } from "./services/safe-paste.js";
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import logger from "./services/logger.js";
@@ -51,7 +51,7 @@ let lastPastedText = "";
 let lastPasteTime = 0;
 
 let activeSelectionText = "";
-let previousClipboardContent = "";
+let previousClipboardContent: ClipboardSnapshot | string = "";
 let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -851,7 +851,18 @@ async function startRecordingFlow() {
   safePasteService.captureTarget();
   setState("starting", "Starting...");
 
-  const selection = await captureActiveSelection(350);
+  let selection: Awaited<ReturnType<typeof captureActiveSelection>>;
+  try {
+    selection = await captureActiveSelection(350);
+  } catch (err: any) {
+    const snapshot = recordingLifecycle.snapshot();
+    if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
+    pasteCoordinator.invalidate();
+    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
+    logger.error({ err: err?.message || String(err) }, "Selection capture failed");
+    setState("error", "Selection capture failed");
+    return;
+  }
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
     if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard);

@@ -11,7 +11,20 @@ function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
   try {
     const electron = require("electron");
     const clip = electron.clipboard || electron.default?.clipboard || null;
-    return clip || null;
+    if (!clip) return null;
+    return {
+      readText: () => clip.readText(),
+      writeText: (text) => clip.writeText(text),
+      write: (data) => clip.write?.(data),
+      clear: () => clip.clear?.(),
+      readHTML: () => clip.readHTML?.() || "",
+      readRTF: () => clip.readRTF?.() || "",
+      readImage: () => clip.readImage?.(),
+      availableFormats: () => clip.availableFormats?.() || [],
+      readBuffer: (format) => clip.readBuffer?.(format) || Buffer.alloc(0),
+      writeBuffer: (format, data) => clip.writeBuffer?.(format, data),
+      writeBufferIsAdditive: typeof clip.writeBuffer === "function",
+    };
   } catch {
     return null;
   }
@@ -63,7 +76,8 @@ export async function captureActiveSelection(
   }
 
   const clipPort = getClipboardPort(portOverride);
-  const previousSnapshot: ClipboardSnapshot = clipPort?.snapshot() || { formats: [], text: "" };
+  let previousSnapshot: ClipboardSnapshot = { formats: [], text: "" };
+  if (clipPort) previousSnapshot = clipPort.snapshot();
 
   // Write sentinel to clipboard to reliably detect new selection copy
   try {
