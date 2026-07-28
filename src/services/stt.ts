@@ -553,6 +553,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 
   // Model fallback chain: preferred model first
   const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
+  let paidFallbackInFlight: Promise<unknown> | null = null;
 
   for (const model of modelsToTry) {
     try {
@@ -586,7 +587,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
       const fallbackAbortController = new AbortController();
 
-      if (fallbackClient) {
+      if (fallbackClient && !paidFallbackInFlight) {
         let timerId: ReturnType<typeof setTimeout> | undefined;
         const primaryDelayTimer = new Promise<never>((_, reject) => {
           timerId = setTimeout(() => reject(new Error("Primary Key delay > 2000ms")), 2000);
@@ -602,7 +603,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
             if (timerId) clearTimeout(timerId);
             logger.info({ model, err: primaryErr?.message }, "Primary API Key took >2000ms or errored; triggering Parallel Paid Fallback Key");
             try {
-              const fbResponse = await fallbackClient.models.generateContent({
+              const paidRequest = fallbackClient.models.generateContent({
                 model,
                 contents: [
                   {
@@ -620,6 +621,13 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
                   abortSignal: fallbackAbortController.signal,
                 },
               });
+              const trackedPaidRequest = paidRequest.finally(() => {
+                if (!fallbackAbortController.signal.aborted && paidFallbackInFlight === trackedPaidRequest) {
+                  paidFallbackInFlight = null;
+                }
+              });
+              paidFallbackInFlight = trackedPaidRequest;
+              const fbResponse = await trackedPaidRequest;
               const fbText = fbResponse.text?.trim() ?? "";
               return { text: fbText, usedPaidKey: true };
             } catch (fbErr: any) {

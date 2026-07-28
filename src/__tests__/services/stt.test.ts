@@ -133,6 +133,7 @@ describe("transcribe", () => {
     try {
       await expect(transcribe(new ArrayBuffer(10), "gemini")).rejects.toThrow("All Gemini STT models failed");
       expect(fallbackSignal?.aborted).toBe(true);
+      expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.setTimeout = originalSetTimeout;
       mockFallbackGenerateContent = null;
