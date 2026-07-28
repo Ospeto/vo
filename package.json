@@ -16,7 +16,8 @@
   },
   "files": [
     "bin/",
-    "out/"
+    "out/",
+    "native/"
   ],
   "scripts": {
     "cli": "bun src/cli.ts",
