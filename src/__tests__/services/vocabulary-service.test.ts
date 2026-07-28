@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "bun:test";
 import { existsSync, rmSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { backfillLegacyWhitespace, loadPersistedVocabulary, savePersistedVocabulary } from "../../services/vocabulary-service.js";
+import { backfillLegacyWhitespace, loadPersistedVocabulary, migrateVocabulary, savePersistedVocabulary } from "../../services/vocabulary-service.js";
 
 const TEST_VOCAB_FILE = join(tmpdir(), "pi-voice-test-vocab", "vocabulary.json");
 
@@ -63,6 +63,11 @@ describe("vocabulary-service", () => {
     const entry = { id: "mas", phrase: "MAS 141", spokenAliases: ["မက်စ် ၁၄၁"], enabled: false };
     expect(backfillLegacyWhitespace([entry])).toEqual([{ ...entry, legacyWhitespace: true }]);
     expect(backfillLegacyWhitespace([])).toEqual([]);
+  });
+
+  test("merges legacy case variants into the existing canonical phrase", () => {
+    const entries = migrateVocabulary(["antigravity"], {}, [{ id: "canonical", phrase: "Antigravity", spokenAliases: ["Antigravity"], enabled: true }]);
+    expect(entries.find((entry) => entry.id === "canonical")).toEqual({ id: "canonical", phrase: "Antigravity", spokenAliases: ["Antigravity", "antigravity"], enabled: true });
   });
 
 });

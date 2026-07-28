@@ -79,6 +79,19 @@ function mergeEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
   return merged;
 }
 
+function mergeLegacyEntries(entries: DictionaryEntry[], legacyEntries: DictionaryEntry[]): DictionaryEntry[] {
+  for (const legacy of legacyEntries) {
+    const existing = entries.find((entry) => entry.phrase === legacy.phrase
+      || entry.phrase.trim().normalize("NFKC").toLocaleLowerCase() === legacy.phrase.trim().normalize("NFKC").toLocaleLowerCase());
+    if (existing) {
+      existing.spokenAliases = Array.from(new Set([...existing.spokenAliases, ...legacy.spokenAliases]));
+    } else {
+      entries.push(legacy);
+    }
+  }
+  return entries;
+}
+
 function readUserDictionary(dictionaryPath: string): string[] {
   try {
     if (!existsSync(dictionaryPath)) return [];
@@ -97,7 +110,8 @@ function validLegacyShape(parsed: any): boolean {
 
 export function migrateVocabulary(customVocabulary: string[], presetVocabulary: Record<string, string[]>, existingEntries: DictionaryEntry[] = [], userDictionary: string[] = []): DictionaryEntry[] {
   const legacy = [...customVocabulary, ...Object.values(presetVocabulary).flat(), ...userDictionary];
-  return mergeEntries([...seededEntries(), ...existingEntries, ...legacy.map(dictionaryEntryFromTerm).filter((entry): entry is DictionaryEntry => Boolean(entry))]);
+  const migratedLegacy = legacy.map(dictionaryEntryFromTerm).filter((entry): entry is DictionaryEntry => Boolean(entry));
+  return mergeLegacyEntries(mergeEntries([...seededEntries(), ...existingEntries]), migratedLegacy);
 }
 
 export function loadPersistedVocabulary(customPath?: string, customDictionaryPath?: string): PersistedVocabulary {
