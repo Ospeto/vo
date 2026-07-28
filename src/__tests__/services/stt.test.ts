@@ -116,6 +116,30 @@ describe("transcribe", () => {
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
   });
 
+  test("aborts a paid fallback when the model timeout wins", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    let fallbackSignal: AbortSignal | undefined;
+    mockGenerateContent.mockImplementation(async () => new Promise(() => {}));
+    mockFallbackGenerateContent = mock(async (request: any) => {
+      fallbackSignal = request.config.abortSignal;
+      await new Promise((_, reject) => {
+        fallbackSignal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      });
+      return { text: "unreachable" };
+    });
+    globalThis.setTimeout = ((callback: TimerHandler, delay?: number, ...args: any[]) =>
+      originalSetTimeout(callback, delay === 2000 ? 1 : delay && delay > 2000 ? 10 : delay, ...args)) as typeof setTimeout;
+
+    try {
+      await expect(transcribe(new ArrayBuffer(10), "gemini")).rejects.toThrow("All Gemini STT models failed");
+      expect(fallbackSignal?.aborted).toBe(true);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      mockFallbackGenerateContent = null;
+      mockGenerateContent.mockImplementation(async () => ({ text: "gemini transcription" }));
+    }
+  });
+
   test("transcribes with openai provider", async () => {
     const data = new ArrayBuffer(100);
     const result = await transcribe(data, "openai");

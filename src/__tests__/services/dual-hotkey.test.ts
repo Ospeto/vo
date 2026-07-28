@@ -1,5 +1,5 @@
 import { describe, expect, test, mock } from "bun:test";
-import { parseKeyBinding, formatKeyDisplay } from "../../services/config.js";
+import { parseKeyBinding, formatKeyBinding, formatKeyDisplay } from "../../services/config.js";
 
 const registeredShortcuts = new Map<string, Function>();
 
@@ -52,6 +52,7 @@ describe("Dual Hotkey Configuration & Parsing Suite", () => {
     expect(editBinding.meta).toBe(true);
     expect(editBinding.alt).toBe(true);
     expect(formatKeyDisplay(editBinding)).toContain("E");
+    expect(formatKeyBinding(editBinding)).toBe("ctrl+alt+cmd+e");
   });
 
   test("HotkeyService.replace applies edit binding and registers fallback edit hotkey", async () => {

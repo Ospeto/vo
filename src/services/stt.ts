@@ -584,6 +584,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       const fallbackClient = getGeminiFallbackClient();
 
       let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
+      const fallbackAbortController = new AbortController();
 
       if (fallbackClient) {
         let timerId: ReturnType<typeof setTimeout> | undefined;
@@ -616,6 +617,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
                   systemInstruction: fullPrompt,
                   temperature: targetTemperature,
                   maxOutputTokens: 8192,
+                  abortSignal: fallbackAbortController.signal,
                 },
               });
               const fbText = fbResponse.text?.trim() ?? "";
@@ -641,6 +643,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
         winner = await Promise.race([resultPromise, timeoutPromise]);
       } finally {
         if (timeoutTimerId) clearTimeout(timeoutTimerId);
+        fallbackAbortController.abort();
       }
       let text = winner.text;
 

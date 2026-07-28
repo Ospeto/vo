@@ -64,7 +64,7 @@ const newAppPresetSelect = document.getElementById("newAppPresetSelect") as HTML
 
 
 
-let currentAppMappings: Record<string, string> = {};
+let currentAppMappings: Record<string, DictationPreset> = {};
 
 const spectrumCanvas = document.getElementById("spectrumCanvas") as HTMLCanvasElement | null;
 const spectrumCtx = spectrumCanvas?.getContext("2d");
@@ -389,7 +389,7 @@ async function initUI() {
       currentPresetVocabMap = config.presetVocabulary as Record<string, string[]>;
     }
     if (config.appPresetMappings) {
-      currentAppMappings = { ...(config.appPresetMappings as any) };
+      currentAppMappings = { ...config.appPresetMappings };
     }
     if (config.geminiApiKey) {
       const keys = String(config.geminiApiKey).split(/[,\n]+/).map((k) => k.trim());
@@ -430,7 +430,7 @@ async function initUI() {
       const name = newAppNameInput?.value.trim().toLowerCase();
       const preset = newAppPresetSelect?.value;
       if (name && preset) {
-        currentAppMappings[name] = preset;
+        currentAppMappings[name] = preset as DictationPreset;
         if (newAppNameInput) newAppNameInput.value = "";
         renderAppRules();
         await window.electronIPC?.saveConfig({ appPresetMappings: currentAppMappings });

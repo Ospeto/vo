@@ -235,6 +235,18 @@ export function formatKeyDisplay(binding: KeyBinding): string {
   return parts.join(isMac ? "" : "+");
 }
 
+export function formatKeyBinding(binding: KeyBinding): string {
+  const keyName = Object.entries(KEY_MAP).find(([, v]) => v === binding.keycode)?.[0];
+  if (!keyName) throw new Error(`Unknown keycode "${binding.keycode}"`);
+  return [
+    binding.ctrl && "ctrl",
+    binding.alt && "alt",
+    binding.shift && "shift",
+    binding.meta && "cmd",
+    keyName,
+  ].filter(Boolean).join("+");
+}
+
 // ── Default config ───────────────────────────────────────────────────
 
 // ── Default config ───────────────────────────────────────────────────
