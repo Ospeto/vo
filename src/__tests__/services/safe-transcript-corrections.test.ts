@@ -21,6 +21,7 @@ describe("VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post
       expect(sanitizeTranscribedText("look at this exclamation mark")).toBe("Look at this!");
       expect(sanitizeTranscribedText("note colon value")).toBe("Note: value");
       expect(sanitizeTranscribedText("first statement semicolon second statement")).toBe("First statement; second statement");
+      expect(sanitizeTranscribedText("semicolons are useful")).toBe("Semicolons are useful");
     });
 
     test("corrects spoken Burmese punctuation commands accurately", () => {
@@ -48,6 +49,13 @@ describe("VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post
       expect(sanitizeTranscribedText("we need to we need to check the log")).toBe("We need to check the log");
       expect(sanitizeTranscribedText("check the database check the database for errors")).toBe("Check the database for errors");
       expect(sanitizeTranscribedText("အဆင်ပြေအောင် အဆင်ပြေအောင် ဆောင်ရွက်ပေးပါ")).toBe("အဆင်ပြေအောင် ဆောင်ရွက်ပေးပါ");
+    });
+
+    test("preserves repeated lines and code regions", () => {
+      const repeatedLines = "const x = 1\nconst x = 1";
+      expect(sanitizeTranscribedText(repeatedLines)).toBe("Const x = 1\nConst x = 1");
+      expect(sanitizeTranscribedText("```\nconst x = 1\nconst x = 1\n```")).toBe("```\nConst x = 1\nConst x = 1\n```");
+      expect(sanitizeTranscribedText("run `the the command` now")).toBe("Run `the the command` now");
     });
 
     test("preserves redoubled Burmese words without spaces (e.g. ကောင်းကောင်း, မြန်မြန်)", () => {

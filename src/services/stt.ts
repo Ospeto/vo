@@ -296,7 +296,32 @@ CRITICAL: You MUST transcribe and proofread EVERY SINGLE WORD spoken from beginn
 
 const SAFE_ENGLISH_REPEAT_WORDS =
   "the|a|an|and|or|but|in|on|at|to|for|of|with|by|from|is|are|was|were|be|been|being|have|has|will|would|should|could|can|this|these|those|it|its|they|them|their|we|our|us|you|your|my";
-const SAFE_REPEAT_WORD_REGEX = new RegExp(`\\b(${SAFE_ENGLISH_REPEAT_WORDS})\\s+\\1\\b`, "gi");
+const SAFE_REPEAT_WORD_REGEX = new RegExp(`\\b(${SAFE_ENGLISH_REPEAT_WORDS})[ \\t]+\\1\\b`, "gi");
+const CODE_REGION_REGEX = /(```[\\s\\S]*?```|`[^`\\n]*`)/g;
+
+function removeSpokenRepeats(text: string): string {
+  const removeRepeats = (segment: string) => {
+    let cleanedSegment = segment.replace(/\\b(ဒီ|ဟို|အာ)[ \\t]+\\1\\b/gi, "$1");
+    cleanedSegment = cleanedSegment.replace(SAFE_REPEAT_WORD_REGEX, "$1");
+    return cleanedSegment.replace(/(?:^|[ \\t]+)([^\\s\\.,\\?!\\:;။၊]+(?:[ \\t]+[^\\s\\.,\\?!\\:;။၊]+){0,4})(?:[ \\t]+\\1)+(?=[ \\t]|[\\.,\\?!\\:;။၊]|$)/gi, (match, fragment) => {
+      const norm = fragment.trim().toLowerCase();
+      if (norm === "that" || norm === "had") {
+        return match;
+      }
+      const leadingSpace = match.startsWith(" ") || match.startsWith("\\t") ? " " : "";
+      return leadingSpace + fragment;
+    });
+  };
+
+  let result = "";
+  let lastIndex = 0;
+  for (const match of text.matchAll(CODE_REGION_REGEX)) {
+    const index = match.index ?? 0;
+    result += removeRepeats(text.slice(lastIndex, index)) + match[0];
+    lastIndex = index + match[0].length;
+  }
+  return result + removeRepeats(text.slice(lastIndex));
+}
 
 export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[]): string {
   if (!text) return "";
@@ -332,7 +357,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = cleaned.replace(/\s*(မေးခွန်းသင်္ကေတ|\bquestion mark\b)\s*/gi, "? ");
   cleaned = cleaned.replace(/\s*(အာမေဋိတ်|\bexclamation mark\b|\bexclamation point\b)\s*/gi, "! ");
   cleaned = cleaned.replace(/\s*(ခေါ်လွန်|\bcolon\b)\s*/gi, ": ");
-  cleaned = cleaned.replace(/\s*(semicolon|\bsemicolon\b)\s*/gi, "; ");
+  cleaned = cleaned.replace(/\s*\bsemicolon\b\s*/gi, "; ");
 
   // 4. Strip throat clearing and vocalization sounds
   cleaned = cleaned.replace(/^(အဟမ်းး|အဟမ်း|အဟက်|အဟွတ်)\s*,?\s*/gi, "");
@@ -346,16 +371,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = cleaned.replace(/\s+(ဟိုဟာလေ|ဟိုဟာ|ဒီဥစ္စာ)\s+/gi, " ");
 
   // 6. Remove repetitive word stutters & duplicate multi-word fragments (up to 5 words)
-  cleaned = cleaned.replace(/\b(ဒီ|ဟို|အာ)\s+\1\b/gi, "$1");
-  cleaned = cleaned.replace(SAFE_REPEAT_WORD_REGEX, "$1");
-  cleaned = cleaned.replace(/(?:^|\s+)([^\s\.,\?!\:;။၊]+(?:[ \t]+[^\s\.,\?!\:;။၊]+){0,4})(?:\s+\1)+(?=\s|[\.,\?!\:;။၊]|$)/gi, (match, fragment) => {
-    const norm = fragment.trim().toLowerCase();
-    if (norm === "that" || norm === "had") {
-      return match;
-    }
-    const leadingSpace = match.startsWith(" ") || match.startsWith("\t") ? " " : "";
-    return leadingSpace + fragment;
-  });
+  cleaned = removeSpokenRepeats(cleaned);
 
   // 7. Collapse multi-spaces & clean double punctuation
   cleaned = cleaned.replace(/[ \t]+/g, " ");
