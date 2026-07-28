@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "bun:test";
 import { existsSync, rmSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadPersistedVocabulary, savePersistedVocabulary } from "../../services/vocabulary-service.js";
+import { applyLegacyWhitespaceCorrections, loadPersistedVocabulary, savePersistedVocabulary } from "../../services/vocabulary-service.js";
 
 const TEST_VOCAB_FILE = join(tmpdir(), "pi-voice-test-vocab", "vocabulary.json");
 
@@ -57,5 +57,9 @@ describe("vocabulary-service", () => {
     expect(loaded.customVocabulary).toEqual(["myanso", "antigravity"]);
     expect(loaded.presetVocabulary.code_comment).toEqual(["resolveConfigPath", "settleMatchingLifecycleError"]);
     expect(loaded.presetVocabulary.burmese_written).toEqual(["စကားပြော"]);
+  });
+
+  test("preserves legacy corrections across arbitrary Unicode whitespace", () => {
+    expect(applyLegacyWhitespaceCorrections("မက်စ်\u2003\u2003၁၄၁ စာရေး\nကောင်း")).toBe("MAS 141 SarYayKaung");
   });
 });

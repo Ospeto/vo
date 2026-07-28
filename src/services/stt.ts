@@ -7,7 +7,7 @@ import { execSync, exec } from "node:child_process";
 import type { SpeechProvider, GeminiModelChoice, DictationPreset } from "./config.js";
 import type { DictionaryEntry } from "../shared/types.js";
 import { applyDictionary } from "./dictionary-engine.js";
-import { loadPersistedVocabulary, dictionaryEntryFromTerm, migrateVocabulary } from "./vocabulary-service.js";
+import { loadPersistedVocabulary, dictionaryEntryFromTerm, migrateVocabulary, applyLegacyWhitespaceCorrections } from "./vocabulary-service.js";
 import { getGeminiClient } from "./gemini-client.js";
 import { scanWorkspaceSymbols } from "./symbol-scanner.js";
 import logger from "./logger.js";
@@ -365,7 +365,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = cleaned.replace(/\s+။/g, "။");
 
   // Dictionary is deliberately last: every provider receives the same local, exact result.
-  return applyDictionary(cleaned.trim(), effectiveDictionaryEntries).trim();
+  return applyDictionary(applyLegacyWhitespaceCorrections(cleaned.trim()), effectiveDictionaryEntries).trim();
 }
 
 let openaiClient: OpenAI | null = null;
