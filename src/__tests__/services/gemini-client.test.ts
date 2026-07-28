@@ -149,19 +149,26 @@ describe("gemini-client", () => {
 
   test("throws when no credentials are set", () => {
     const emptyDir = mkdtempSync(join(tmpdir(), "pi-voice-test-empty-"));
-    const origCwd = process.env.PI_VOICE_CWD;
-    process.env.PI_VOICE_CWD = emptyDir;
+    const modulePath = join(process.cwd(), "src/services/gemini-client.ts");
+    const env = { ...process.env };
+    delete env.GOOGLE_CLOUD_PROJECT;
+    delete env.GEMINI_API_KEY;
+    delete env.GOOGLE_API_KEY;
+    delete env.GOOGLE_GENAI_USE_VERTEXAI;
 
     try {
-      expect(() => getGeminiClient()).toThrow(
-        /GOOGLE_CLOUD_PROJECT.*GEMINI_API_KEY/,
-      );
+      const result = Bun.spawnSync([
+        "bun",
+        "-e",
+        `import(${JSON.stringify(modulePath)}).then(({ getGeminiClient }) => {
+          try { getGeminiClient(); process.exit(1); }
+          catch (error) {
+            process.exit(/GOOGLE_CLOUD_PROJECT.*GEMINI_API_KEY/.test(String(error)) ? 0 : 1);
+          }
+        })`,
+      ], { cwd: emptyDir, env: { ...env, HOME: emptyDir } });
+      expect(result.exitCode).toBe(0);
     } finally {
-      if (origCwd === undefined) {
-        delete process.env.PI_VOICE_CWD;
-      } else {
-        process.env.PI_VOICE_CWD = origCwd;
-      }
       rmSync(emptyDir, { recursive: true, force: true });
     }
   });
