@@ -164,13 +164,15 @@ function startMetering() {
     }
     const gain = Math.max(currentGainValue, 0.0001);
     const metrics = analyzePcmFrame(buffer, 0.008 * gain, 0.003 * gain, 0.99 * gain);
+    const normalizedRms = metrics.rms / gain;
+    const normalizedPeak = metrics.peak / gain;
     sessionTotalFrames++;
-    sessionMaxRms = Math.max(sessionMaxRms, metrics.rms);
-    sessionPeakAmplitude = Math.max(sessionPeakAmplitude, metrics.peak);
+    sessionMaxRms = Math.max(sessionMaxRms, normalizedRms);
+    sessionPeakAmplitude = Math.max(sessionPeakAmplitude, normalizedPeak);
     if (metrics.isSpeech) sessionSpeechFrames++;
     if (metrics.isClipped) sessionClippingFrames++;
 
-    const endpointStatus = endpointDetector.processFrame(metrics.rms);
+    const endpointStatus = endpointDetector.processFrame(normalizedRms);
     if (
       endpointStatus.isEndpointed &&
       !autoEndpointTriggered &&
