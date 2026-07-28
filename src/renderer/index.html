@@ -217,6 +217,27 @@
             </div>
           </div>
 
+          <!-- Silence Auto-Endpointing & Transcription Delay Section -->
+          <div class="modal-section-group">
+            <label class="section-label">Silence Endpointing & Transcription Delay</label>
+            <div class="sound-setting-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <div>
+                <span class="setting-title" style="font-weight: 500; font-size: 13px;">Enable Auto-Endpointing</span>
+                <p class="setting-desc" style="font-size: 11px; color: #94a3b8; margin: 2px 0 0 0;">Automatically end recording when silence is detected</p>
+              </div>
+              <input type="checkbox" id="autoEndpointToggle" checked style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
+            </div>
+            <div class="chime-card-row">
+              <div class="chime-card-header">
+                <span class="chime-step-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">Silence Gap</span>
+                <span class="chime-step-title">Transcription Delay (Seconds)</span>
+              </div>
+              <div class="chime-card-controls">
+                <input type="number" id="transcriptionDelayInput" min="0" max="10" step="0.1" value="0.5" class="chime-select" style="width: 100px; font-size: 12px; padding: 4px 8px;" aria-label="Transcription Delay in Seconds">
+              </div>
+            </div>
+          </div>
+
           <!-- Notification Audio Chimes Sound Settings Section -->
           <div class="modal-section-group">
             <label class="section-label">Notification Audio Chimes</label>

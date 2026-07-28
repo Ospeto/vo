@@ -40,6 +40,8 @@ export interface PiVoiceConfig {
   chimeSoundStart: ChimeSoundChoice;
   chimeSoundEnd: ChimeSoundChoice;
   symbolScannerEnabled: boolean;
+  transcriptionDelaySec: number;
+  autoEndpointEnabled: boolean;
   customVocabulary: string[];
   presetVocabulary: Partial<Record<DictationPreset, string[]>>;
   dictionaryEntries: DictionaryEntry[];
@@ -63,6 +65,8 @@ export interface PiVoiceConfigPatch {
   chimeSoundStart?: ChimeSoundChoice;
   chimeSoundEnd?: ChimeSoundChoice;
   symbolScannerEnabled?: boolean;
+  transcriptionDelaySec?: number;
+  autoEndpointEnabled?: boolean;
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
   dictionaryEntries?: DictionaryEntry[];
@@ -263,6 +267,8 @@ const DEFAULT_INPUT_GAIN = 1.0;
 const DEFAULT_DICTATION_PRESET: DictationPreset = "careful";
 const DEFAULT_DICTATION_MODE: DictationMode = "toggle";
 const DEFAULT_AUDIO_CHIMES_ENABLED = true;
+const DEFAULT_TRANSCRIPTION_DELAY_SEC = 0.5;
+const DEFAULT_AUTO_ENDPOINT_ENABLED = true;
 
 export const DEFAULT_APP_PRESET_MAPPINGS: Record<string, DictationPreset> = {
   code: "code_comment",
@@ -305,6 +311,8 @@ function defaultConfig(): PiVoiceConfig {
     chimeSoundStart: "glass",
     chimeSoundEnd: "submarine",
     symbolScannerEnabled: true,
+    transcriptionDelaySec: DEFAULT_TRANSCRIPTION_DELAY_SEC,
+    autoEndpointEnabled: DEFAULT_AUTO_ENDPOINT_ENABLED,
     customVocabulary: [],
     presetVocabulary: {},
     dictionaryEntries: migrateVocabulary([], {}),
@@ -359,6 +367,8 @@ export const configFileSchema = z.object({
   chimeSoundStart: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional().default("glass"),
   chimeSoundEnd: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional().default("submarine"),
   symbolScannerEnabled: z.boolean().optional().default(true),
+  transcriptionDelaySec: z.number().min(0.0).max(10.0).optional().default(DEFAULT_TRANSCRIPTION_DELAY_SEC),
+  autoEndpointEnabled: z.boolean().optional().default(DEFAULT_AUTO_ENDPOINT_ENABLED),
   customVocabulary: z.array(z.string()).optional().default([]),
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
   dictionaryEntries: z.array(z.object({ id: z.string(), phrase: z.string(), spokenAliases: z.array(z.string()), enabled: z.boolean(), legacyWhitespace: z.boolean().optional(), category: z.enum(["general", "person_name", "technical"]).optional() })).optional().default([]),
@@ -449,7 +459,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset: rawDictationPreset, dictationMode, translateEnabled: rawTranslateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, dictionaryEntries, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset: rawDictationPreset, dictationMode, translateEnabled: rawTranslateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, transcriptionDelaySec, autoEndpointEnabled, customVocabulary, presetVocabulary, dictionaryEntries, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
   const editKeyBinding = parseKeyBinding(editKeyStr);
 
@@ -498,6 +508,8 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     chimeSoundStart,
     chimeSoundEnd,
     symbolScannerEnabled,
+    transcriptionDelaySec,
+    autoEndpointEnabled,
     customVocabulary: mergedCustomVocab,
     presetVocabulary: mergedPresetVocab,
     dictionaryEntries: mergedDictionaryEntries,
@@ -591,6 +603,8 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ...(patch.chimeSoundStart !== undefined ? { chimeSoundStart: patch.chimeSoundStart } : {}),
     ...(patch.chimeSoundEnd !== undefined ? { chimeSoundEnd: patch.chimeSoundEnd } : {}),
     ...(patch.symbolScannerEnabled !== undefined ? { symbolScannerEnabled: patch.symbolScannerEnabled } : {}),
+    ...(patch.transcriptionDelaySec !== undefined ? { transcriptionDelaySec: Math.max(0.0, Math.min(10.0, patch.transcriptionDelaySec)) } : {}),
+    ...(patch.autoEndpointEnabled !== undefined ? { autoEndpointEnabled: patch.autoEndpointEnabled } : {}),
     customVocabulary: finalCustomVocab,
     presetVocabulary: mergedPresetVocab,
     dictionaryEntries: finalDictionaryEntries,

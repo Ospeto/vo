@@ -19,13 +19,16 @@ let recordingStartTime = 0;
 let recordingGeneration = 0;
 let postRollTimer: ReturnType<typeof setTimeout> | null = null;
 
-const endpointDetector = new SpeechEndpointDetector({
-  speechThresholdRms: 0.008,
+let endpointDetector = new SpeechEndpointDetector({
+  speechThresholdRms: 0.005,
   silenceThresholdRms: 0.003,
-  confirmSilenceMs: 800,
+  confirmSilenceMs: 500,
   minSpeechDurationMs: 150,
   frameIntervalMs: 50,
 });
+
+let autoEndpointEnabled = true;
+let transcriptionDelaySec = 0.5;
 
 let sessionMaxRms = 0;
 let sessionPeakAmplitude = 0;
@@ -163,7 +166,7 @@ function startMetering() {
       sumSquares += qualityVal * qualityVal;
     }
     const gain = Math.max(currentGainValue, 0.0001);
-    const metrics = analyzePcmFrame(buffer, 0.008 * gain, 0.003 * gain, 0.99 * gain);
+    const metrics = analyzePcmFrame(buffer, 0.005 * gain, 0.003 * gain, 0.99 * gain);
     const normalizedRms = metrics.rms / gain;
     const normalizedPeak = metrics.peak / gain;
     sessionTotalFrames++;
@@ -172,15 +175,17 @@ function startMetering() {
     if (metrics.isSpeech) sessionSpeechFrames++;
     if (metrics.isClipped) sessionClippingFrames++;
 
-    const endpointStatus = endpointDetector.processFrame(normalizedRms);
-    if (
-      endpointStatus.isEndpointed &&
-      !autoEndpointTriggered &&
-      mediaRecorder &&
-      mediaRecorder.state === "recording"
-    ) {
-      autoEndpointTriggered = true;
-      triggerAutoStop();
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      const endpointStatus = endpointDetector.processFrame(normalizedRms);
+      if (
+        endpointStatus.isEndpointed &&
+        !autoEndpointTriggered &&
+        autoEndpointEnabled &&
+        transcriptionDelaySec > 0
+      ) {
+        autoEndpointTriggered = true;
+        triggerAutoStop();
+      }
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
     if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -304,7 +309,21 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   audioChunks = [];
   currentGainValue = inputGain;
   recordingStartTime = Date.now();
+
+  const config = await window.electronIPC?.getConfig();
+  autoEndpointEnabled = config?.autoEndpointEnabled ?? true;
+  transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
+
+  const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
+  endpointDetector = new SpeechEndpointDetector({
+    speechThresholdRms: 0.005,
+    silenceThresholdRms: 0.003,
+    confirmSilenceMs: confirmSilenceMs > 0 ? confirmSilenceMs : 500,
+    minSpeechDurationMs: 150,
+    frameIntervalMs: 50,
+  });
   endpointDetector.reset();
+
   sessionMaxRms = 0;
   sessionPeakAmplitude = 0;
   sessionTotalFrames = 0;

@@ -67,6 +67,8 @@ const chimeEndSelect = document.getElementById("chimeEndSelect") as HTMLSelectEl
 const previewStartChimeBtn = document.getElementById("previewStartChimeBtn") as HTMLButtonElement;
 const previewEndChimeBtn = document.getElementById("previewEndChimeBtn") as HTMLButtonElement;
 const symbolScannerToggle = document.getElementById("symbolScannerToggle") as HTMLInputElement;
+const autoEndpointToggle = document.getElementById("autoEndpointToggle") as HTMLInputElement;
+const transcriptionDelayInput = document.getElementById("transcriptionDelayInput") as HTMLInputElement;
 const settingModelSelect = document.getElementById("settingModelSelect") as HTMLSelectElement;
 const micDeviceSelect = document.getElementById("micDeviceSelect") as HTMLSelectElement;
 const addAppRuleBtn = document.getElementById("addAppRuleBtn") as HTMLButtonElement | null;
@@ -426,6 +428,12 @@ async function initUI() {
     }
     if (symbolScannerToggle && config.symbolScannerEnabled !== undefined) {
       symbolScannerToggle.checked = config.symbolScannerEnabled;
+    }
+    if (autoEndpointToggle && config.autoEndpointEnabled !== undefined) {
+      autoEndpointToggle.checked = config.autoEndpointEnabled;
+    }
+    if (transcriptionDelayInput && config.transcriptionDelaySec !== undefined) {
+      transcriptionDelayInput.value = config.transcriptionDelaySec.toString();
     }
     if (settingModelSelect && config.geminiModel) {
       settingModelSelect.value = config.geminiModel;
@@ -1131,6 +1139,19 @@ chimeEndSelect?.addEventListener("change", async () => {
 
 symbolScannerToggle?.addEventListener("change", async () => {
   await window.electronIPC?.saveConfig({ symbolScannerEnabled: symbolScannerToggle.checked });
+});
+
+autoEndpointToggle?.addEventListener("change", async () => {
+  await window.electronIPC?.saveConfig({ autoEndpointEnabled: autoEndpointToggle.checked });
+});
+
+transcriptionDelayInput?.addEventListener("change", async () => {
+  const val = parseFloat(transcriptionDelayInput.value);
+  if (!isNaN(val)) {
+    const clamped = Math.max(0.0, Math.min(10.0, val));
+    transcriptionDelayInput.value = clamped.toString();
+    await window.electronIPC?.saveConfig({ transcriptionDelaySec: clamped });
+  }
 });
 
 previewStartChimeBtn?.addEventListener("click", async () => {
