@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Ospeto/vo)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Platform](https://img.shields.io/badge/platform-macOS_Apple_Silicon-black.svg)](https://github.com/Ospeto/vo)
-[![Tests](https://img.shields.io/badge/tests-262%2F262_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
+[![Tests](https://img.shields.io/badge/tests-266%2F266_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
 
 **`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` seamlessly transcribes spoken Burmese audio into clean, technical English software specifications or written Burmese prose directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack. Paste is target-aware: if the focused window changes or native paste is unavailable, the transcript is retained without injecting text.
 
@@ -28,8 +28,8 @@
 │                        (SystemInstruction Prompt Enforcer)                  │
 │                                      │                                      │
 │                                      ▼                                      │
-│                   [ DOUBLE-SAFETY TRANSLATION FALLBACK ]                    │
-│                   (100ms Gemini 3.5 Text Translation)                       │
+│            [ NON-EDITING TRANSLATION SAFETY FALLBACK ]                      │
+│              (Only when auto-translation is enabled)                       │
 │                                      │                                      │
 │                                      ▼                                      │
 │                       [ NATIVE PASTE INJECTION ]                            │
@@ -117,7 +117,7 @@ cd vo
 # Install dependencies
 bun install
 
-# Run unit test suite (262 tests)
+# Run unit test suite
 bun test
 
 # Build production bundle
