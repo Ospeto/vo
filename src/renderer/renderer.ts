@@ -476,11 +476,18 @@ async function initUI() {
   dictionaryPreviewInput?.addEventListener("input", renderDictionaryPreview);
 }
 
-function showDictionaryError(message = "") {
-  if (dictionaryValidation) dictionaryValidation.textContent = message;
+function showDictionaryMessage(message = "", isError = true) {
+  if (dictionaryValidation) {
+    dictionaryValidation.style.color = isError ? "#fca5a5" : "#86efac";
+    dictionaryValidation.textContent = message;
+  }
 }
 
-function renderDictionaryEntries() {
+function showDictionaryError(message = "") {
+  showDictionaryMessage(message, true);
+}
+
+function renderDictionaryEntries(highlightId?: string) {
   if (!dictionaryEntriesContainer) return;
   dictionaryEntriesContainer.innerHTML = "";
   if (dictionaryEntries.length === 0) {
@@ -488,10 +495,23 @@ function renderDictionaryEntries() {
     renderDictionaryPreview();
     return;
   }
+
+  let highlightedElement: HTMLElement | null = null;
+
   for (const entry of dictionaryEntries) {
     const row = document.createElement("div");
     row.className = "vocab-tag";
+    row.dataset.id = entry.id;
     row.style.opacity = entry.enabled ? "1" : "0.5";
+    if (entry.id === highlightId) {
+      highlightedElement = row;
+      row.style.borderColor = "#22c55e";
+      row.style.boxShadow = "0 0 8px rgba(34, 197, 94, 0.5)";
+      setTimeout(() => {
+        row.style.borderColor = "";
+        row.style.boxShadow = "";
+      }, 2500);
+    }
     const label = document.createElement("span");
     label.textContent = `${entry.phrase} ← ${entry.spokenAliases.join(", ")}`;
     row.appendChild(label);
@@ -507,7 +527,7 @@ function renderDictionaryEntries() {
       dictionaryAliasesInput.value = entry.spokenAliases.join(", ");
       editingDictionaryId = entry.id;
       addDictionaryEntryBtn.textContent = "Save";
-      showDictionaryError("");
+      showDictionaryMessage("");
     });
     row.appendChild(edit);
     const remove = document.createElement("button");
@@ -516,27 +536,33 @@ function renderDictionaryEntries() {
     row.appendChild(remove);
     dictionaryEntriesContainer.appendChild(row);
   }
+
   renderDictionaryPreview();
+
+  if (highlightedElement) {
+    highlightedElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
-async function saveDictionaryEntries(nextEntries: DictionaryEntry[]) {
+async function saveDictionaryEntries(nextEntries: DictionaryEntry[], highlightId?: string) {
   const errors = validateDictionaryEntries(nextEntries);
   if (errors.length > 0) {
     showDictionaryError(errors.map((error) => `${error.alias}: ${error.message}`).join("; "));
-    return;
+    return false;
   }
   try {
     const config = await window.electronIPC?.saveConfig({ dictionaryEntries: nextEntries });
     dictionaryEntries = (config?.dictionaryEntries || nextEntries) as DictionaryEntry[];
-    showDictionaryError("");
-    renderDictionaryEntries();
+    renderDictionaryEntries(highlightId);
+    return true;
   } catch (error) {
     showDictionaryError(error instanceof Error ? error.message : "Could not save dictionary entry");
+    return false;
   }
 }
 
 async function updateDictionaryEntry(entry: DictionaryEntry) {
-  await saveDictionaryEntries(dictionaryEntries.map((item) => item.id === entry.id ? entry : item));
+  await saveDictionaryEntries(dictionaryEntries.map((item) => item.id === entry.id ? entry : item), entry.id);
 }
 
 async function saveDictionaryEntry() {
@@ -571,12 +597,13 @@ async function saveDictionaryEntry() {
     ? dictionaryEntries.map((entry) => entry.id === targetId ? nextEntry : entry)
     : [...dictionaryEntries, nextEntry];
 
-  await saveDictionaryEntries(nextEntries);
-  if (!dictionaryValidation?.textContent) {
+  const success = await saveDictionaryEntries(nextEntries, targetId);
+  if (success) {
+    showDictionaryMessage(`✓ Saved "${phrase} ← ${mergedAliases.join(", ")}"`, false);
     editingDictionaryId = null;
-    dictionaryPhraseInput.value = "";
-    dictionaryAliasesInput.value = "";
-    addDictionaryEntryBtn.textContent = "+ Add";
+    if (dictionaryPhraseInput) dictionaryPhraseInput.value = "";
+    if (dictionaryAliasesInput) dictionaryAliasesInput.value = "";
+    if (addDictionaryEntryBtn) addDictionaryEntryBtn.textContent = "+ Add";
   }
 }
 
