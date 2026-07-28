@@ -46,6 +46,7 @@
 - Supports **Gemini 3.6 Flash**, **Gemini 3.5 Flash Lite**, **Gemini 3.1 Flash Lite**, and **Gemini 2.5 Pro**.
 - Automatically translates spoken Burmese instructions into pure Senior Software Engineer English specifications.
 - Sends a bounded, deduplicated list of enabled trusted vocabulary and spoken aliases as soft hints to Gemini and OpenAI, then applies the enabled dictionary locally with exact, deterministic matching across supported speech providers.
+- Applies a safe local post-transcription correction pass for spoken punctuation, accidental repeats, and spacing while preserving code regions, URLs, identifiers, and intentional repeated lines.
 - Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
 - Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
 - Starts capture before recording-state handoff to reduce clipped first phonemes, stops after confirmed speech silence, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
