@@ -154,16 +154,19 @@ export class SafePasteService {
       result = { ok: false, reason };
     }
     if (result === undefined) {
-      if (!isCurrent()) return { ok: false, reason: "target_mismatch" };
-      const injectionStarted = this.clock();
-      try {
-        await this.injectPaste(expectedTarget, isCurrent);
-        this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "success" });
-        result = { ok: true, reason: "injection_requested" };
-      } catch (error) {
-        const reason = failureReason(error, "injection_rejected");
-        this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "failure", reason });
-        result = { ok: false, reason };
+      if (!isCurrent()) {
+        result = { ok: false, reason: "target_mismatch" };
+      } else {
+        const injectionStarted = this.clock();
+        try {
+          await this.injectPaste(expectedTarget, isCurrent);
+          this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "success" });
+          result = { ok: true, reason: "injection_requested" };
+        } catch (error) {
+          const reason = failureReason(error, "injection_rejected");
+          this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "failure", reason });
+          result = { ok: false, reason };
+        }
       }
     }
     if (result?.ok) {

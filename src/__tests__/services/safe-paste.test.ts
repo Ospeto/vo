@@ -228,6 +228,26 @@ describe("SafePasteService", () => {
     expect(clipboard.value).toBe("old");
   });
 
+  test("restores the clipboard when cancellation happens after writing but before injection", async () => {
+    let isCurrent = true;
+    let value = "old";
+    let injected = false;
+    const events: string[] = [];
+    const clipboard = {
+      readText: () => value,
+      writeText: (text: string) => { events.push("write"); value = text; isCurrent = false; },
+      snapshot: () => { events.push("snapshot"); return { text: value, formats: [] }; },
+      restore: (snapshot: ClipboardSnapshot) => { events.push("restore"); value = snapshot.text ?? ""; },
+    };
+    const service = new SafePasteService(() => target(), async () => { injected = true; }, clipboard, async () => {});
+    service.captureTarget();
+
+    expect(await service.paste("secret", () => isCurrent)).toEqual({ ok: false, reason: "target_mismatch" });
+    expect(value).toBe("old");
+    expect(injected).toBe(false);
+    expect(events).toEqual(["snapshot", "write", "restore"]);
+  });
+
   test("parses optional non-authoritative title without widening target policy", () => {
     expect(parseTargetLine("com.example.editor\tEditor\t42\t7\t\n")).toEqual({ ...target(), windowTitle: undefined });
     expect(parseTargetLine("com.example.editor\tEditor\t42\t7\tDocument\textra\n")).toBeNull();
