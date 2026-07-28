@@ -112,6 +112,12 @@ async function populateAudioDevices(selectedDeviceId?: string) {
     }
   } catch {}
 }
+
+if (typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === "function") {
+  navigator.mediaDevices.addEventListener("devicechange", () => {
+    populateAudioDevices(micDeviceSelect?.value);
+  });
+}
 let currentPresetVocabMap: Record<string, string[]> = {};
 
 function getAudioContext(): AudioContext {

@@ -12,6 +12,12 @@ let currentGainValue = 1.0;
 let recordingStartTime = 0;
 let recordingGeneration = 0;
 
+let sessionMaxAbs = 0;
+let sessionMaxRms = 0;
+let sessionClippedSamples = 0;
+let sessionTotalSamples = 0;
+let sessionTrackEnded = false;
+
 async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
     currentGainValue = inputGain;
@@ -32,8 +38,8 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
         mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: { ...baseAudioConstraints, deviceId: { exact: targetDeviceId } },
         });
-      } catch {
-        // Fallback to system default if specified external mic device is unavailable
+      } catch (err: any) {
+        console.warn(`Target audio device '${targetDeviceId}' unavailable (${err?.message}), falling back to system default.`);
         mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: baseAudioConstraints,
         });
@@ -41,6 +47,18 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
     } else {
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: baseAudioConstraints,
+      });
+    }
+
+    if (mediaStream) {
+      mediaStream.getAudioTracks().forEach((track) => {
+        track.onended = () => {
+          sessionTrackEnded = true;
+          mediaStream = null;
+          if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            window.electronIPC?.sendRecordingError("Microphone disconnected");
+          }
+        };
       });
     }
 
@@ -85,6 +103,17 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   }
 }
 
+if (typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === "function") {
+  navigator.mediaDevices.addEventListener("devicechange", () => {
+    if (mediaStream) {
+      const tracks = mediaStream.getAudioTracks();
+      if (tracks.length === 0 || tracks.some((t) => t.readyState === "ended")) {
+        mediaStream = null;
+      }
+    }
+  });
+}
+
 function startMetering() {
   if (meterInterval) clearInterval(meterInterval);
   
@@ -99,10 +128,19 @@ function startMetering() {
     let sumSquares = 0;
     for (let i = 0; i < buffer.length; i++) {
       const val = buffer[i] ?? 0;
-      const amplified = val;
-      sumSquares += amplified * amplified;
+      const qualityVal = currentGainValue > 0 ? val / currentGainValue : val;
+      const absVal = Math.abs(qualityVal);
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        if (absVal > sessionMaxAbs) sessionMaxAbs = absVal;
+        if (absVal >= 0.99) sessionClippedSamples++;
+        sessionTotalSamples++;
+      }
+      sumSquares += qualityVal * qualityVal;
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      if (rms > sessionMaxRms) sessionMaxRms = rms;
+    }
     
     // Smooth logarithmic dB scale normalized to [0, 100%]
     const rmsDb = Math.max(-60, Math.min(0, 20 * Math.log10(rms || 0.0001)));
@@ -116,10 +154,9 @@ function startMetering() {
     }
 
     // Extract 16 frequency bands for visualizer spectrum
+    const barCount = 16;
     const freqData = new Uint8Array(analyserNode.frequencyBinCount);
     analyserNode.getByteFrequencyData(freqData);
-
-    const barCount = 16;
     const step = Math.floor(freqData.length / barCount);
     const spectrum: number[] = [];
     for (let i = 0; i < barCount; i++) {
@@ -152,7 +189,16 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   currentGainValue = inputGain;
   recordingStartTime = Date.now();
 
-  if (!mediaStream) {
+  sessionMaxAbs = 0;
+  sessionMaxRms = 0;
+  sessionClippedSamples = 0;
+  sessionTotalSamples = 0;
+  sessionTrackEnded = false;
+
+  const isStreamValid = mediaStream && mediaStream.active && mediaStream.getAudioTracks().some((t) => t.readyState === "live");
+
+  if (!isStreamValid) {
+    mediaStream = null;
     const ok = await setupAudioPipeline(inputGain);
     if (!ok || generation !== recordingGeneration) return;
   } else if (gainNode && audioCtx) {
@@ -174,6 +220,26 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
       };
       mediaRecorder.onstop = async () => {
         if (generation !== recordingGeneration) return;
+
+        if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
+          window.electronIPC?.sendRecordingError("Microphone disconnected");
+          audioChunks = [];
+          return;
+        }
+
+        const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
+        if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
+          window.electronIPC?.sendRecordingError("Microphone input clipped");
+          audioChunks = [];
+          return;
+        }
+
+        if (sessionMaxAbs < 0.008 && sessionMaxRms < 0.003) {
+          window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
+          audioChunks = [];
+          return;
+        }
+
         const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
         const arrayBuffer = await audioBlob.arrayBuffer();
         if (generation !== recordingGeneration) return;
@@ -214,6 +280,25 @@ window.electronIPC?.onStopRecording(() => {
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
           mediaRecorder.stop();
         } else {
+          if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
+            window.electronIPC?.sendRecordingError("Microphone disconnected");
+            audioChunks = [];
+            return;
+          }
+
+          const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
+          if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
+            window.electronIPC?.sendRecordingError("Microphone input clipped");
+            audioChunks = [];
+            return;
+          }
+
+          if (sessionMaxAbs < 0.008 && sessionMaxRms < 0.003) {
+            window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
+            audioChunks = [];
+            return;
+          }
+
           const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
           audioBlob.arrayBuffer().then((buf) => {
             if (generation !== recordingGeneration) return;
