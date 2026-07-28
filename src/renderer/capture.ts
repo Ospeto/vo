@@ -371,12 +371,13 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
 });
 
 window.electronIPC?.onStopRecording(() => {
-  const generation = recordingGeneration;
   try {
     if (!mediaRecorder) {
+      recordingGeneration++;
       window.electronIPC?.sendRecordingError("No media recorder instance");
       return;
     }
+    const generation = recordingGeneration;
 
     const doStop = () => {
       // 300ms post-roll to allow final WebAudio speech tail chunk to flush into MediaRecorder
