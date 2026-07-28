@@ -400,10 +400,10 @@ export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
   const active = entries.filter((entry) => entry.enabled && entry.phrase.trim());
   if (active.length === 0) return "";
   const lines = active.map((entry) => {
-    const aliases = Array.from(new Set(entry.spokenAliases.filter(Boolean)));
-    return `- Possible match: ${aliases.join(" | ")} -> Preferred spelling if supported by the audio: ${entry.phrase}`;
+    const aliases = Array.from(new Set([entry.phrase, ...entry.spokenAliases].map((s) => s.trim()).filter(Boolean)));
+    return `- Spoken sound/word "${aliases.join('" or "')}" ➔ Output exact preferred spelling: "${entry.phrase}"`;
   });
-  return `\nDICTIONARY HINTS (soft help only; deterministic local correction runs after transcription):\n${lines.join("\n")}\n`;
+  return `\nSTRICT DICTIONARY REPLACEMENT RULES (CRITICAL):\nWhen the speaker says any of these words or sounds, output the exact preferred spelling:\n${lines.join("\n")}\n`;
 }
 
 export function buildCustomVocabularyPromptPart(terms: string[]): string {

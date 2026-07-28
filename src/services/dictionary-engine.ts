@@ -60,8 +60,8 @@ export class DictionaryEngine {
     }
 
     const alternatives = candidates.map((candidate) => {
-      const escaped = candidate.legacyWhitespace
-        ? candidate.alias.split(/\s+/).filter(Boolean).map(escapeRegExp).join("\\s*")
+      const escaped = (candidate.legacyWhitespace || candidate.alias.includes(" ") || candidate.alias.includes("-"))
+        ? candidate.alias.split(/[\s\-]+/).filter(Boolean).map(escapeRegExp).join("[\\s\\-]*")
         : escapeRegExp(candidate.alias);
       return candidate.boundary
         ? `(?<![${LATIN_BOUNDARY}])${escaped}(?![${LATIN_BOUNDARY}])`
@@ -73,9 +73,13 @@ export class DictionaryEngine {
   process(text: string): string {
     if (!text || !this.matcher) return text;
     return text.replace(this.matcher, (match) => {
-      const candidate = this.candidates.find((item) => item.legacyWhitespace
-        ? normalizeLegacyAlias(item.alias) === normalizeLegacyAlias(match)
-        : normalizeAlias(item.alias) === normalizeAlias(match));
+      const matchNorm = normalizeAlias(match).replace(/[\s\-]+/g, "");
+      const candidate = this.candidates.find((item) => {
+        const itemNorm = normalizeAlias(item.alias).replace(/[\s\-]+/g, "");
+        return itemNorm === matchNorm || (item.legacyWhitespace
+          ? normalizeLegacyAlias(item.alias) === normalizeLegacyAlias(match)
+          : normalizeAlias(item.alias) === normalizeAlias(match));
+      });
       return candidate?.phrase ?? match;
     });
   }
