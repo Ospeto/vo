@@ -401,7 +401,7 @@ export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
   if (active.length === 0) return "";
   const lines = active.map((entry) => {
     const aliases = Array.from(new Set(entry.spokenAliases.filter(Boolean)));
-    return `- Heard as: ${aliases.join(" | ")} -> Write exactly: ${entry.phrase}`;
+    return `- Possible match: ${aliases.join(" | ")} -> Preferred spelling if supported by the audio: ${entry.phrase}`;
   });
   return `\nDICTIONARY HINTS (soft help only; deterministic local correction runs after transcription):\n${lines.join("\n")}\n`;
 }
@@ -432,12 +432,12 @@ export function buildCustomVocabularyPromptPart(terms: string[]): string {
     }
   }
 
-  let result = "\nMANDATORY PERSON NAMES & VOCABULARY DICTIONARY:\n";
+  let result = "\nDICTIONARY HINTS (soft help only; use only when supported by the audio):\n";
   if (mappings.length > 0) {
-    result += `PHONETIC MAPPINGS (MUST BE STRICTLY RESPECTED):\n${mappings.join("\n")}\n`;
+    result += `POSSIBLE PHONETIC MAPPINGS:\n${mappings.join("\n")}\n`;
   }
   if (plainTerms.length > 0) {
-    result += `EXACT TARGET SPELLINGS: ${plainTerms.join(", ")}\n`;
+    result += `POSSIBLE TARGET SPELLINGS: ${plainTerms.join(", ")}\n`;
   }
   return result;
 }
