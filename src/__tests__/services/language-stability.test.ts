@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig, updateConfig } from "../../services/config.js";
 import { resolveEffectivePreset, getPresetPromptInstructions, transcribeDetailed } from "../../services/stt.js";
+import { _resetGeminiClient } from "../../services/gemini-client.js";
 
 describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   let tempDir: string;
@@ -12,10 +13,12 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "pi-voice-lang-stability-"));
     process.env.GEMINI_API_KEY = "test-gemini-key";
+    _resetGeminiClient();
   });
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    _resetGeminiClient();
     try {
       rmSync(tempDir, { recursive: true, force: true });
     } catch {}
@@ -98,17 +101,31 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
     test("explicit translateEnabled: false disables translation mode even when targetLanguage is set", async () => {
       updateConfig(tempDir, { translateEnabled: false, targetLanguage: "Japanese" });
 
-      const fakeAudio = new Float32Array(16000).buffer;
-      const res = await transcribeDetailed(fakeAudio, {
-        provider: "gemini",
-        dictationPreset: "careful",
-        translateEnabled: false,
-        targetLanguage: "Japanese",
-      }).catch((err) => {
-        return { text: "", usedPaidKey: false, modelUsed: "gemini-3.1-flash-lite", error: err.message };
-      });
+      let capturedSystemInstruction = "";
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
+        return new Response(JSON.stringify({
+          candidates: [{ content: { parts: [{ text: "The database is ready." }] } }],
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }) as any;
 
-      expect(res).toBeDefined();
+      try {
+        const res = await transcribeDetailed(new Float32Array(16000).buffer, {
+          provider: "gemini",
+          dictationPreset: "burmese_written",
+          translateEnabled: false,
+          targetLanguage: "Japanese",
+          workspacePath: tempDir,
+        });
+
+        expect(res.text).toBe("The database is ready.");
+        expect(capturedSystemInstruction).toContain("original spoken language");
+        expect(capturedSystemInstruction).not.toContain("into fluent, natural Burmese written prose");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 

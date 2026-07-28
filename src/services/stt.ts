@@ -271,7 +271,7 @@ CORE CAREFUL DIRECTIVES:
 ${GLOBAL_BILINGUAL_DIRECTIVE}
 
 Preset Mode: BURMESE WRITTEN PROSE & BILINGUAL ACCURACY.
-Transcribe spoken audio into fluent, natural Burmese written prose (မြန်မာစာ) while accurately preserving embedded English technical terms, proper nouns, and acronyms in exact English script.
+When translation mode is inactive, transcribe spoken audio into fluent, natural written prose in its original spoken language. Accurately preserve embedded English technical terms, proper nouns, and acronyms in exact English script.
 `.trim();
     case "email_polish":
       return `
