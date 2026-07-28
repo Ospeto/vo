@@ -75,6 +75,14 @@ export class HotkeyService implements IHotkeyService {
       return { success: false, error: err.message };
     }
 
+    if (editBindingStr) {
+      try {
+        this.currentEditBinding = parseKeyBinding(editBindingStr);
+      } catch (err: any) {
+        logger.warn({ err: String(err) }, "Failed to parse edit hotkey binding in replace");
+      }
+    }
+
     const previousBinding = this.currentBinding;
     const previousDisplay = this.currentDisplay;
 
@@ -107,7 +115,12 @@ export class HotkeyService implements IHotkeyService {
       }
 
       if (!fnHookStarted) {
-        globalShortcut.register("Control+Command+Option+V", () => onDown("dictate"));
+        try {
+          globalShortcut.register("Control+Command+Option+V", () => onDown("dictate"));
+          globalShortcut.register("Control+Command+Option+E", () => onDown("edit"));
+        } catch (err) {
+          logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
+        }
       }
 
       this.currentBinding = candidateBinding;

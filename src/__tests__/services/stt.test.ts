@@ -14,12 +14,19 @@ mock.module("../../services/logger.js", () => ({
 const mockGenerateContent = mock(async () => ({
   text: "gemini transcription",
 }));
+let mockFallbackGenerateContent: any = null;
+
 mock.module("../../services/gemini-client.js", () => ({
   getGeminiClient: () => ({
     models: {
       generateContent: mockGenerateContent,
     },
   }),
+  getGeminiFallbackClient: () => (mockFallbackGenerateContent ? {
+    models: {
+      generateContent: mockFallbackGenerateContent,
+    },
+  } : null),
   _resetGeminiClient: () => {},
 }));
 
@@ -107,6 +114,31 @@ describe("transcribe", () => {
     const result = await transcribe(data, "gemini");
     expect(result).toBe("Gemini transcription");
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+  });
+
+  test("aborts a paid fallback when the model timeout wins", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    let fallbackSignal: AbortSignal | undefined;
+    mockGenerateContent.mockImplementation(async () => new Promise(() => {}));
+    mockFallbackGenerateContent = mock(async (request: any) => {
+      fallbackSignal = request.config.abortSignal;
+      await new Promise((_, reject) => {
+        fallbackSignal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      });
+      return { text: "unreachable" };
+    });
+    globalThis.setTimeout = ((callback: TimerHandler, delay?: number, ...args: any[]) =>
+      originalSetTimeout(callback, delay === 2000 ? 1 : delay && delay > 2000 ? 10 : delay, ...args)) as typeof setTimeout;
+
+    try {
+      await expect(transcribe(new ArrayBuffer(10), "gemini")).rejects.toThrow("All Gemini STT models failed");
+      expect(fallbackSignal?.aborted).toBe(true);
+      expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      mockFallbackGenerateContent = null;
+      mockGenerateContent.mockImplementation(async () => ({ text: "gemini transcription" }));
+    }
   });
 
   test("transcribes with openai provider", async () => {
@@ -229,5 +261,37 @@ describe("transcribe", () => {
     expect(resolveEffectivePreset("auto", "Xcode", customMappings)).toBe("code_comment");
     expect(resolveEffectivePreset("auto", "Discord", customMappings)).toBe("email_polish");
     expect(resolveEffectivePreset("auto", "UnknownApp", customMappings)).toBe("careful");
+  });
+
+  test("uses fallback client when primary gemini key rejects fast", async () => {
+    mockGenerateContent.mockImplementationOnce(async () => {
+      throw new Error("429 Rate Limit");
+    });
+    mockFallbackGenerateContent = mock(async () => ({
+      text: "paid fallback transcription",
+    }));
+
+    const data = new ArrayBuffer(10);
+    const result = await transcribe(data, "gemini");
+    expect(result).toBe("Paid fallback transcription");
+    expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
+
+    mockFallbackGenerateContent = null;
+  });
+
+  test("does not invoke fallback client when primary gemini key succeeds fast", async () => {
+    mockGenerateContent.mockImplementationOnce(async () => ({
+      text: "primary fast result",
+    }));
+    mockFallbackGenerateContent = mock(async () => ({
+      text: "paid fallback transcription",
+    }));
+
+    const data = new ArrayBuffer(10);
+    const result = await transcribe(data, "gemini");
+    expect(result).toBe("Primary fast result");
+    expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(0);
+
+    mockFallbackGenerateContent = null;
   });
 });

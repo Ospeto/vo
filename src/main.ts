@@ -3,7 +3,7 @@ import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, updateConfig, parseKeyBinding, ConfigError, type PiVoiceConfig } from "./services/config.js";
+import { loadConfig, updateConfig, parseKeyBinding, formatKeyBinding, ConfigError, type PiVoiceConfig } from "./services/config.js";
 import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
@@ -610,7 +610,8 @@ function setupIpcHandlers() {
         pasteTextToFocusedField(text);
         const activeApp = getActiveAppName();
         const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
-        const isEnglish = currentConfig.dictationPreset !== "burmese_written" && currentConfig.dictationPreset !== "fast";
+        const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
+        const isEnglish = !isBurmeseText;
         const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
       }
@@ -716,7 +717,7 @@ function setupIpcHandlers() {
         onDown: (mode) => handleHotkeyDown(mode),
         onUp: () => handleHotkeyUp(),
       },
-      currentConfig.editKeyDisplay
+      formatKeyBinding(currentConfig.editKey)
     );
     if (res.success && res.binding) {
       currentConfig = updateConfig(workingCwd, { key: newKeyStr });
