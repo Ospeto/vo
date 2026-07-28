@@ -22,6 +22,8 @@ describe("vocabulary-service", () => {
     const first = loadPersistedVocabulary(legacyFile, dictionaryFile);
     expect(first.version).toBe(2);
     expect(first.entries?.some((entry) => entry.phrase === "MAS 141")).toBe(true);
+    expect(first.entries?.find((entry) => entry.phrase === "MAS 141")?.spokenAliases).toContain("မက်စ်\t၁၄၁");
+    expect(first.entries?.find((entry) => entry.phrase === "SarYayKaung")?.spokenAliases).toContain("စာရေး  ကောင်း");
     expect(first.entries?.some((entry) => entry.phrase === "userId")).toBe(true);
     expect(first.entries?.some((entry) => entry.phrase === "kubectl")).toBe(true);
     const before = readFileSync(legacyFile, "utf8");
