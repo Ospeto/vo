@@ -81,32 +81,29 @@
     /* Contextual Labels */
     .hud-label {
       display: none;
-      flex-direction: column;
+      align-items: center;
       justify-content: center;
       min-width: 0;
-      line-height: 1.1;
-      margin: 0 2px;
-      max-width: 150px;
+      line-height: 1;
+      margin: 0 4px;
+      max-width: 180px;
     }
     .hud-capsule.expanded .hud-label,
     .hud-capsule:hover .hud-label {
-      display: flex;
+      display: inline-flex;
     }
     .hud-title {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
+      font-size: 9.5px;
+      font-weight: 750;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: rgba(255, 255, 255, 0.95);
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .hud-detail {
-      font-size: 8.5px;
-      font-weight: 500;
-      color: rgba(255, 255, 255, 0.65);
-      overflow: hidden;
-      text-overflow: ellipsis;
+      display: none;
     }
 
     /* Cancel & Action Buttons */
@@ -388,7 +385,7 @@
         hudIcon.innerHTML = stateIcons.idle;
       }
 
-      // Pick titles and details
+      // Pick single subtitle line
       if (hasSelection && state === "recording") {
         hudTitle.textContent = "EDITING";
         hudDetail.textContent = msg || "Transform selection";
@@ -396,7 +393,7 @@
         hudTitle.textContent = "SELECTION";
         hudDetail.textContent = msg || "Edit selected text";
       } else {
-        hudTitle.textContent = defaultTitles[state] || state.toUpperCase();
+        hudTitle.textContent = msg || defaultTitles[state] || state.toUpperCase();
         hudDetail.textContent = msg || defaultDetails[state] || "";
       }
 

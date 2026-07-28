@@ -121,4 +121,15 @@ describe("VO HUD Usefulness & Aesthetic Pass Contract Suite", () => {
       expect(hudHtmlContent).toContain(".hud-bar:nth-child(2) { height: 14px; }");
     });
   });
+
+  describe("7. Single Subtitle Contract (No Duplicate Vertical Stack)", () => {
+    test("enforces single subtitle line rendering without vertical title/detail stack", () => {
+      expect(hudHtmlContent).toContain(".hud-detail {\n      display: none;");
+      expect(hudHtmlContent).not.toContain("flex-direction: column;");
+    });
+
+    test("sets single subtitle text on hudTitle incorporating dynamic messages, errors, and selection state", () => {
+      expect(hudHtmlContent).toContain("hudTitle.textContent = msg || defaultTitles[state] || state.toUpperCase()");
+    });
+  });
 });
