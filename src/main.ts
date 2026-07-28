@@ -70,8 +70,15 @@ function isCurrentTranscription(sequenceId: number): boolean {
 }
 
 let activeSTTAbortController: AbortController | null = null;
+let activeSelectionAbortController: AbortController | null = null;
+
+function abortSelectionCapture() {
+  activeSelectionAbortController?.abort();
+  activeSelectionAbortController = null;
+}
 
 function cancelDictation(reason: string = "Cancelled") {
+  abortSelectionCapture();
   if (currentState === "idle") {
     if (hudWindow && hudWindow.isVisible()) {
       hudWindow.hide();
@@ -852,10 +859,13 @@ async function startRecordingFlow() {
   safePasteService.captureTarget();
   setState("starting", "Starting...");
 
+  const selectionAbortController = new AbortController();
+  activeSelectionAbortController = selectionAbortController;
   let selection: Awaited<ReturnType<typeof captureActiveSelection>>;
   try {
-    selection = await captureActiveSelection(350, selectionClipboardPort);
+    selection = await captureActiveSelection(350, { signal: selectionAbortController.signal, port: selectionClipboardPort ?? undefined });
   } catch (err: any) {
+    if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
     const snapshot = recordingLifecycle.snapshot();
     if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
     pasteCoordinator.invalidate();
@@ -864,6 +874,7 @@ async function startRecordingFlow() {
     setState("error", "Selection capture failed");
     return;
   }
+  if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
     if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard, selectionClipboardPort);
@@ -918,6 +929,7 @@ function handleHotkeyUp() {
   const pressDuration = Date.now() - keyHoldPressStartTime;
   if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
     if (currentState === "starting") {
+      abortSelectionCapture();
       pasteCoordinator.invalidate();
       recordingLifecycle.reset();
       setState("idle", "Ready");
