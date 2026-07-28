@@ -18,6 +18,7 @@ let currentGainValue = 1.0;
 let recordingStartTime = 0;
 let recordingGeneration = 0;
 let postRollTimer: ReturnType<typeof setTimeout> | null = null;
+let stopRequestedDuringStartup = false;
 
 let endpointDetector = new SpeechEndpointDetector({
   speechThresholdRms: 0.005,
@@ -305,6 +306,7 @@ async function finalizeRecording(generation: number) {
 
 window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
   const generation = ++recordingGeneration;
+  stopRequestedDuringStartup = false;
   finalizedRecordingGeneration = -1;
   audioChunks = [];
   currentGainValue = inputGain;
@@ -368,14 +370,20 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
       };
       mediaRecorder.onstop = () => { void finalizeRecording(generation); };
       mediaRecorder.start(100);
+      if (stopRequestedDuringStartup && generation === recordingGeneration) {
+        stopRequestedDuringStartup = false;
+        stopRecording();
+      }
     }
   } catch (err: any) {
+    stopRequestedDuringStartup = false;
     window.electronIPC?.sendRecordingError(`MediaRecorder start failed: ${err.message}`);
   }
 });
 
 (window.electronIPC as any)?.onCancelRecording(() => {
   recordingGeneration++;
+  stopRequestedDuringStartup = false;
   if (postRollTimer) {
     clearTimeout(postRollTimer);
     postRollTimer = null;
@@ -389,11 +397,10 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   audioChunks = [];
 });
 
-window.electronIPC?.onStopRecording(() => {
+function stopRecording() {
   try {
-    if (!mediaRecorder) {
-      recordingGeneration++;
-      window.electronIPC?.sendRecordingError("No media recorder instance");
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      stopRequestedDuringStartup = true;
       return;
     }
     const generation = recordingGeneration;
@@ -423,4 +430,6 @@ window.electronIPC?.onStopRecording(() => {
   } catch (err: any) {
     window.electronIPC?.sendRecordingError(`MediaRecorder stop failed: ${err.message}`);
   }
-});
+}
+
+window.electronIPC?.onStopRecording(stopRecording);
