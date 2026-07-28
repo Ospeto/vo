@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
 import logger from "./logger.js";
-import { loadPersistedVocabulary, savePersistedVocabulary, migrateVocabulary } from "./vocabulary-service.js";
+import { loadPersistedVocabulary, savePersistedVocabulary, migrateVocabulary, backfillLegacyWhitespace } from "./vocabulary-service.js";
 import { validateDictionaryEntries } from "./dictionary-engine.js";
 import type { DictionaryEntry } from "../shared/types.js";
 
@@ -460,7 +460,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     ...(presetVocabulary || {}),
   };
   const mergedDictionaryEntries = dictionaryEntries.length > 0
-    ? dictionaryEntries
+    ? backfillLegacyWhitespace(dictionaryEntries)
     : migrateVocabulary(mergedCustomVocab, mergedPresetVocab, persistedVocab.entries || []);
   const dictionaryErrors = validateDictionaryEntries(mergedDictionaryEntries);
   if (dictionaryErrors.length > 0) {

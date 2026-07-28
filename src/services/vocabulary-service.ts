@@ -55,6 +55,13 @@ function seededEntries(): DictionaryEntry[] {
   return TRUSTED_SEEDS.map(([phrase, aliases]) => ({ id: stableId(phrase, aliases), phrase, spokenAliases: aliases, enabled: true, legacyWhitespace: true }));
 }
 
+export function backfillLegacyWhitespace(entries: DictionaryEntry[]): DictionaryEntry[] {
+  const legacyPhrases = new Set(TRUSTED_SEEDS.map(([phrase]) => phrase));
+  return entries.map((entry) => legacyPhrases.has(entry.phrase) && entry.legacyWhitespace === undefined
+    ? { ...entry, legacyWhitespace: true }
+    : entry);
+}
+
 function mergeEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
   const merged: DictionaryEntry[] = [];
   for (const raw of entries) {
