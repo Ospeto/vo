@@ -11,7 +11,6 @@ let meterInterval: number | null = null;
 let currentGainValue = 1.0;
 let recordingStartTime = 0;
 let recordingGeneration = 0;
-const cancelledGenerations = new Set<number>();
 
 async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
@@ -174,7 +173,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
         }
       };
       mediaRecorder.onstop = async () => {
-        if (generation !== recordingGeneration || cancelledGenerations.delete(generation)) return;
+        if (generation !== recordingGeneration) return;
         const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
         const arrayBuffer = await audioBlob.arrayBuffer();
         if (generation !== recordingGeneration) return;
@@ -189,9 +188,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
 });
 
 (window.electronIPC as any)?.onCancelRecording(() => {
-  const generation = recordingGeneration;
   recordingGeneration++;
-  cancelledGenerations.add(generation);
   try {
     if (mediaRecorder) {
       if (mediaRecorder.state !== "inactive") {
