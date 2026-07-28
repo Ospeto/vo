@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Ospeto/vo)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Platform](https://img.shields.io/badge/platform-macOS_Apple_Silicon-black.svg)](https://github.com/Ospeto/vo)
-[![Tests](https://img.shields.io/badge/tests-239%2F239_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
+[![Tests](https://img.shields.io/badge/tests-254%2F254_passing-brightgreen.svg)](https://github.com/Ospeto/vo)
 
 **`vo`** is an ultra-fast, high-precision voice dictation and speech-to-text translation interface built for macOS Apple Silicon. Powered by Google Gemini Multimodal APIs, `vo` seamlessly transcribes spoken Burmese audio into clean, technical English software specifications or written Burmese prose directly into focused text fields across VS Code, Cursor, Myanso, Terminals, Obsidian, and Slack. Paste is target-aware: if the focused window changes or native paste is unavailable, the transcript is retained without injecting text.
 
@@ -45,6 +45,7 @@
 ### 1. ⚡ Multimodal Speech-to-Text & Translation Engine
 - Supports **Gemini 3.6 Flash**, **Gemini 3.5 Flash Lite**, **Gemini 3.1 Flash Lite**, and **Gemini 2.5 Pro**.
 - Automatically translates spoken Burmese instructions into pure Senior Software Engineer English specifications.
+- Applies enabled trusted-dictionary aliases locally after transcription with exact, deterministic matching across supported speech providers.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
 - Automatically scans exported functions, classes, interfaces, and file names from your active project workspace.
@@ -116,7 +117,7 @@ cd vo
 # Install dependencies
 bun install
 
-# Run unit test suite (239 tests)
+# Run unit test suite (254 tests)
 bun test
 
 # Build production bundle

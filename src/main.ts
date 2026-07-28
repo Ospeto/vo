@@ -593,6 +593,7 @@ function setupIpcHandlers() {
         targetLanguage: currentConfig.targetLanguage,
         customVocabulary: currentConfig.customVocabulary,
         presetVocabulary: currentConfig.presetVocabulary,
+        dictionaryEntries: currentConfig.dictionaryEntries,
         symbolScannerEnabled: currentConfig.symbolScannerEnabled,
         selectedText: activeSelectionText,
         abortSignal: sttAbortController.signal,

@@ -300,6 +300,19 @@
 
         <!-- TAB 3: DICTIONARY & SMART RULES -->
         <div id="tab-dictionary" class="tab-pane hidden">
+          <div class="modal-section-group" style="border-color: rgba(34, 197, 94, 0.3); background: rgba(34, 197, 94, 0.05);">
+            <label class="section-label" style="color: #86efac;">Trusted Dictionary</label>
+            <div class="vocab-input-row">
+              <input type="text" id="dictionaryPhraseInput" placeholder="Write as (e.g. SarYayKaung)" aria-label="Write as">
+              <input type="text" id="dictionaryAliasesInput" placeholder="Heard as (comma-separated)" aria-label="Heard as">
+              <button id="addDictionaryEntryBtn" class="action-btn-sm">+ Add</button>
+            </div>
+            <div id="dictionaryValidation" role="alert" style="color:#fca5a5;font-size:10px;min-height:14px;"></div>
+            <div id="dictionaryEntriesContainer" class="vocab-tags" style="margin-top:6px;max-height:130px;overflow-y:auto;"></div>
+            <label for="dictionaryPreviewInput" class="section-label" style="display:block;margin-top:8px;">Live preview</label>
+            <input type="text" id="dictionaryPreviewInput" placeholder="Type text to test corrections" aria-label="Dictionary preview input" style="width:100%;">
+            <div id="dictionaryPreviewOutput" style="font-size:11px;color:#d4d4d8;margin-top:4px;white-space:pre-wrap;"></div>
+          </div>
           <!-- Dedicated Person Names Dictionary Card -->
           <div class="modal-section-group" style="border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05);">
             <div style="display: flex; align-items: center; justify-content: space-between;">

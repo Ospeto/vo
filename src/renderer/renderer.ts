@@ -1,4 +1,5 @@
-import type { AppState, StatePayload, GeminiModelChoice } from "../shared/types.js";
+import type { AppState, StatePayload, GeminiModelChoice, DictionaryEntry } from "../shared/types.js";
+import { DictionaryEngine, validateDictionaryEntries } from "../services/dictionary-engine.js";
 import type { DictationPreset, DictationMode, ChimeSoundChoice } from "../services/config.js";
 import type { HistoryEntry } from "../services/history-service.js";
 
@@ -39,6 +40,15 @@ const personNameInput = document.getElementById("personNameInput") as HTMLInputE
 const addPersonNameBtn = document.getElementById("addPersonNameBtn") as HTMLButtonElement;
 const personNamesContainer = document.getElementById("personNamesContainer") as HTMLElement;
 const personNamesCountBadge = document.getElementById("personNamesCountBadge") as HTMLElement;
+const dictionaryPhraseInput = document.getElementById("dictionaryPhraseInput") as HTMLInputElement;
+const dictionaryAliasesInput = document.getElementById("dictionaryAliasesInput") as HTMLInputElement;
+const addDictionaryEntryBtn = document.getElementById("addDictionaryEntryBtn") as HTMLButtonElement;
+const dictionaryValidation = document.getElementById("dictionaryValidation") as HTMLElement;
+const dictionaryEntriesContainer = document.getElementById("dictionaryEntriesContainer") as HTMLElement;
+const dictionaryPreviewInput = document.getElementById("dictionaryPreviewInput") as HTMLInputElement;
+const dictionaryPreviewOutput = document.getElementById("dictionaryPreviewOutput") as HTMLElement;
+let dictionaryEntries: DictionaryEntry[] = [];
+let editingDictionaryId: string | null = null;
 
 let currentCustomVocab: string[] = [];
 const geminiApiKey1Input = document.getElementById("geminiApiKey1Input") as HTMLInputElement;
@@ -385,6 +395,7 @@ async function initUI() {
     if (config.customVocabulary) {
       currentCustomVocab = [...config.customVocabulary];
     }
+    dictionaryEntries = Array.isArray(config.dictionaryEntries) ? config.dictionaryEntries.map((entry: DictionaryEntry) => ({ ...entry, spokenAliases: [...entry.spokenAliases] })) : [];
     if (config.presetVocabulary) {
       currentPresetVocabMap = config.presetVocabulary as Record<string, string[]>;
     }
@@ -416,6 +427,7 @@ async function initUI() {
     renderAppRules();
     renderPersonNames();
     renderVocabTags();
+    renderDictionaryEntries();
     await renderHistory();
   }
 
@@ -445,6 +457,97 @@ async function initUI() {
 
   await renderHistory();
   renderVocabTags();
+  renderDictionaryEntries();
+  addDictionaryEntryBtn?.addEventListener("click", saveDictionaryEntry);
+  dictionaryPreviewInput?.addEventListener("input", renderDictionaryPreview);
+}
+
+function showDictionaryError(message = "") {
+  if (dictionaryValidation) dictionaryValidation.textContent = message;
+}
+
+function renderDictionaryEntries() {
+  if (!dictionaryEntriesContainer) return;
+  dictionaryEntriesContainer.innerHTML = "";
+  if (dictionaryEntries.length === 0) {
+    dictionaryEntriesContainer.textContent = "No trusted entries yet";
+    renderDictionaryPreview();
+    return;
+  }
+  for (const entry of dictionaryEntries) {
+    const row = document.createElement("div");
+    row.className = "vocab-tag";
+    row.style.opacity = entry.enabled ? "1" : "0.5";
+    const label = document.createElement("span");
+    label.textContent = `${entry.phrase} ← ${entry.spokenAliases.join(", ")}`;
+    row.appendChild(label);
+    const toggle = document.createElement("button");
+    toggle.textContent = entry.enabled ? "Disable" : "Enable";
+    toggle.title = toggle.textContent;
+    toggle.addEventListener("click", () => updateDictionaryEntry({ ...entry, enabled: !entry.enabled }));
+    row.appendChild(toggle);
+    const edit = document.createElement("button");
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => {
+      dictionaryPhraseInput.value = entry.phrase;
+      dictionaryAliasesInput.value = entry.spokenAliases.join(", ");
+      editingDictionaryId = entry.id;
+      addDictionaryEntryBtn.textContent = "Save";
+    });
+    row.appendChild(edit);
+    const remove = document.createElement("button");
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => saveDictionaryEntries(dictionaryEntries.filter((item) => item.id !== entry.id)));
+    row.appendChild(remove);
+    dictionaryEntriesContainer.appendChild(row);
+  }
+  renderDictionaryPreview();
+}
+
+async function saveDictionaryEntries(nextEntries: DictionaryEntry[]) {
+  const errors = validateDictionaryEntries(nextEntries);
+  if (errors.length > 0) {
+    showDictionaryError(errors.map((error) => `${error.alias}: ${error.message}`).join("; "));
+    return;
+  }
+  try {
+    const config = await window.electronIPC?.saveConfig({ dictionaryEntries: nextEntries });
+    dictionaryEntries = (config?.dictionaryEntries || nextEntries) as DictionaryEntry[];
+    showDictionaryError("");
+    renderDictionaryEntries();
+  } catch (error) {
+    showDictionaryError(error instanceof Error ? error.message : "Could not save dictionary entry");
+  }
+}
+
+async function updateDictionaryEntry(entry: DictionaryEntry) {
+  await saveDictionaryEntries(dictionaryEntries.map((item) => item.id === entry.id ? entry : item));
+}
+
+async function saveDictionaryEntry() {
+  const phrase = dictionaryPhraseInput?.value.trim();
+  const aliases = (dictionaryAliasesInput?.value || "").split(",").map((alias) => alias.trim()).filter(Boolean);
+  if (!phrase) {
+    showDictionaryError("Write as is required");
+    return;
+  }
+  if (aliases.length === 0) aliases.push(phrase);
+  const nextEntry: DictionaryEntry = { id: editingDictionaryId || crypto.randomUUID(), phrase, spokenAliases: aliases, enabled: true };
+  const nextEntries = editingDictionaryId
+    ? dictionaryEntries.map((entry) => entry.id === editingDictionaryId ? nextEntry : entry)
+    : [...dictionaryEntries, nextEntry];
+  await saveDictionaryEntries(nextEntries);
+  if (!dictionaryValidation.textContent) {
+    editingDictionaryId = null;
+    dictionaryPhraseInput.value = "";
+    dictionaryAliasesInput.value = "";
+    addDictionaryEntryBtn.textContent = "+ Add";
+  }
+}
+
+function renderDictionaryPreview() {
+  if (!dictionaryPreviewOutput || !dictionaryPreviewInput) return;
+  dictionaryPreviewOutput.textContent = new DictionaryEngine(dictionaryEntries).process(dictionaryPreviewInput.value);
 }
 
 function renderAppRules() {

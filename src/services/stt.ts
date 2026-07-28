@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { execSync, exec } from "node:child_process";
 import type { SpeechProvider, GeminiModelChoice, DictationPreset } from "./config.js";
+import type { DictionaryEntry } from "../shared/types.js";
+import { applyDictionary } from "./dictionary-engine.js";
+import { loadPersistedVocabulary, dictionaryEntryFromTerm, migrateVocabulary } from "./vocabulary-service.js";
 import { getGeminiClient } from "./gemini-client.js";
 import { scanWorkspaceSymbols } from "./symbol-scanner.js";
 import logger from "./logger.js";
@@ -277,10 +280,11 @@ CRITICAL: You MUST transcribe and proofread EVERY SINGLE WORD spoken from beginn
   }
 }
 
-export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset): string {
+export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[]): string {
   if (!text) return "";
 
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
+  const effectiveDictionaryEntries = dictionaryEntries ?? loadPersistedVocabulary().entries ?? [];
   let cleaned = text.trim();
 
   // Filter out unwanted Burmese raw text lines or inline Burmese script ONLY when code_comment preset is active AND translate toggle is ON
@@ -326,27 +330,18 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   cleaned = cleaned.replace(/။+/g, "။");
   cleaned = cleaned.replace(/\?+/g, "?");
 
-  // 8. Standardize Burmese course & project names to English script
-  cleaned = cleaned.replace(/မက်စ်\s*၁၄၁/gi, "MAS 141");
-  cleaned = cleaned.replace(/မက်စ်\s*၁၄၂/gi, "MAS 142");
-  cleaned = cleaned.replace(/မက်စ်\s*၁၄၃/gi, "MAS 143");
-  cleaned = cleaned.replace(/(စာရေးကောင်း|စာရေး\s*ကောင်း|စာရေးကောင်)/gi, "SarYayKaung");
-  cleaned = cleaned.replace(/(ဩစပေတို|အိုစပေတို)/gi, "Ospeto");
-  cleaned = cleaned.replace(/(တီဘီအိတ်ချ်|တီဘီအိတ်)/gi, "TBH");
-  cleaned = cleaned.replace(/(အင်ဂရမ်|အန်ဂရမ်)/gi, "Engram");
-
-  // 9. Convert spoken task checklist command ("task: <text>" -> "- [ ] <text>")
+  // 8. Convert spoken task checklist command ("task: <text>" -> "- [ ] <text>")
   if (/^(task:|တာဝန်:)\s*/i.test(cleaned)) {
     cleaned = cleaned.replace(/^(task:|တာဝန်:)\s*/i, "- [ ] ");
   }
 
-  // 10. Convert spoken code block command ("code: <text>" -> ```\n<text>\n```)
+  // 9. Convert spoken code block command ("code: <text>" -> ```\n<text>\n```)
   if (/^(code:|အကုဒ်:)\s*/i.test(cleaned)) {
     const codeBody = cleaned.replace(/^(code:|အကုဒ်:)\s*/i, "").trim();
     cleaned = "```\n" + codeBody + "\n```";
   }
 
-  // 11. Terminal / CLI Punctuation Sanitizer:
+  // 10. Terminal / CLI Punctuation Sanitizer:
   if (activeApp) {
     const lowerApp = activeApp.toLowerCase();
     if (
@@ -360,16 +355,17 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
     }
   }
 
-  // 12. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
+  // 11. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
   if (!/^(https?:\/\/|ftp:\/\/|git@)/i.test(cleaned)) {
     cleaned = cleaned.replace(/(^|[။\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase());
   }
 
-  // 13. Fix spacing around Burmese full stop (။)
+  // 12. Fix spacing around Burmese full stop (။)
   cleaned = cleaned.replace(/။([^\s\n])/g, "။ $1");
   cleaned = cleaned.replace(/\s+။/g, "။");
 
-  return cleaned.trim();
+  // Dictionary is deliberately last: every provider receives the same local, exact result.
+  return applyDictionary(cleaned.trim(), effectiveDictionaryEntries).trim();
 }
 
 let openaiClient: OpenAI | null = null;
@@ -395,6 +391,20 @@ CRITICAL RULES:
 4. PHONETIC ACCURACY FOR PERSON NAMES: You MUST transcribe person names, family names, and proper nouns using their EXACT target Burmese/English spelling (e.g. 'သော်ဇင်' NOT 'တော်စင်', 'အောင်ချမ်းမြေ့' NOT 'အွန်တန်းမြေ', 'ကို Joy' NOT 'ကိုဂျွိုင်း', 'ဝေယံထက်' NOT 'ဝေယံ', 'မိုးကျော်အောင်' NOT 'မိုးကျော်'). NEVER garble spoken names into phonetically similar unrelated Burmese words.
 5. NEVER truncate, drop trailing words, or cut off sentences mid-way. Output 100% complete, fully-formed transcription for the entire audio.
 `.trim();
+
+function migrateLegacyHintEntries(terms: string[]): DictionaryEntry[] {
+  return terms.map(dictionaryEntryFromTerm).filter((entry): entry is DictionaryEntry => Boolean(entry));
+}
+
+export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
+  const active = entries.filter((entry) => entry.enabled && entry.phrase.trim());
+  if (active.length === 0) return "";
+  const lines = active.map((entry) => {
+    const aliases = Array.from(new Set(entry.spokenAliases.filter(Boolean)));
+    return `- Possible match: ${aliases.join(" | ")} -> Preferred spelling if supported by the audio: ${entry.phrase}`;
+  });
+  return `\nDICTIONARY HINTS (soft help only; deterministic local correction runs after transcription):\n${lines.join("\n")}\n`;
+}
 
 export function buildCustomVocabularyPromptPart(terms: string[]): string {
   if (!terms || terms.length === 0) return "";
@@ -422,12 +432,12 @@ export function buildCustomVocabularyPromptPart(terms: string[]): string {
     }
   }
 
-  let result = "\nMANDATORY PERSON NAMES & VOCABULARY DICTIONARY:\n";
+  let result = "\nDICTIONARY HINTS (soft help only; use only when supported by the audio):\n";
   if (mappings.length > 0) {
-    result += `PHONETIC MAPPINGS (MUST BE STRICTLY RESPECTED):\n${mappings.join("\n")}\n`;
+    result += `POSSIBLE PHONETIC MAPPINGS:\n${mappings.join("\n")}\n`;
   }
   if (plainTerms.length > 0) {
-    result += `EXACT TARGET SPELLINGS: ${plainTerms.join(", ")}\n`;
+    result += `POSSIBLE TARGET SPELLINGS: ${plainTerms.join(", ")}\n`;
   }
   return result;
 }
@@ -440,6 +450,7 @@ export interface TranscribeOptions {
   targetLanguage?: string;
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
+  dictionaryEntries?: DictionaryEntry[];
   symbolScannerEnabled?: boolean;
   workspacePath?: string;
   selectedText?: string;
@@ -470,6 +481,7 @@ async function transcribeGemini(
   dictationPreset?: DictationPreset,
   customVocabulary?: string[],
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>,
+  dictionaryEntries: DictionaryEntry[] = [],
   symbolScannerEnabled: boolean = true,
   workspacePath?: string,
   translateEnabled?: boolean,
@@ -508,12 +520,14 @@ async function transcribeGemini(
 
   const diskTerms = loadUserDictionary();
   const presetTerms = presetVocabulary?.[effectivePreset] || [];
-  const allCustomTerms = Array.from(new Set([...diskTerms, ...(customVocabulary || []), ...presetTerms]))
-    .map((t) => t.trim().slice(0, 40))
-    .filter((t) => t.length > 0)
-    .slice(0, 50);
+  const hintEntries = dictionaryEntries.length > 0
+    ? dictionaryEntries
+    : migrateLegacyHintEntries([...diskTerms, ...(customVocabulary || []), ...presetTerms]);
+  const allCustomTerms = Array.from(new Set([...diskTerms, ...(customVocabulary || []), ...presetTerms].map((term) => term.trim()).filter(Boolean)));
 
-  const dictPromptPart = buildCustomVocabularyPromptPart(allCustomTerms);
+  const dictPromptPart = dictionaryEntries.length > 0
+    ? buildDictionaryPromptPart(hintEntries)
+    : buildCustomVocabularyPromptPart(allCustomTerms);
 
   let workspacePromptPart = "";
   if (symbolScannerEnabled !== false) {
@@ -795,6 +809,10 @@ export async function transcribeDetailed(
   const targetLanguage = typeof providerOrOptions === "object" ? (providerOrOptions.targetLanguage ?? "English") : "English";
   const selectedText = typeof providerOrOptions === "object" ? providerOrOptions.selectedText : undefined;
   const abortSignal = typeof providerOrOptions === "object" ? providerOrOptions.abortSignal : undefined;
+  const persistedVocabulary = loadPersistedVocabulary();
+  const dictionaryEntries = typeof providerOrOptions === "object" && providerOrOptions.dictionaryEntries !== undefined
+    ? providerOrOptions.dictionaryEntries
+    : migrateVocabulary(customVocabulary || [], presetVocabulary || {}, persistedVocabulary.entries || [], loadUserDictionary());
 
   switch (provider) {
     case "local":
@@ -816,6 +834,7 @@ export async function transcribeDetailed(
         dictationPreset,
         customVocabulary,
         presetVocabulary,
+        dictionaryEntries,
         symbolScannerEnabled,
         workspacePath,
         translateEnabled,
@@ -830,7 +849,7 @@ export async function transcribeDetailed(
   }
 
   const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp);
-  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset);
+  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries);
   logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawText, sanitized, usedPaidKey }, "Transcribed detailed and sanitized");
   return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
 }
