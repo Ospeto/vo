@@ -42,4 +42,10 @@ describe("DictionaryEngine", () => {
     expect(new DictionaryEngine([entry("off", "CAT", ["cat"], false)]).process("cat")).toBe("cat");
     expect(validateDictionaryEntries([entry("a", "A", ["spoken"]), entry("b", "B", ["SPOKEN"])]).length).toBe(1);
   });
+
+  test("replaces alias 'loveish' with phrase 'lavish' case-insensitively", () => {
+    const engine = new DictionaryEngine([entry("lavish-id", "lavish", ["loveish"])]);
+    expect(engine.process("I bought a loveish house")).toBe("I bought a lavish house");
+    expect(engine.process("Loveish items are nice")).toBe("lavish items are nice");
+  });
 });

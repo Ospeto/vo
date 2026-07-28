@@ -964,6 +964,7 @@ configBtn?.addEventListener("click", () => {
     settingsModal.classList.remove("hidden");
     renderPersonNames();
     renderVocabTags();
+    renderDictionaryEntries();
   }
 });
 
