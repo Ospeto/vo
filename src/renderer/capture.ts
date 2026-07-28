@@ -1,5 +1,4 @@
 import { IPC, type RecordingFormat } from "../shared/types.js";
-import { analyzeAudioQuality } from "../shared/audio-utils.js";
 
 let mediaStream: MediaStream | null = null;
 let audioCtx: AudioContext | null = null;

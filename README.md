@@ -46,6 +46,7 @@
 - Supports **Gemini 3.6 Flash**, **Gemini 3.5 Flash Lite**, **Gemini 3.1 Flash Lite**, and **Gemini 2.5 Pro**.
 - Automatically translates spoken Burmese instructions into pure Senior Software Engineer English specifications.
 - Applies enabled trusted-dictionary aliases locally after transcription with exact, deterministic matching across supported speech providers.
+- Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
 - Automatically scans exported functions, classes, interfaces, and file names from your active project workspace.
@@ -96,6 +97,7 @@
 | **Auto-Translation** | `false` (OFF) | Optional translation mode; uses the configured target language |
 | **Target Translation Language** | `English` | Language used when auto-translation is enabled |
 | **Default Model** | `gemini-3.1-flash-lite` | Ultra-fast multimodal STT model |
+| **Audio Input** | `System Default Microphone` | Select a configured microphone; connected-device changes refresh automatically |
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |
 
