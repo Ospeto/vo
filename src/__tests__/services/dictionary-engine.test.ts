@@ -32,6 +32,12 @@ describe("DictionaryEngine", () => {
     expect(new DictionaryEngine([disabled]).process("မက်စ်\u2003\u2003၁၄၁")).toBe("မက်စ်\u2003\u2003၁၄၁");
   });
 
+  test("surfaces conflicts with legacy whitespace variants", () => {
+    const legacy = entry("legacy", "MAS 141", ["မက်စ် ၁၄၁"]);
+    legacy.legacyWhitespace = true;
+    expect(validateDictionaryEntries([legacy, entry("other", "Other", ["မက်စ်\t၁၄၁"])]).length).toBe(1);
+  });
+
   test("disabled entries do nothing and conflicts are surfaced", () => {
     expect(new DictionaryEngine([entry("off", "CAT", ["cat"], false)]).process("cat")).toBe("cat");
     expect(validateDictionaryEntries([entry("a", "A", ["spoken"]), entry("b", "B", ["SPOKEN"])]).length).toBe(1);
