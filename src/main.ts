@@ -566,11 +566,12 @@ function createTray() {
   });
 }
 
-function validateIpcSender(event: IpcMainInvokeEvent | Electron.IpcMainEvent): boolean {
+function validateIpcSender(event: IpcMainInvokeEvent | Electron.IpcMainEvent, allowHud = false): boolean {
   const senderId = event.sender.id;
   const isCapture = captureWindow && senderId === captureWindow.webContents.id;
   const isPopover = popoverWindow && senderId === popoverWindow.webContents.id;
-  return Boolean(isCapture || isPopover);
+  const isHud = allowHud && hudWindow && senderId === hudWindow.webContents.id;
+  return Boolean(isCapture || isPopover || isHud);
 }
 
 function setupIpcHandlers() {
@@ -696,7 +697,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on(IPC.CANCEL_DICTATION, (event) => {
-    if (!validateIpcSender(event)) return;
+    if (!validateIpcSender(event, true)) return;
     cancelDictation("Cancelled via user interface");
   });
 
