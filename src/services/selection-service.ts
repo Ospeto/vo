@@ -23,7 +23,7 @@ function getElectronClipboardAdapter(): ClipboardAdapter<any> | null {
       availableFormats: () => clip.availableFormats?.() || [],
       readBuffer: (format) => clip.readBuffer?.(format) || Buffer.alloc(0),
       writeBuffer: (format, data) => clip.writeBuffer?.(format, data),
-      writeBufferIsAdditive: typeof clip.writeBuffer === "function",
+      writeBufferIsAdditive: true,
     };
   } catch {
     return null;
