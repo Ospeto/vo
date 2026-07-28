@@ -8,13 +8,8 @@ import logger from "./logger.js";
 let geminiClients: GoogleGenAI[] = [];
 let fallbackClient: GoogleGenAI | null = null;
 let currentKeyIndex = 0;
-let keepAliveTimer: NodeJS.Timeout | null = null;
 
 export function _resetGeminiClient(): void {
-  if (keepAliveTimer) {
-    clearInterval(keepAliveTimer);
-    keepAliveTimer = null;
-  }
   geminiClients = [];
   fallbackClient = null;
   currentKeyIndex = 0;
@@ -88,19 +83,6 @@ export function resolveApiKeys(): string[] {
   return keys;
 }
 
-function startKeepAliveHeartbeat(client: GoogleGenAI) {
-  if (keepAliveTimer) return;
-  keepAliveTimer = setInterval(() => {
-    try {
-      client.models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: [{ role: "user", parts: [{ text: "ping" }] }],
-        config: { maxOutputTokens: 1 },
-      }).catch(() => {});
-    } catch {}
-  }, 45000);
-}
-
 export function getGeminiClient(): GoogleGenAI {
   if (geminiClients.length > 0) {
     const client = geminiClients[currentKeyIndex];
@@ -124,10 +106,6 @@ export function getGeminiClient(): GoogleGenAI {
     geminiClients = apiKeys.map(
       (apiKey) => new GoogleGenAI({ apiKey, httpOptions: { headers: { Connection: "keep-alive" } } }),
     );
-    const firstClient = geminiClients[0];
-    if (firstClient) {
-      startKeepAliveHeartbeat(firstClient);
-    }
   } else {
     // Try fallback key before throwing
     const fbClient = getGeminiFallbackClient();
