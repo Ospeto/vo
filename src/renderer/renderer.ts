@@ -947,12 +947,19 @@ translateToggleBtn?.addEventListener("click", async () => {
   if (translateEnabled) {
     playMechanicalClickSound();
   }
-  await window.electronIPC?.saveConfig({ translateEnabled });
+  const updatedConfig = await window.electronIPC?.saveConfig({ translateEnabled });
+  if (updatedConfig && updatedConfig.translateEnabled !== undefined) {
+    translateEnabled = updatedConfig.translateEnabled;
+    updateTranslateBtnUI();
+  }
 });
 
 targetLanguageSelect?.addEventListener("change", async () => {
   const selectedLang = targetLanguageSelect.value;
-  await window.electronIPC?.saveConfig({ targetLanguage: selectedLang });
+  const updatedConfig = await window.electronIPC?.saveConfig({ targetLanguage: selectedLang });
+  if (updatedConfig && updatedConfig.targetLanguage && targetLanguageSelect) {
+    targetLanguageSelect.value = updatedConfig.targetLanguage;
+  }
 });
 
 clearHistoryBtn?.addEventListener("click", async () => {

@@ -449,9 +449,19 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     throw new ConfigError(configPath, issues);
   }
 
-  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, dictionaryEntries, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
+  const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset: rawDictationPreset, dictationMode, translateEnabled: rawTranslateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, customVocabulary, presetVocabulary, dictionaryEntries, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
   const keyBinding = parseKeyBinding(keyStr);
   const editKeyBinding = parseKeyBinding(editKeyStr);
+
+  // Migrate legacy "translate" preset to careful preset + translateEnabled toggle
+  let dictationPreset = rawDictationPreset;
+  let translateEnabled = rawTranslateEnabled;
+  if ((parsedJson as any)?.dictationPreset === "translate" || rawDictationPreset === "translate") {
+    dictationPreset = "careful";
+    if ((parsedJson as any)?.translateEnabled === undefined) {
+      translateEnabled = true;
+    }
+  }
 
   const persistedVocab = loadPersistedVocabulary();
   const mergedCustomVocab = Array.from(new Set([...persistedVocab.customVocabulary, ...(customVocabulary || [])]));
@@ -515,6 +525,10 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     } catch {}
   }
 
+  if (existingJson.dictationPreset === "translate" && existingJson.translateEnabled === undefined) {
+    existingJson = { ...existingJson, dictationPreset: "careful", translateEnabled: true };
+  }
+
   // Encrypt secrets if provided in patch
   if (patch.geminiApiKey !== undefined) {
     patch.geminiApiKey = encryptSecret(patch.geminiApiKey);
@@ -553,6 +567,14 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     ? patch.appPresetMappings
     : existingAppMappings;
 
+  // Migrate legacy "translate" dictationPreset in patch
+  if (patch.dictationPreset === "translate") {
+    patch.dictationPreset = "careful";
+    if (patch.translateEnabled === undefined) {
+      patch.translateEnabled = true;
+    }
+  }
+
   // Preserve unrelated keys while merging patch
   const mergedJson = {
     ...existingJson,
@@ -586,9 +608,17 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     throw new ConfigError(configPath, issues);
   }
 
+  // Ensure defaulted explicit fields are cleanly persisted
+  const toSave = {
+    ...mergedJson,
+    translateEnabled: validationResult.data.translateEnabled,
+    targetLanguage: validationResult.data.targetLanguage,
+    dictationPreset: validationResult.data.dictationPreset,
+  };
+
   // Atomic write via temporary file + atomic rename
   try {
-    writeFileSync(tmpPath, JSON.stringify(mergedJson, null, 2), "utf-8");
+    writeFileSync(tmpPath, JSON.stringify(toSave, null, 2), "utf-8");
     renameSync(tmpPath, configPath);
   } catch (err: any) {
     logger.error({ err: String(err), configPath }, "Failed atomic write of config patch");
