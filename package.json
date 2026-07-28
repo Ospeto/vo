@@ -16,13 +16,15 @@
   },
   "files": [
     "bin/",
-    "out/"
+    "out/",
+    "native/"
   ],
   "scripts": {
     "cli": "bun src/cli.ts",
     "dev:electron": "electron-vite dev",
     "dev:cli": "bun src/cli.ts",
-    "build": "bun run build:electron && bun run build:cli",
+    "build": "bun run build:native && bun run build:electron && bun run build:cli",
+    "build:native": "bun scripts/build-native-paste-addon.ts",
     "build:electron": "electron-vite build && mkdir -p out/src/assets out/assets out/renderer && cp -R src/assets/* out/src/assets/ && cp -R src/assets/* out/assets/ && cp src/renderer/hud.html out/renderer/hud.html",
     "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
     "dist": "bun run build && electron-builder --mac",
@@ -68,6 +70,12 @@
       "out/**/*",
       "bin/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native/pi-paste.node",
+        "to": "native/pi-paste.node"
+      }
     ],
     "mac": {
       "category": "public.app-category.utilities",

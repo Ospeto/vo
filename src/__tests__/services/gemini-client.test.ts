@@ -1,4 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Mock @google/genai
 const mockGoogleGenAI = mock((_opts?: any) => ({ models: {} }));
@@ -24,8 +27,8 @@ describe("gemini-client", () => {
   let savedEnv: Record<string, string | undefined>;
 
   beforeEach(() => {
-    _resetGeminiClient();
     mockGoogleGenAI.mockClear();
+    mockGoogleGenAI.mockImplementation((_opts?: any) => ({ models: {} }));
     savedEnv = {
       GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT,
       GOOGLE_CLOUD_LOCATION: process.env.GOOGLE_CLOUD_LOCATION,
@@ -39,6 +42,7 @@ describe("gemini-client", () => {
     delete process.env.GEMINI_API_KEY;
     delete process.env.GOOGLE_API_KEY;
     delete process.env.GOOGLE_GENAI_USE_VERTEXAI;
+    _resetGeminiClient();
   });
 
   afterEach(() => {
@@ -50,6 +54,7 @@ describe("gemini-client", () => {
         process.env[key] = val;
       }
     }
+    _resetGeminiClient();
   });
 
   test("creates Vertex AI client when GOOGLE_CLOUD_PROJECT is set", () => {
@@ -91,6 +96,21 @@ describe("gemini-client", () => {
     });
   });
 
+  test("idle client setup does not schedule or issue model inference heartbeat", () => {
+    process.env.GEMINI_API_KEY = "test-key";
+
+    const setIntervalSpy = mock(globalThis.setInterval);
+    const originalSetInterval = globalThis.setInterval;
+    globalThis.setInterval = setIntervalSpy as any;
+
+    try {
+      getGeminiClient();
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+    } finally {
+      globalThis.setInterval = originalSetInterval;
+    }
+  });
+
   test("creates API key client when GOOGLE_API_KEY is set", () => {
     process.env.GOOGLE_API_KEY = "google-key";
 
@@ -128,9 +148,29 @@ describe("gemini-client", () => {
   });
 
   test("throws when no credentials are set", () => {
-    expect(() => getGeminiClient()).toThrow(
-      /GOOGLE_CLOUD_PROJECT.*GEMINI_API_KEY/,
-    );
+    const emptyDir = mkdtempSync(join(tmpdir(), "pi-voice-test-empty-"));
+    const modulePath = join(process.cwd(), "src/services/gemini-client.ts");
+    const env = { ...process.env };
+    delete env.GOOGLE_CLOUD_PROJECT;
+    delete env.GEMINI_API_KEY;
+    delete env.GOOGLE_API_KEY;
+    delete env.GOOGLE_GENAI_USE_VERTEXAI;
+
+    try {
+      const result = Bun.spawnSync([
+        "bun",
+        "-e",
+        `import(${JSON.stringify(modulePath)}).then(({ getGeminiClient }) => {
+          try { getGeminiClient(); process.exit(1); }
+          catch (error) {
+            process.exit(/GOOGLE_CLOUD_PROJECT.*GEMINI_API_KEY/.test(String(error)) ? 0 : 1);
+          }
+        })`,
+      ], { cwd: emptyDir, env: { ...env, HOME: emptyDir } });
+      expect(result.exitCode).toBe(0);
+    } finally {
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
   });
 
   test("returns cached client on subsequent calls", () => {

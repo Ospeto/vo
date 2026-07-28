@@ -13,6 +13,10 @@ import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonRes
 import { HotkeyService } from "./services/hotkey-service.js";
 import { captureActiveSelection, restoreClipboard } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
+import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-paste-addon.js";
+import { createMacSafePasteService, type ClipboardAdapter } from "./services/safe-paste.js";
+import { PasteCoordinator } from "./services/paste-flow.js";
+import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -28,7 +32,12 @@ process.on("unhandledRejection", (reason) => {
 
 const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const nativePasteBin = join(projectRoot, "bin", "pi-paste");
+
+const recordingLifecycle = new RecordingLifecycle();
+const addonPath = resolveNativePastePath(projectRoot);
+const addon = loadNativePasteAddon(addonPath);
+const safePasteService = createMacSafePasteService(addon, clipboard as unknown as ClipboardAdapter<any>);
+const pasteCoordinator = new PasteCoordinator((text, isCurrent) => safePasteService.paste(text, isCurrent));
 
 let captureWindow: BrowserWindow | null = null;
 let popoverWindow: BrowserWindow | null = null;
@@ -38,14 +47,26 @@ let currentConfig: PiVoiceConfig;
 
 let currentState: AppState = "idle";
 let sequenceId = 0;
-let isPasting = false;
 let lastPastedText = "";
 let lastPasteTime = 0;
 
 let activeSelectionText = "";
 let previousClipboardContent = "";
+let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+
+function restoreCapturedSelection() {
+  if (selectionCaptured) restoreClipboard(previousClipboardContent);
+  previousClipboardContent = "";
+  activeSelectionText = "";
+  selectionCaptured = false;
+}
+
+function isCurrentTranscription(sequenceId: number): boolean {
+  const snapshot = recordingLifecycle.snapshot();
+  return snapshot.sequenceId === sequenceId && snapshot.state === "transcribing";
+}
 
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -70,6 +91,9 @@ function setState(state: AppState, message?: string) {
     stoppingSafetyTimer = setTimeout(() => {
       if (currentState === "stopping") {
         logger.warn("Stopping state timed out, auto-resetting state machine to idle");
+        pasteCoordinator.invalidate();
+        recordingLifecycle.reset();
+        restoreCapturedSelection();
         setState("idle", "Ready");
       }
     }, 2500);
@@ -184,54 +208,6 @@ function playSuccessChime() {
 function playUndoChime() {
   if (currentConfig.audioChimesEnabled === false) return;
   playSound(currentConfig.chimeSoundEnd || "submarine");
-}
-
-function pasteTextToFocusedField(text: string) {
-  const now = Date.now();
-  if (isPasting || (text === lastPastedText && now - lastPasteTime < 1500)) {
-    logger.warn({ text }, "Duplicate paste request blocked by mutex guard");
-    return;
-  }
-
-  isPasting = true;
-  lastPastedText = text;
-  lastPasteTime = now;
-
-  try {
-    const previousText = clipboard.readText();
-
-    clipboard.writeText(text);
-
-    const hasNativePaste = existsSync(nativePasteBin);
-    const pasteCmd = hasNativePaste
-      ? `"${nativePasteBin}"`
-      : `osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to key code 9 using {command down}'`;
-
-    exec(pasteCmd, (err) => {
-      setTimeout(() => {
-        isPasting = false;
-        try {
-          if (previousClipboardContent) {
-            restoreClipboard(previousClipboardContent);
-            previousClipboardContent = "";
-            activeSelectionText = "";
-          } else if (previousText && previousText !== text) {
-            clipboard.writeText(previousText);
-          }
-        } catch {}
-      }, 200);
-
-      if (err) {
-        logger.error({ err: String(err) }, "Paste command failed");
-      } else {
-        logger.info({ text, native: hasNativePaste }, "Pasted transcribed text into active input field");
-        playSuccessChime();
-      }
-    });
-  } catch (pasteErr) {
-    isPasting = false;
-    logger.error({ err: String(pasteErr) }, "Failed to paste text into active window");
-  }
 }
 
 function isTerminalApp(appName: string): boolean {
@@ -568,7 +544,17 @@ function setupIpcHandlers() {
     if (currentState !== "recording" && currentState !== "stopping") return;
 
     if (data.byteLength < 1000) {
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection();
       setState("idle", "Recording too short");
+      return;
+    }
+
+    const currentSeq = recordingLifecycle.snapshot().sequenceId;
+    const ackStop = recordingLifecycle.acknowledgeStop(currentSeq, true);
+    if (!ackStop.accepted) {
+      logger.warn("Received recording data for invalid lifecycle sequence");
       return;
     }
 
@@ -586,7 +572,15 @@ function setupIpcHandlers() {
         selectedText: activeSelectionText,
       });
 
+      const transcriptionSnapshot = recordingLifecycle.snapshot();
+      if (transcriptionSnapshot.sequenceId !== currentSeq || transcriptionSnapshot.state !== "transcribing") {
+        logger.warn({ currentSeq, snapshot: transcriptionSnapshot }, "Discarding stale transcription result");
+        return;
+      }
+
       if (!text || text.trim().length === 0) {
+        recordingLifecycle.finishTranscription(currentSeq, true);
+        restoreCapturedSelection();
         setState("idle", "No speech detected");
         return;
       }
@@ -606,21 +600,53 @@ function setupIpcHandlers() {
       logger.info({ text, usedPaidKey }, "STT transcription successful");
 
       const isUndo = handleVoiceUndoCheck(text);
-      if (!isUndo) {
-        pasteTextToFocusedField(text);
-        const activeApp = getActiveAppName();
-        const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
-        const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
-        const isEnglish = !isBurmeseText;
-        const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
-        addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
+      if (isUndo) {
+        recordingLifecycle.finishTranscription(currentSeq, true);
+        restoreCapturedSelection();
+        setState("idle", "Voice undo executed");
+        return;
       }
-      setState("idle", `Dictated: "${text}"`);
+
+      const activeApp = getActiveAppName();
+      const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
+      const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
+      const isEnglish = !isBurmeseText;
+      const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
+
+      const pasteResult = await pasteCoordinator.pasteText(text);
+
+      if (!isCurrentTranscription(currentSeq)) {
+        logger.warn({ currentSeq }, "Discarding stale paste result");
+        return;
+      }
+
+      if (pasteResult.status === "submitted") {
+        recordingLifecycle.finishTranscription(currentSeq, true);
+        restoreCapturedSelection();
+        addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
+        lastPastedText = text;
+        lastPasteTime = Date.now();
+        playSuccessChime();
+        setState("idle", `Dictated: "${text}"`);
+      } else {
+        recordingLifecycle.finishTranscription(currentSeq, false);
+        recordingLifecycle.settle();
+        restoreCapturedSelection();
+        addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
+        logger.warn({ pasteResult }, "Target window changed or paste denied - transcript saved to history");
+        setState("idle", "Target changed - transcript saved to history");
+      }
     } catch (err: any) {
+      if (!isCurrentTranscription(currentSeq)) return;
+      recordingLifecycle.finishTranscription(currentSeq, false);
+      restoreCapturedSelection();
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);
       setTimeout(() => {
-        if (currentState === "error") setState("idle");
+        if (currentState === "error") {
+          recordingLifecycle.settle();
+          setState("idle");
+        }
       }, 1500);
     }
   });
@@ -628,6 +654,9 @@ function setupIpcHandlers() {
   ipcMain.on(IPC.RECORDING_ERROR, (event, error: string) => {
     if (!validateIpcSender(event)) return;
     logger.warn({ error }, "Recording warning");
+    pasteCoordinator.invalidate();
+    recordingLifecycle.reset();
+    restoreCapturedSelection();
     setState("error", error);
   });
 
@@ -752,8 +781,25 @@ let keyHoldPressStartTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
 
 async function startRecordingFlow() {
+  const reqRes = recordingLifecycle.requestStart();
+  if (!reqRes.accepted) {
+    logger.warn({ reason: reqRes.reason }, "Cannot start recording flow");
+    return;
+  }
+
+  pasteCoordinator.invalidate();
+  safePasteService.captureTarget();
+  setState("starting", "Starting...");
+
   const selection = await captureActiveSelection(350);
+  const lifecycleSnapshot = recordingLifecycle.snapshot();
+  if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
+    if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard);
+    return;
+  }
+
   previousClipboardContent = selection.previousClipboard;
+  selectionCaptured = selection.hasSelection;
 
   if (currentTriggerMode === "edit" && selection.hasSelection) {
     activeSelectionText = selection.selectedText;
@@ -764,6 +810,7 @@ async function startRecordingFlow() {
 
   logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
   setState("recording", "Recording...");
+  recordingLifecycle.acknowledgeStart(reqRes.sequenceId, true);
   playStartChime();
   captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
 }
@@ -792,11 +839,18 @@ function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
 function handleHotkeyUp() {
   const pressDuration = Date.now() - keyHoldPressStartTime;
   if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
-    if (currentState === "recording" || currentState === "starting") {
+    if (currentState === "starting") {
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      setState("idle", "Ready");
+    } else if (currentState === "recording") {
       logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Auto-Detect)");
-      setState("stopping", "Stopping...");
-      playToggleStopChime();
-      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+      const stopRes = recordingLifecycle.requestStop();
+      if (stopRes.accepted) {
+        setState("stopping", "Stopping...");
+        playToggleStopChime();
+        captureWindow?.webContents.send(IPC.STOP_RECORDING);
+      }
     }
   }
 }
@@ -804,9 +858,12 @@ function handleHotkeyUp() {
 function toggleRecordingState() {
   if (currentState === "recording") {
     logger.info("Tap 2: STOPPING recording");
-    setState("stopping", "Stopping...");
-    playToggleStopChime();
-    captureWindow?.webContents.send(IPC.STOP_RECORDING);
+    const stopRes = recordingLifecycle.requestStop();
+    if (stopRes.accepted) {
+      setState("stopping", "Stopping...");
+      playToggleStopChime();
+      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+    }
   } else if (currentState === "idle" || currentState === "error") {
     startRecordingFlow();
   }
@@ -826,6 +883,7 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
       togglePopover();
       return { ok: true };
     case "stop":
+    case "shutdown":
       setImmediate(() => app.quit());
       return { ok: true };
     default:
@@ -835,6 +893,7 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
 
 function gracefulShutdown() {
   logger.info("Shutting down...");
+  pasteCoordinator.invalidate();
   hotkeyService?.stop();
   stopDaemonServer();
   removeRuntimeState();

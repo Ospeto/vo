@@ -118,4 +118,34 @@ describe("CLI status and stop ownership flows", () => {
     expect(result).toBe(0);
     expect(commands).toEqual(["status", "shutdown"]);
   });
+
+  test("CLI shutdown returns success when daemon protocol accepts shutdown command", async () => {
+    const oldDaemonHandler = (command: string) => {
+      if (command === "status") return { ok: true, state: "idle", cwd: state.cwd, pid: state.pid, uptime: 1 };
+      if (command === "stop") return { ok: true };
+      return { ok: false, error: `Unknown command: ${command}` };
+    };
+
+    const newDaemonHandler = (command: string) => {
+      if (command === "status") return { ok: true, state: "idle", cwd: state.cwd, pid: state.pid, uptime: 1 };
+      if (command === "stop" || command === "shutdown") return { ok: true };
+      return { ok: false, error: `Unknown command: ${command}` };
+    };
+
+    // Demonstrates old daemon fails shutdown command
+    const oldResult = await runStop({
+      readState: owned,
+      send: async (cmd) => oldDaemonHandler(cmd),
+      error: () => {},
+    });
+    expect(oldResult).toBe(1);
+
+    // Demonstrates new daemon handler succeeds on shutdown command
+    const newResult = await runStop({
+      readState: owned,
+      send: async (cmd) => newDaemonHandler(cmd),
+      error: () => {},
+    });
+    expect(newResult).toBe(0);
+  });
 });

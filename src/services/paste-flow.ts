@@ -13,7 +13,7 @@ export class PasteCoordinator {
   private lastPasteTime = 0;
   private generation = 0;
 
-  constructor(private readonly paste: (text: string) => Promise<SafePasteResult>) {}
+  constructor(private readonly paste: (text: string, isCurrent: () => boolean) => Promise<SafePasteResult>) {}
 
   invalidate(): void { ++this.generation; }
 
@@ -28,7 +28,7 @@ export class PasteCoordinator {
     this.lastSubmittedText = text;
     this.lastPasteTime = now;
     try {
-      const result = await this.paste(text);
+      const result = await this.paste(text, () => generation === this.generation);
       if (generation !== this.generation) return { status: "stale", reason: "Paste invalidated; transcript was retained" };
       return result.ok ? { status: "submitted" } : { status: "denied", reason: result.reason };
     } catch (error) {

@@ -370,7 +370,11 @@ export async function runStop(options: {
       options.error("state preserved and no signal was sent");
       return 1;
     }
-    await options.send("shutdown");
+    const shutdownRes = await options.send("shutdown");
+    if (!shutdownRes || !shutdownRes.ok) {
+      options.error(`state preserved and no signal was sent: ${shutdownRes?.error || "Unknown error"}`);
+      return 1;
+    }
     return 0;
   } catch (err: any) {
     options.error(`state preserved and no signal was sent: ${err?.message || String(err)}`);

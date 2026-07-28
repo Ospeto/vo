@@ -45,6 +45,54 @@ afterEach(async () => {
 });
 
 describe.serial("macOS safety reliability integration smoke", () => {
+  test("rejects window changes between capture and paste without wrong-target injection or clipboard corruption", async () => {
+    let activeWindowTarget: TargetIdentity | null = { ...target, windowId: 100, windowTitle: "Original Window" };
+    let injectedCalls = 0;
+    let currentClipboardText = "user original clipboard text";
+
+    const clipboardAdapter = {
+      readText: () => currentClipboardText,
+      writeText: (text: string) => { currentClipboardText = text; },
+      snapshot: () => ({ text: currentClipboardText, formats: [] }),
+      restore: (snapshot: ClipboardSnapshot) => { currentClipboardText = snapshot.text ?? ""; },
+    };
+
+    const pasteService = new SafePasteService(
+      () => activeWindowTarget,
+      async () => { injectedCalls++; },
+      clipboardAdapter,
+    );
+
+    const lifecycle = new RecordingLifecycle();
+    const coordinator = new PasteCoordinator((text) => pasteService.paste(text));
+
+    // 1. Capture target before recording starts
+    const startRes = lifecycle.requestStart();
+    expect(startRes.accepted).toBe(true);
+    pasteService.captureTarget();
+    lifecycle.acknowledgeStart(startRes.sequenceId, true);
+
+    // 2. Stop recording and transition to transcribing
+    const stopRes = lifecycle.requestStop();
+    expect(stopRes.accepted).toBe(true);
+    lifecycle.acknowledgeStop(stopRes.sequenceId, true);
+
+    // 3. User switches to a different window (or Terminal / 1Password)
+    activeWindowTarget = { ...target, windowId: 999, windowTitle: "Terminal - zsh" };
+
+    // 4. Transcription finishes and paste is attempted
+    const pasteRes = await coordinator.pasteText("dictated confidential text");
+
+    // 5. Verify rejection, no injection, no clipboard corruption
+    expect(pasteRes).toEqual({ status: "denied", reason: "target_mismatch" });
+    expect(injectedCalls).toBe(0);
+    expect(currentClipboardText).toBe("user original clipboard text");
+
+    // 6. Verify lifecycle handles failure safely
+    expect(lifecycle.finishTranscription(stopRes.sequenceId, false).accepted).toBe(true);
+    expect(lifecycle.snapshot().state).toBe("error");
+  });
+
   test("keeps a newer lifecycle safe from stale renderer acknowledgements and rejects transient toggles", () => {
     const lifecycle = new RecordingLifecycle();
     const first = lifecycle.requestToggle();
@@ -91,7 +139,7 @@ describe.serial("macOS safety reliability integration smoke", () => {
     lifecycle.acknowledgeStart(start.sequenceId, true);
     const stop = lifecycle.requestStop();
     lifecycle.acknowledgeStop(stop.sequenceId, true);
-    const coordinator = new PasteCoordinator((text) => paste.paste(text));
+    const coordinator = new PasteCoordinator((text, isCurrent) => paste.paste(text, isCurrent));
     const result = await coordinator.pasteText("retained transcript");
     expect(result).toMatchObject({ status: "denied" });
     expect(lifecycle.finishTranscription(stop.sequenceId, false)).toMatchObject({ accepted: true, state: "error" });
@@ -116,11 +164,11 @@ describe.serial("macOS safety reliability integration smoke", () => {
     };
     const paste = new SafePasteService(
       () => target,
-      async () => { await pendingPaste; injected++; },
+      async (_expected, isCurrent) => { await pendingPaste; if (isCurrent()) injected++; },
       clipboard,
     );
     paste.captureTarget();
-    const coordinator = new PasteCoordinator((text) => paste.paste(text));
+    const coordinator = new PasteCoordinator((text, isCurrent) => paste.paste(text, isCurrent));
     const pending = coordinator.pasteText("teardown transcript");
 
     expect(lifecycle.shutdown().accepted).toBe(true);
@@ -129,7 +177,7 @@ describe.serial("macOS safety reliability integration smoke", () => {
     release();
 
     expect(await pending).toEqual({ status: "stale", reason: "Paste invalidated; transcript was retained" });
-    expect(injected).toBe(1);
+    expect(injected).toBe(0);
     expect(lifecycle.finishTranscription(stop.sequenceId, true).accepted).toBe(false);
     expect(lifecycle.snapshot()).toEqual(teardownSnapshot);
   });

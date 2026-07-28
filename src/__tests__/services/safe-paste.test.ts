@@ -151,16 +151,16 @@ describe("SafePasteService", () => {
 
   test("calls native injection directly and restores after an actual native failure", async () => {
     const events: string[] = [];
-    const received: TargetIdentity[][] = [];
+    const received: TargetIdentity[] = [];
     const service = new SafePasteService(
       () => target(),
-      async (...args: [TargetIdentity]) => { received.push(args); throw Object.assign(new Error("native failure"), { reason: "injection_failed" }); },
+      async (expected) => { received.push(expected); throw Object.assign(new Error("native failure"), { reason: "injection_failed" }); },
       clipboardFixture(events),
       async () => {},
     );
     service.captureTarget();
     expect(await service.paste("secret")).toEqual({ ok: false, reason: "injection_failed" });
-    expect(received).toEqual([[target()]]);
+    expect(received).toEqual([target()]);
     expect(events).toEqual(["snapshot", "write", "restore"]);
   });
 
@@ -226,6 +226,26 @@ describe("SafePasteService", () => {
     current = target({ windowId: 8 });
     expect(await service.paste("secret")).toEqual({ ok: false, reason: "target_mismatch" });
     expect(clipboard.value).toBe("old");
+  });
+
+  test("restores the clipboard when cancellation happens after writing but before injection", async () => {
+    let isCurrent = true;
+    let value = "old";
+    let injected = false;
+    const events: string[] = [];
+    const clipboard = {
+      readText: () => value,
+      writeText: (text: string) => { events.push("write"); value = text; isCurrent = false; },
+      snapshot: () => { events.push("snapshot"); return { text: value, formats: [] }; },
+      restore: (snapshot: ClipboardSnapshot) => { events.push("restore"); value = snapshot.text ?? ""; },
+    };
+    const service = new SafePasteService(() => target(), async () => { injected = true; }, clipboard, async () => {});
+    service.captureTarget();
+
+    expect(await service.paste("secret", () => isCurrent)).toEqual({ ok: false, reason: "target_mismatch" });
+    expect(value).toBe("old");
+    expect(injected).toBe(false);
+    expect(events).toEqual(["snapshot", "write", "restore"]);
   });
 
   test("parses optional non-authoritative title without widening target policy", () => {

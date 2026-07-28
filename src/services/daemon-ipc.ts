@@ -5,7 +5,7 @@
  * The CLI connects as a client, sends a JSON command, and receives a JSON response.
  *
  * Protocol (newline-delimited JSON):
- *   → { "command": "status" | "stop" }
+ *   → { "command": "status" | "stop" | "show" | "shutdown" }
  *   ← { "ok": true, ...payload } | { "ok": false, "error": "..." }
  */
 

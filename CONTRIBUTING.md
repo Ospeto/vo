@@ -22,7 +22,7 @@ bun run dev:cli
 bun run build
 ```
 
-Outputs a production build to `out/`.
+Outputs Electron and CLI bundles to `out/` and the native paste addon to `native/`.
 
 ## Preview
 

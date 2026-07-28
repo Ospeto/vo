@@ -70,7 +70,7 @@ export class SafePasteService {
   private static nextOperationId = 1;
   constructor(
     private readonly readTarget: () => TargetIdentity | null | TargetReadResult | Promise<TargetIdentity | null | TargetReadResult>,
-    private readonly injectPaste: (expected: TargetIdentity) => Promise<void>,
+    private readonly injectPaste: (expected: TargetIdentity, isCurrent: () => boolean) => Promise<void>,
     private readonly clipboard: ClipboardPort,
     private readonly authorizeTarget: (expected: TargetIdentity) => Promise<void> = async (expected) => {
       const current = targetResult(await this.readTarget());
@@ -97,13 +97,15 @@ export class SafePasteService {
     this.capturedTarget = captured.target && isValidTarget(captured.target) ? captured.target : null;
     this.captureFailure = captured.target && !isValidTarget(captured.target) ? "target_malformed" : (captured.reason ? safeReason(captured.reason, "target_unavailable") as TargetFailureReason : null);
   }
-  async paste(text: string): Promise<SafePasteResult> {
+  async paste(text: string, isCurrent: () => boolean = () => true): Promise<SafePasteResult> {
     if (this.capturePromise) { await this.capturePromise; this.capturePromise = null; }
+    const expectedTarget = this.capturedTarget;
     const operationId = `paste-${SafePasteService.nextOperationId++}`;
     const started = this.clock();
     const captureReason = this.captureFailure ?? (this.capturedTarget ? null : "target_unavailable");
     this.emit({ operationId, stage: "target_capture", durationMs: this.captureDuration, outcome: this.capturedTarget ? "captured" : "failed", reason: captureReason ?? undefined });
-    if (!isValidTarget(this.capturedTarget)) {
+    if (!isCurrent()) return { ok: false, reason: "target_mismatch" };
+    if (!isValidTarget(expectedTarget)) {
       this.emit({ operationId, stage: "target_recheck", durationMs: 0, outcome: "not_run", reason: captureReason ?? "target_unavailable" });
       const result = { ok: false as const, reason: captureReason ?? "target_unavailable" as TargetFailureReason };
       this.emitTotal(operationId, started, result);
@@ -111,7 +113,8 @@ export class SafePasteService {
     }
     const recheckStarted = this.clock();
     try {
-      await this.authorizeTarget(this.capturedTarget);
+      await this.authorizeTarget(expectedTarget);
+      if (!isCurrent()) return { ok: false, reason: "target_mismatch" };
       this.emit({ operationId, stage: "target_recheck", durationMs: this.elapsed(recheckStarted), outcome: "authorization_accepted" });
     }
     catch (error) {
@@ -122,6 +125,7 @@ export class SafePasteService {
       return result;
     }
     let previous: ClipboardSnapshot;
+    if (!isCurrent()) return { ok: false, reason: "target_mismatch" };
     const snapshotStarted = this.clock();
     try {
       previous = this.clipboard.snapshot();
@@ -150,15 +154,19 @@ export class SafePasteService {
       result = { ok: false, reason };
     }
     if (result === undefined) {
-      const injectionStarted = this.clock();
-      try {
-        await this.injectPaste(this.capturedTarget);
-        this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "success" });
-        result = { ok: true, reason: "injection_requested" };
-      } catch (error) {
-        const reason = failureReason(error, "injection_rejected");
-        this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "failure", reason });
-        result = { ok: false, reason };
+      if (!isCurrent()) {
+        result = { ok: false, reason: "target_mismatch" };
+      } else {
+        const injectionStarted = this.clock();
+        try {
+          await this.injectPaste(expectedTarget, isCurrent);
+          this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "success" });
+          result = { ok: true, reason: "injection_requested" };
+        } catch (error) {
+          const reason = failureReason(error, "injection_rejected");
+          this.emit({ operationId, stage: "injection", durationMs: this.elapsed(injectionStarted), outcome: "failure", reason });
+          result = { ok: false, reason };
+        }
       }
     }
     if (result?.ok) {
@@ -290,8 +298,9 @@ export function createMacSafePasteService<TImage extends ClipboardImage>(addon: 
     try { const result = addon.authorize(expected); if (!result.ok) throw Object.assign(new Error(result.reason), { reason: result.reason }); }
     catch (error) { throw Object.assign(new Error("native authorization failed"), { reason: failureReason(error, "target_unavailable") }); }
   };
-  const injectPaste = async (expected: TargetIdentity): Promise<void> => {
+  const injectPaste = async (expected: TargetIdentity, isCurrent: () => boolean): Promise<void> => {
     if (!addon) throw Object.assign(new Error("native addon unavailable"), { reason: "native_unavailable" });
+    if (!isCurrent()) throw Object.assign(new Error("paste invalidated"), { reason: "target_mismatch" });
     try { const result = addon.inject(expected); if (!result.ok) throw Object.assign(new Error(result.reason), { reason: result.reason }); }
     catch (error) { throw Object.assign(new Error("native injection failed"), { reason: failureReason(error, "injection_rejected") }); }
   };
