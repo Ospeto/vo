@@ -178,6 +178,7 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
     beforeEach(() => {
       testCwd = join(tmpdir(), `pi-voice-test-delay-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       mkdirSync(join(testCwd, ".pi"), { recursive: true });
+      writeFileSync(join(testCwd, ".pi", "pi-voice.json"), "{}");
     });
 
     afterEach(() => {
