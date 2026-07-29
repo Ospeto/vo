@@ -93,11 +93,23 @@ export function validateIpcSenderPolicy(
 }
 
 export function getSanitizedSettingsConfig(config: PiVoiceConfig): SettingsConfigPayload {
-  const { geminiApiKey, geminiFallbackApiKey, ...rest } = config;
+  const {
+    geminiApiKey,
+    geminiFallbackApiKey,
+    geminiKeyError,
+    geminiFallbackKeyError,
+    legacyProjectKeyBlocked,
+    legacyProjectKeyRemediation,
+    ...rest
+  } = config;
   return {
     ...rest,
     hasGeminiKey: Boolean(geminiApiKey && geminiApiKey.trim().length > 0),
     hasGeminiFallbackKey: Boolean(geminiFallbackApiKey && geminiFallbackApiKey.trim().length > 0),
+    ...(geminiKeyError ? { geminiKeyError } : {}),
+    ...(geminiFallbackKeyError ? { geminiFallbackKeyError } : {}),
+    ...(legacyProjectKeyBlocked ? { legacyProjectKeyBlocked: true } : {}),
+    ...(legacyProjectKeyRemediation ? { legacyProjectKeyRemediation } : {}),
     hasOpenAIKey: false,
   };
 }
