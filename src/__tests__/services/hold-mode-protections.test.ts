@@ -117,11 +117,11 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
     });
   });
 
-  describe("2. Auto-endpointing disabled in hold mode", () => {
-    test("autoEndpointEnabled is set to false when dictationMode === 'hold'", () => {
+  describe("2. Auto-endpointing disabled across dictation modes", () => {
+    test("autoEndpointEnabled is set to false for both 'hold' and 'toggle' modes", () => {
       expect(isAutoEndpointEnabled("hold", true)).toBe(false);
       expect(isAutoEndpointEnabled("hold", false)).toBe(false);
-      expect(isAutoEndpointEnabled("toggle", true)).toBe(true);
+      expect(isAutoEndpointEnabled("toggle", true)).toBe(false);
       expect(isAutoEndpointEnabled("toggle", false)).toBe(false);
     });
 

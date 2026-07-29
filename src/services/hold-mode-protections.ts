@@ -13,6 +13,6 @@ export function getHoldModeMinimumDuration(pressDurationMs: number, isFnDown = f
   return MINIMUM_HOLD_RECORDING_MS;
 }
 
-export function isAutoEndpointEnabled(dictationMode: "hold" | "toggle", configured = true): boolean {
-  return dictationMode !== "hold" && configured;
+export function isAutoEndpointEnabled(_dictationMode: "hold" | "toggle", _configured = true): boolean {
+  return false;
 }
