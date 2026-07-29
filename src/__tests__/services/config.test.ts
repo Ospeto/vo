@@ -165,20 +165,20 @@ describe("formatKeyDisplay", () => {
 
 describe("loadConfig", () => {
   let tmpDir: string;
-  let origXdg: string | undefined;
+  let origHome: string | undefined;
 
   beforeEach(() => {
     tmpDir = join(tmpdir(), `pi-voice-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
-    origXdg = process.env.XDG_CONFIG_HOME;
-    process.env.XDG_CONFIG_HOME = join(tmpDir, "global-config");
+    origHome = process.env.HOME;
+    process.env.HOME = join(tmpDir, "home");
   });
 
   afterEach(() => {
-    if (origXdg === undefined) {
-      delete process.env.XDG_CONFIG_HOME;
+    if (origHome === undefined) {
+      delete process.env.HOME;
     } else {
-      process.env.XDG_CONFIG_HOME = origXdg;
+      process.env.HOME = origHome;
     }
     rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -239,6 +239,14 @@ describe("loadConfig", () => {
     }
   });
 
+  test("throws ConfigError for a non-object JSON config", () => {
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    writeFileSync(join(piDir, "pi-voice.json"), "null");
+
+    expect(() => loadConfig(tmpDir)).toThrow(ConfigError);
+  });
+
   test("throws ConfigError on invalid provider", () => {
     const piDir = join(tmpDir, ".pi");
     mkdirSync(piDir, { recursive: true });
@@ -284,7 +292,7 @@ describe("Global User Config Persistence & Overlay Suite", () => {
   let testRoot: string;
   let dirA: string;
   let dirB: string;
-  let origXdg: string | undefined;
+  let origHome: string | undefined;
 
   beforeEach(() => {
     testRoot = join(tmpdir(), `pi-voice-global-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -293,15 +301,15 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     mkdirSync(dirA, { recursive: true });
     mkdirSync(dirB, { recursive: true });
 
-    origXdg = process.env.XDG_CONFIG_HOME;
-    process.env.XDG_CONFIG_HOME = join(testRoot, "global-config");
+    origHome = process.env.HOME;
+    process.env.HOME = join(testRoot, "home");
   });
 
   afterEach(() => {
-    if (origXdg === undefined) {
-      delete process.env.XDG_CONFIG_HOME;
+    if (origHome === undefined) {
+      delete process.env.HOME;
     } else {
-      process.env.XDG_CONFIG_HOME = origXdg;
+      process.env.HOME = origHome;
     }
     rmSync(testRoot, { recursive: true, force: true });
   });

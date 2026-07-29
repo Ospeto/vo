@@ -415,11 +415,7 @@ export function decryptSecret(encrypted?: string): string | undefined {
 }
 
 export function getUserConfigPath(): string {
-  if (process.env.PI_VOICE_CONFIG_PATH) {
-    return process.env.PI_VOICE_CONFIG_PATH;
-  }
-  const configHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
-  return join(configHome, "pi-voice", "config.json");
+  return join(homedir(), ".config", "pi-voice", "config.json");
 }
 
 export function getProjConfigPath(cwd: string = process.cwd()): string | null {
@@ -448,8 +444,12 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     try {
       const rawContent = readFileSync(userConfigPath, "utf-8");
       globalJson = JSON.parse(rawContent);
+      if (!globalJson || typeof globalJson !== "object" || Array.isArray(globalJson)) {
+        throw new ConfigError(userConfigPath, "Config must be a JSON object");
+      }
       globalExists = true;
     } catch (err: any) {
+      if (err instanceof ConfigError) throw err;
       if (err instanceof SyntaxError || err.name === "SyntaxError" || err.message?.includes("JSON")) {
         throw new ConfigError(userConfigPath, `JSON parse error: ${err.message}`);
       }
@@ -463,8 +463,12 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     try {
       const rawContent = readFileSync(projConfigPath, "utf-8");
       projJson = JSON.parse(rawContent);
+      if (!projJson || typeof projJson !== "object" || Array.isArray(projJson)) {
+        throw new ConfigError(projConfigPath, "Config must be a JSON object");
+      }
       projExists = true;
     } catch (err: any) {
+      if (err instanceof ConfigError) throw err;
       if (err instanceof SyntaxError || err.name === "SyntaxError" || err.message?.includes("JSON")) {
         throw new ConfigError(projConfigPath, `JSON parse error: ${err.message}`);
       }
@@ -671,7 +675,6 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
   const projConfigPath = getProjConfigPath(cwd);
   const hasProjConfig = projConfigPath ? existsSync(projConfigPath) : false;
 
-  // Always update global user config
   let existingUserJson: Record<string, unknown> = {};
   if (existsSync(userConfigPath)) {
     try {
@@ -680,27 +683,38 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     } catch {}
   }
   const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath);
-  try {
-    atomicWriteJson(userConfigPath, toSaveUser);
-  } catch (err: any) {
-    logger.error({ err: String(err), configPath: userConfigPath }, "Failed atomic write of global user config patch");
-    throw new ConfigError(userConfigPath, `Atomic write failed: ${err.message}`);
-  }
-
-  // Also update project-local config if present
+  let toSaveProj: Record<string, unknown> | undefined;
+  let existingProjJson: Record<string, unknown> | undefined;
   if (hasProjConfig && projConfigPath) {
-    let existingProjJson: Record<string, unknown> = {};
+    existingProjJson = {};
     try {
       const content = readFileSync(projConfigPath, "utf-8");
       existingProjJson = JSON.parse(content);
     } catch {}
-    const toSaveProj = preparePatchSave(existingProjJson, patch, projConfigPath);
+    toSaveProj = preparePatchSave(existingProjJson, patch, projConfigPath);
+  }
+
+  if (toSaveProj && projConfigPath && existingProjJson) {
     try {
       atomicWriteJson(projConfigPath, toSaveProj);
     } catch (err: any) {
       logger.error({ err: String(err), configPath: projConfigPath }, "Failed atomic write of project config patch");
       throw new ConfigError(projConfigPath, `Atomic write failed: ${err.message}`);
     }
+  }
+
+  try {
+    atomicWriteJson(userConfigPath, toSaveUser);
+  } catch (err: any) {
+    if (toSaveProj && projConfigPath && existingProjJson) {
+      try {
+        atomicWriteJson(projConfigPath, existingProjJson);
+      } catch (rollbackErr: any) {
+        logger.error({ err: String(rollbackErr), configPath: projConfigPath }, "Failed to roll back project config patch");
+      }
+    }
+    logger.error({ err: String(err), configPath: userConfigPath }, "Failed atomic write of global user config patch");
+    throw new ConfigError(userConfigPath, `Atomic write failed: ${err.message}`);
   }
 
   return loadConfig(cwd);
