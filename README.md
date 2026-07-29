@@ -49,7 +49,7 @@
 - Applies a safe local post-transcription correction pass for spoken punctuation, accidental repeats, and spacing while preserving code regions, URLs, identifiers, and intentional repeated lines.
 - Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
 - Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
-- Starts capture before recording-state handoff to reduce clipped first phonemes, optionally stops after a configurable confirmed-speech silence gap, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
+- Starts capture before recording-state handoff to reduce clipped first phonemes, optionally stops after a configurable confirmed-speech silence gap in toggle mode, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
 - Shows a golden `$ Paid` badge in the HUD during transcribing and idle states when a paid API key is used or configured.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
@@ -103,8 +103,8 @@
 | **Target Translation Language** | `English` | Language used when auto-translation is enabled |
 | **Default Model** | `gemini-3.1-flash-lite` | Ultra-fast multimodal STT model |
 | **Audio Input** | `System Default Microphone` | Select a configured microphone; connected-device changes refresh automatically |
-| **Auto-Endpointing** | `true` (ON) | Automatically stop recording after the configured silence gap; disable for manual-only stopping |
-| **Transcription Delay** | `0.5` seconds | Silence gap required before auto-endpointing stops recording; accepts `0`–`10` seconds |
+| **Auto-Endpointing** | `true` (ON) | Automatically stop recording after the configured silence gap in toggle mode; hold mode always stops on hotkey release |
+| **Transcription Delay** | `0.5` seconds | Silence gap required before auto-endpointing stops recording in toggle mode; accepts `0`–`10` seconds |
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |
 
