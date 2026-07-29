@@ -868,10 +868,12 @@ function setupIpcHandlers() {
 let lastHotkeyDownTime = 0;
 let keyHoldPressStartTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
-let stopQueuedOnStart = false;
+let pendingStopOnStart = false;
+let recordingStartTime = 0;
 
 async function startRecordingFlow() {
-  stopQueuedOnStart = false;
+  pendingStopOnStart = false;
+  recordingStartTime = Date.now();
   const reqRes = recordingLifecycle.requestStart();
   if (!reqRes.accepted) {
     logger.warn({ reason: reqRes.reason }, "Cannot start recording flow");
@@ -924,13 +926,21 @@ async function startRecordingFlow() {
   setState("recording", "Recording...");
   recordingLifecycle.acknowledgeStart(reqRes.sequenceId, true);
 
-  if (stopQueuedOnStart && currentConfig.dictationMode === "hold") {
-    logger.info("Queued stop executing immediately upon entering recording state");
-    const stopRes = recordingLifecycle.requestStop();
-    if (stopRes.accepted) {
-      setState("stopping", "Stopping...");
-      playToggleStopChime();
-      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+  if (pendingStopOnStart && currentConfig.dictationMode === "hold") {
+    logger.info("Queued stop executing upon entering recording state with minimum capture window");
+    const elapsed = Date.now() - recordingStartTime;
+    const delay = Math.max(0, 800 - elapsed);
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    const snapshot = recordingLifecycle.snapshot();
+    if (snapshot.sequenceId === reqRes.sequenceId && snapshot.state === "recording") {
+      const stopRes = recordingLifecycle.requestStop();
+      if (stopRes.accepted) {
+        setState("stopping", "Stopping...");
+        playToggleStopChime();
+        captureWindow?.webContents.send(IPC.STOP_RECORDING);
+      }
     }
   }
 }
@@ -968,7 +978,7 @@ function handleHotkeyUp() {
   const pressDuration = Date.now() - keyHoldPressStartTime;
   if (currentState === "starting") {
     logger.info({ pressDuration }, "Key Up during starting state: queuing stop");
-    stopQueuedOnStart = true;
+    pendingStopOnStart = true;
   } else if (currentState === "recording") {
     logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Mode)");
     const stopRes = recordingLifecycle.requestStop();

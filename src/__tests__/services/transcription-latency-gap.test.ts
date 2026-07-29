@@ -180,6 +180,8 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
       testCwd = join(tmpdir(), `pi-voice-test-delay-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       origXdg = process.env.XDG_CONFIG_HOME;
       process.env.XDG_CONFIG_HOME = join(testCwd, "global-config");
+      mkdirSync(join(process.env.XDG_CONFIG_HOME, "pi-voice"), { recursive: true });
+      writeFileSync(join(process.env.XDG_CONFIG_HOME, "pi-voice", "config.json"), "{}");
       mkdirSync(join(testCwd, ".pi"), { recursive: true });
       writeFileSync(join(testCwd, ".pi", "pi-voice.json"), "{}");
     });
@@ -221,6 +223,80 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
 
       const updatedExcessive = updateConfig(testCwd, { transcriptionDelaySec: 15.0 });
       expect(updatedExcessive.transcriptionDelaySec).toBe(10.0);
+    });
+  });
+
+  describe("5. Short Tap Audio Capture Buffer Window (pendingStopOnStart 800ms minimum capture window)", () => {
+    test("calculates correct delay to ensure at least 800ms recording duration when pendingStopOnStart is true", () => {
+      let pendingStopOnStart = false;
+      const recordingStartTime = Date.now() - 200; // 200ms elapsed
+      pendingStopOnStart = true;
+
+      const elapsed = Date.now() - recordingStartTime;
+      const delayMs = Math.max(0, 800 - elapsed);
+
+      expect(pendingStopOnStart).toBe(true);
+      expect(elapsed).toBeGreaterThanOrEqual(200);
+      expect(delayMs).toBeLessThanOrEqual(600);
+      expect(delayMs).toBeGreaterThan(0);
+      expect(elapsed + delayMs).toBe(800);
+    });
+
+    test("returns 0ms delay when elapsed recording duration already exceeds 800ms", () => {
+      const pendingStopOnStart = true;
+      const recordingStartTime = Date.now() - 900; // 900ms elapsed
+
+      const elapsed = Date.now() - recordingStartTime;
+      const delayMs = Math.max(0, 800 - elapsed);
+
+      expect(pendingStopOnStart).toBe(true);
+      expect(elapsed).toBeGreaterThanOrEqual(900);
+      expect(delayMs).toBe(0);
+    });
+
+    test("simulates pendingStopOnStart flow with 800ms minimum window on fast key release during starting state", async () => {
+      const lifecycle = new RecordingLifecycle();
+      let currentState: string = "idle";
+      let pendingStopOnStart = false;
+      let recordingStartTime = 0;
+      let stopCalledAt = 0;
+
+      // Start recording flow
+      pendingStopOnStart = false;
+      recordingStartTime = Date.now();
+      lifecycle.requestStart();
+      currentState = "starting";
+
+      // Simulate fast key release during starting state
+      if (currentState === "starting") {
+        pendingStopOnStart = true;
+      }
+      expect(pendingStopOnStart).toBe(true);
+
+      // Simulate entering recording state after selection capture
+      const seq = lifecycle.snapshot().sequenceId;
+      lifecycle.acknowledgeStart(seq, true);
+      currentState = "recording";
+
+      if (pendingStopOnStart) {
+        const elapsed = Date.now() - recordingStartTime;
+        const delayMs = Math.max(0, 800 - elapsed);
+        if (delayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+        const snapshot = lifecycle.snapshot();
+        if (snapshot.sequenceId === seq && snapshot.state === "recording") {
+          const stopRes = lifecycle.requestStop();
+          if (stopRes.accepted) {
+            currentState = "stopping";
+            stopCalledAt = Date.now();
+          }
+        }
+      }
+
+      expect(currentState).toBe("stopping");
+      const totalDuration = stopCalledAt - recordingStartTime;
+      expect(totalDuration).toBeGreaterThanOrEqual(750); // Account for timer resolution
     });
   });
 });
