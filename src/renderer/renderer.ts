@@ -655,16 +655,37 @@ function updateTranslateBtnUI() {
   }
 }
 
-function renderPersonNames() {
-  if (!personNamesContainer) return;
-  personNamesContainer.innerHTML = "";
+export function setCustomVocabForTest(vocab: string[]) {
+  currentCustomVocab = vocab;
+}
 
-  if (personNamesCountBadge) {
-    personNamesCountBadge.textContent = `${currentCustomVocab.length} Names`;
+export function getCustomVocabForTest() {
+  return currentCustomVocab;
+}
+
+export function setPresetVocabMapForTest(map: Record<string, string[]>) {
+  currentPresetVocabMap = map;
+}
+
+export function getPresetVocabMapForTest() {
+  return currentPresetVocabMap;
+}
+
+export function renderPersonNames() {
+  const container = personNamesContainer || document.getElementById("personNamesContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const badge = personNamesCountBadge || document.getElementById("personNamesCountBadge");
+  if (badge) {
+    badge.textContent = `${currentCustomVocab.length} Names`;
   }
 
   if (currentCustomVocab.length === 0) {
-    personNamesContainer.innerHTML = `<span class="vocab-tag-empty">No person names added yet</span>`;
+    const emptySpan = document.createElement("span");
+    emptySpan.className = "vocab-tag-empty";
+    emptySpan.textContent = "No person names added yet";
+    container.appendChild(emptySpan);
     return;
   }
 
@@ -674,15 +695,24 @@ function renderPersonNames() {
     tag.style.borderColor = "rgba(59, 130, 246, 0.4)";
     tag.style.background = "rgba(59, 130, 246, 0.15)";
     tag.style.color = "#93c5fd";
-    tag.innerHTML = `${term} <button data-index="${index}" title="Remove name">&times;</button>`;
-    tag.querySelector("button")?.addEventListener("click", async () => {
+
+    const textNode = document.createTextNode(`${term} `);
+    tag.appendChild(textNode);
+
+    const btn = document.createElement("button");
+    btn.dataset.index = String(index);
+    btn.title = "Remove name";
+    btn.textContent = "×";
+    btn.addEventListener("click", async () => {
       await removePersonName(index);
     });
-    personNamesContainer.appendChild(tag);
+    tag.appendChild(btn);
+
+    container.appendChild(tag);
   });
 }
 
-async function addPersonName(name: string) {
+export async function addPersonName(name: string) {
   const cleanName = name.trim();
   if (!cleanName) return;
 
@@ -694,7 +724,7 @@ async function addPersonName(name: string) {
   if (personNameInput) personNameInput.value = "";
 }
 
-async function removePersonName(index: number) {
+export async function removePersonName(index: number) {
   if (index >= 0 && index < currentCustomVocab.length) {
     currentCustomVocab.splice(index, 1);
     await window.electronIPC?.saveConfig({ customVocabulary: currentCustomVocab });
@@ -702,29 +732,43 @@ async function removePersonName(index: number) {
   }
 }
 
-function renderVocabTags() {
-  if (!vocabTagsContainer || !modalPresetSelect) return;
-  const currentPreset = modalPresetSelect.value;
+export function renderVocabTags() {
+  const container = vocabTagsContainer || document.getElementById("vocabTagsContainer");
+  const presetSelect = modalPresetSelect || (document.getElementById("modalPresetSelect") as HTMLSelectElement);
+  if (!container || !presetSelect) return;
+  const currentPreset = presetSelect.value;
   const terms = currentPresetVocabMap[currentPreset] || [];
-  vocabTagsContainer.innerHTML = "";
+  container.innerHTML = "";
 
   if (terms.length === 0) {
-    vocabTagsContainer.innerHTML = `<span class="vocab-tag-empty">No vocabulary terms for ${currentPreset}</span>`;
+    const emptySpan = document.createElement("span");
+    emptySpan.className = "vocab-tag-empty";
+    emptySpan.textContent = `No vocabulary terms for ${currentPreset}`;
+    container.appendChild(emptySpan);
     return;
   }
 
   terms.forEach((term, index) => {
     const tag = document.createElement("span");
     tag.className = "vocab-tag";
-    tag.innerHTML = `${term} <button data-index="${index}" title="Remove term">&times;</button>`;
-    tag.querySelector("button")?.addEventListener("click", async () => {
+
+    const textNode = document.createTextNode(`${term} `);
+    tag.appendChild(textNode);
+
+    const btn = document.createElement("button");
+    btn.dataset.index = String(index);
+    btn.title = "Remove term";
+    btn.textContent = "×";
+    btn.addEventListener("click", async () => {
       await removeVocabTerm(currentPreset, index);
     });
-    vocabTagsContainer.appendChild(tag);
+    tag.appendChild(btn);
+
+    container.appendChild(tag);
   });
 }
 
-async function addVocabTerm(preset: string, term: string) {
+export async function addVocabTerm(preset: string, term: string) {
   const cleanTerm = term.trim();
   if (!cleanTerm) return;
 
@@ -738,7 +782,7 @@ async function addVocabTerm(preset: string, term: string) {
   if (vocabInput) vocabInput.value = "";
 }
 
-async function removeVocabTerm(preset: string, index: number) {
+export async function removeVocabTerm(preset: string, index: number) {
   const list = currentPresetVocabMap[preset] || [];
   if (index >= 0 && index < list.length) {
     list.splice(index, 1);
@@ -748,14 +792,18 @@ async function removeVocabTerm(preset: string, index: number) {
   }
 }
 
-async function renderHistory() {
+export async function renderHistory() {
   const historyContainer = document.getElementById("historyContainer");
   if (!historyContainer) return;
 
   const history: HistoryEntry[] = (await window.electronIPC?.getHistory()) || [];
 
   if (history.length === 0) {
-    historyContainer.innerHTML = '<div class="history-empty">No recent dictations</div>';
+    const emptyDiv = document.createElement("div");
+    emptyDiv.className = "history-empty";
+    emptyDiv.textContent = "No recent dictations";
+    historyContainer.innerHTML = "";
+    historyContainer.appendChild(emptyDiv);
     return;
   }
 
@@ -783,16 +831,21 @@ async function renderHistory() {
           second: "2-digit",
         });
 
-    metaEl.innerHTML = `${timeStr} · ${item.activeApp || "App"}`;
+    metaEl.textContent = `${timeStr} · ${item.activeApp || "App"}`;
 
     el.title = "Click to copy text to clipboard";
     el.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(item.text);
-        const originalMeta = metaEl.innerHTML;
-        metaEl.innerHTML = `<span style="color: #34d399; font-weight: 600;">✓ Copied to clipboard!</span>`;
+        const originalText = metaEl.textContent;
+        metaEl.textContent = "";
+        const copiedSpan = document.createElement("span");
+        copiedSpan.style.color = "#34d399";
+        copiedSpan.style.fontWeight = "600";
+        copiedSpan.textContent = "✓ Copied to clipboard!";
+        metaEl.appendChild(copiedSpan);
         setTimeout(() => {
-          metaEl.innerHTML = originalMeta;
+          metaEl.textContent = originalText;
         }, 1200);
       } catch (err) {
         console.error("Failed to copy history item:", err);
