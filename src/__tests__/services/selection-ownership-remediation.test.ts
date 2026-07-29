@@ -478,7 +478,7 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       )).toBe(true);
       expect(invalidated).toBe(1);
       expect(restored).toEqual([start.sequenceId]);
-      expect(errors).toEqual(["Microphone failed"]);
+      expect(errors).toEqual(["capture setup failed"]);
 
       expect(handleRecordingError(
         { error: "Late microphone failed", sequenceId: start.sequenceId },
@@ -488,7 +488,7 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
         (message) => errors.push(message),
       )).toBe(false);
       expect(invalidated).toBe(1);
-      expect(errors).toEqual(["Microphone failed"]);
+      expect(errors).toEqual(["capture setup failed"]);
     });
   });
 });
