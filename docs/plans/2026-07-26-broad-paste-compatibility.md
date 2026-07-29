@@ -4,7 +4,7 @@
 
 **Goal:** Make normal macOS application/window targets broadly paste-eligible while retaining one lightweight target recheck, fail-closed native injection, clipboard restoration, and existing lifecycle semantics.
 
-**Architecture:** `SafePasteService` will capture one app/PID/window identity at recording start, then perform one matching conditional native recheck immediately before clipboard mutation and Command-V. The native helper will exchange only bounded, validated window-target fields and injection status; `PasteCoordinator` and renderer lifecycle behavior remain authoritative, with privacy-preserving stage diagnostics added around the existing flow.
+**Architecture:** `SafePasteService` will capture one app/PID/window identity at recording start, then perform one matching conditional native recheck immediately before clipboard mutation and Command-V. The native helper will exchange only bounded, validated window-target fields and injection status; `PasteCoordinator` and renderer lifecycle behavior remain authoritative, with recording sequence validity carried through orchestration and paste stages, and privacy-preserving stage diagnostics added around the existing flow.
 
 **Tech Stack:** TypeScript, Bun tests/scripts, Objective-C/AppKit/ApplicationServices native helper, Electron clipboard, Pino logger, macOS arm64 build and packaging smoke tests.
 
@@ -119,9 +119,9 @@ git add src/services/safe-paste.ts src/__tests__/services/safe-paste.test.ts && 
 
 ### Implementation steps
 
-1. Keep `PasteCoordinator`’s mutex, duplicate suppression, generation invalidation, stale-result handling, and pending-paste semantics intact. Only pass through the exact `SafePasteService` reason and diagnostic outcome needed by existing state reporting.
+1. Keep `PasteCoordinator`’s mutex, duplicate suppression, generation invalidation, stale-result handling, and pending-paste semantics intact. Carry the recording sequence and current-transcription predicate through the coordinator and service barriers; commit dedupe state only after successful submission. Only pass through the exact `SafePasteService` reason and diagnostic outcome needed by existing state reporting.
 2. Connect diagnostics to the existing logger only at the service boundary if needed. Log structured stage completion/failure, timeout, mode, duration, operation ID, total duration, outcome, and reason code; never include `text`, clipboard data, or protected field values.
-3. Keep `src/main.ts` unchanged unless a minimal logger/state hook is required; preserve current renderer shutdown invalidation and failure UI transcript-retention behavior.
+3. Keep `src/main.ts` unchanged unless a minimal logger/state hook is required; preserve current renderer shutdown invalidation and failure UI transcript-retention behavior while rechecking lifecycle validity after asynchronous app lookup and before coordinator submission.
 4. Run the focused flow and integration tests:
 
    ```sh

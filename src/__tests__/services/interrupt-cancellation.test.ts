@@ -149,5 +149,72 @@ describe("Interrupt and Cancellation Test Suite", () => {
       expect(pasteRes.status).toBe("stale");
       expect(isPasted).toBe(false);
     });
+
+    test("main orchestration with delayed getActiveAppName discards stale paste when cancelled during lookup", async () => {
+      const lifecycle = new RecordingLifecycle();
+      const start = lifecycle.requestStart();
+      lifecycle.acknowledgeStart(start.sequenceId, true);
+      const stop = lifecycle.requestStop();
+      lifecycle.acknowledgeStop(stop.sequenceId, true);
+
+      const currentSeq = start.sequenceId;
+      const isCurrentTranscription = (seq: number) =>
+        lifecycle.snapshot().sequenceId === seq && lifecycle.snapshot().state === "transcribing";
+
+      let pasteCalled = false;
+      const coordinator = new PasteCoordinator(async () => {
+        pasteCalled = true;
+        return { ok: true, reason: "injection_requested" };
+      });
+
+      // Controllable delayed active-app lookup
+      let resolveActiveApp!: (appName: string) => void;
+      const pendingActiveApp = new Promise<string>((r) => { resolveActiveApp = r; });
+      const getActiveAppName = () => pendingActiveApp;
+
+      // Start orchestration task
+      let orchestrationFinished = false;
+      let pasteResult: any = null;
+
+      const runOrchestration = (async () => {
+        const text = "Dictated text";
+        const activeApp = await getActiveAppName();
+
+        // Recheck 1: immediately after active-app lookup
+        if (!isCurrentTranscription(currentSeq)) {
+          orchestrationFinished = true;
+          return { status: "stale_lookup" };
+        }
+
+        // Recheck 2: immediately before calling coordinator
+        if (!isCurrentTranscription(currentSeq)) {
+          orchestrationFinished = true;
+          return { status: "stale_before_coordinator" };
+        }
+
+        pasteResult = await coordinator.pasteText(text, currentSeq, isCurrentTranscription);
+
+        if (!isCurrentTranscription(currentSeq) || pasteResult.status === "stale") {
+          orchestrationFinished = true;
+          return { status: "stale_result" };
+        }
+
+        orchestrationFinished = true;
+        return pasteResult;
+      })();
+
+      // While getActiveAppName is pending, cancel dictation (e.g. Escape key pressed)
+      lifecycle.cancel();
+      coordinator.invalidate();
+
+      // Resolve getActiveAppName now
+      resolveActiveApp("Editor");
+
+      const outcome = await runOrchestration;
+      expect(outcome).toEqual({ status: "stale_lookup" });
+      expect(pasteCalled).toBe(false);
+      expect(orchestrationFinished).toBe(true);
+      expect(lifecycle.snapshot().state).toBe("idle");
+    });
   });
 });

@@ -68,4 +68,61 @@ describe("PasteCoordinator", () => {
     expect(result.status).toBe("stale");
     expect(lifecycle.snapshot().state).toBe("transcribing");
   });
+
+  test("dedupe text and timestamp commit on successful submission only", async () => {
+    let returnSuccess = false;
+    let calls = 0;
+    const coordinator = new PasteCoordinator(async () => {
+      calls++;
+      if (returnSuccess) return { ok: true, reason: "injection_requested" };
+      return { ok: false, reason: "target_mismatch" };
+    });
+
+    // 1. Denied attempt must NOT commit dedupe
+    const res1 = await coordinator.pasteText("same text");
+    expect(res1).toEqual({ status: "denied", reason: "target_mismatch" });
+    expect(calls).toBe(1);
+
+    // Immediate retry with same text must NOT be suppressed as duplicate
+    const res2 = await coordinator.pasteText("same text");
+    expect(res2).toEqual({ status: "denied", reason: "target_mismatch" });
+    expect(calls).toBe(2);
+
+    // 2. Successful attempt MUST commit dedupe
+    returnSuccess = true;
+    const res3 = await coordinator.pasteText("same text");
+    expect(res3).toEqual({ status: "submitted" });
+    expect(calls).toBe(3);
+
+    // Immediate retry with same text MUST be suppressed as duplicate
+    const res4 = await coordinator.pasteText("same text");
+    expect(res4).toEqual({ status: "duplicate" });
+    expect(calls).toBe(3);
+  });
+
+  test("accepts recording lifecycle sequence and predicate without minting validity at call time", async () => {
+    const lifecycle = new RecordingLifecycle();
+    const start = lifecycle.requestStart();
+    lifecycle.acknowledgeStart(start.sequenceId, true);
+    const stop = lifecycle.requestStop();
+    lifecycle.acknowledgeStop(stop.sequenceId, true);
+
+    const currentSeq = start.sequenceId;
+    const isCurrentTranscription = (seq: number) =>
+      lifecycle.snapshot().sequenceId === seq && lifecycle.snapshot().state === "transcribing";
+
+    let pasteCalled = false;
+    const coordinator = new PasteCoordinator(async () => {
+      pasteCalled = true;
+      return { ok: true, reason: "injection_requested" };
+    });
+
+    // Invalidate recording lifecycle (e.g. user pressed Escape / cancelled)
+    lifecycle.cancel();
+
+    // Calling pasteText with old sequence and predicate must refuse immediately without minting validity
+    const res = await coordinator.pasteText("text", currentSeq, isCurrentTranscription);
+    expect(res).toEqual({ status: "stale", reason: "Paste invalidated; transcript was retained" });
+    expect(pasteCalled).toBe(false);
+  });
 });

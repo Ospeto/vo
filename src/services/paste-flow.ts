@@ -17,22 +17,42 @@ export class PasteCoordinator {
 
   invalidate(): void { ++this.generation; }
 
-  async pasteText(text: string): Promise<PasteOperationResult> {
+  async pasteText(
+    text: string,
+    sequenceOrIsCurrent?: number | (() => boolean),
+    isCurrentTranscription?: (sequence: number) => boolean
+  ): Promise<PasteOperationResult> {
     const now = Date.now();
     if (this.isPasting || (text === this.lastSubmittedText && now - this.lastPasteTime < 1500)) {
       return { status: "duplicate" };
     }
 
+    const initialGen = this.generation;
+    const isCurrent = (): boolean => {
+      if (initialGen !== this.generation) return false;
+      if (typeof sequenceOrIsCurrent === "function") return sequenceOrIsCurrent();
+      if (typeof sequenceOrIsCurrent === "number" && typeof isCurrentTranscription === "function") {
+        return isCurrentTranscription(sequenceOrIsCurrent);
+      }
+      return true;
+    };
+
+    if (!isCurrent()) {
+      return { status: "stale", reason: "Paste invalidated; transcript was retained" };
+    }
+
     this.isPasting = true;
-    const generation = this.generation;
-    this.lastSubmittedText = text;
-    this.lastPasteTime = now;
     try {
-      const result = await this.paste(text, () => generation === this.generation);
-      if (generation !== this.generation) return { status: "stale", reason: "Paste invalidated; transcript was retained" };
-      return result.ok ? { status: "submitted" } : { status: "denied", reason: result.reason };
+      const result = await this.paste(text, isCurrent);
+      if (!isCurrent()) return { status: "stale", reason: "Paste invalidated; transcript was retained" };
+      if (result.ok) {
+        this.lastSubmittedText = text;
+        this.lastPasteTime = Date.now();
+        return { status: "submitted" };
+      }
+      return { status: "denied", reason: result.reason };
     } catch (error) {
-      if (generation !== this.generation) return { status: "stale", reason: "Paste invalidated; transcript was retained" };
+      if (!isCurrent()) return { status: "stale", reason: "Paste invalidated; transcript was retained" };
       return { status: "error", reason: error instanceof Error ? error.message : String(error) };
     } finally {
       this.isPasting = false;

@@ -702,15 +702,25 @@ function setupIpcHandlers() {
       }
 
       const activeApp = await getActiveAppName();
+      if (!isCurrentTranscription(currentSeq)) {
+        logger.warn({ currentSeq }, "Discarding stale paste attempt after active-app lookup");
+        return;
+      }
+
       const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
       const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
       const isEnglish = !isBurmeseText;
       const cost = calculateDictationCost(audioDurationSec, text.length, modelUsed || currentConfig.geminiModel, isEnglish);
 
-      const pasteResult = await pasteCoordinator.pasteText(text);
-
       if (!isCurrentTranscription(currentSeq)) {
-        logger.warn({ currentSeq }, "Discarding stale paste result");
+        logger.warn({ currentSeq }, "Discarding stale paste attempt before paste coordinator");
+        return;
+      }
+
+      const pasteResult = await pasteCoordinator.pasteText(text, currentSeq, isCurrentTranscription);
+
+      if (!isCurrentTranscription(currentSeq) || pasteResult.status === "stale") {
+        logger.warn({ currentSeq, pasteResult }, "Discarding stale paste result");
         return;
       }
 
