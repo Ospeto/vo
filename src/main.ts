@@ -474,7 +474,7 @@ function createHudWindow() {
   });
 }
 
-function togglePopover() {
+function togglePopover(focus = false) {
   if (!popoverWindow) return;
 
   if (popoverWindow.isVisible()) {
@@ -506,7 +506,12 @@ function togglePopover() {
     );
 
     popoverWindow.setPosition(pos.x, pos.y);
-    popoverWindow.showInactive();
+    if (focus) {
+      popoverWindow.show();
+      popoverWindow.focus();
+    } else {
+      popoverWindow.showInactive();
+    }
   }
 }
 
@@ -1052,13 +1057,15 @@ if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
       if (popoverWindow.isVisible()) {
         popoverWindow.focus();
       } else {
-        togglePopover();
+        togglePopover(true);
       }
     }
   });
 }
 
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock && !process.argv.includes("--headless")) return;
+
   if (process.argv.includes("--headless")) {
     const isOk = addon !== null && typeof addon.selfCheck === "function" && addon.selfCheck() === true;
     if (isOk) {
