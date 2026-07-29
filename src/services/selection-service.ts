@@ -258,6 +258,9 @@ export class SelectionOwnershipManager {
   private activeOwnership: SelectionOwnership | null = null;
 
   setOwnership(ownership: SelectionOwnership): void {
+    if (this.activeOwnership && ownership.sequenceId < this.activeOwnership.sequenceId) {
+      return;
+    }
     this.activeOwnership = ownership;
   }
 

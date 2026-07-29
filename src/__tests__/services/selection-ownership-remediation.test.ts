@@ -271,6 +271,30 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
   });
 
   describe("4. Sequence Isolation", () => {
+    test("stale capture completion cannot replace newer sequence ownership", () => {
+      const snapshot = port.snapshot();
+      adapter.writeText("Current sequence selection");
+      const ownershipSnapshot = port.snapshot();
+
+      ownershipManager.setOwnership({
+        sequenceId: 302,
+        previousClipboard: snapshot,
+        hasSelection: true,
+        selectedText: "Current sequence selection",
+        ownershipSnapshot,
+      });
+
+      ownershipManager.setOwnership({
+        sequenceId: 301,
+        previousClipboard: snapshot,
+        hasSelection: true,
+        selectedText: "Stale sequence selection",
+        ownershipSnapshot,
+      });
+
+      expect(ownershipManager.getOwnership()?.sequenceId).toBe(302);
+    });
+
     test("calling restoreCapturedSelection for old sequence ID does not affect current sequence ownership", () => {
       const snapshot1 = port.snapshot();
       adapter.writeText("Seq 1 selection");
@@ -366,6 +390,38 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
 
       // Clipboard contains what SafePaste restored ("Selection text present at paste time")
       expect(adapter.readText()).toBe("Selection text present at paste time");
+    });
+  });
+
+  describe("6. Recording Error Sequence Binding", () => {
+    test("late recording error cleanup cannot restore newer sequence ownership", () => {
+      const lifecycle = new RecordingLifecycle();
+      const first = lifecycle.requestStart();
+      const previousClipboard = port.snapshot();
+      adapter.writeText("First sequence selection");
+      ownershipManager.setOwnership({
+        sequenceId: first.sequenceId,
+        previousClipboard,
+        hasSelection: true,
+        selectedText: "First sequence selection",
+        ownershipSnapshot: port.snapshot(),
+      });
+
+      lifecycle.reset();
+      const second = lifecycle.requestStart();
+      adapter.writeText("Second sequence selection");
+      ownershipManager.setOwnership({
+        sequenceId: second.sequenceId,
+        previousClipboard,
+        hasSelection: true,
+        selectedText: "Second sequence selection",
+        ownershipSnapshot: port.snapshot(),
+      });
+
+      const restored = ownershipManager.restoreCapturedSelection(first.sequenceId, port);
+      expect(restored).toBe(false);
+      expect(ownershipManager.getOwnership()?.sequenceId).toBe(second.sequenceId);
+      expect(adapter.readText()).toBe("Second sequence selection");
     });
   });
 });

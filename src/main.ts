@@ -770,9 +770,10 @@ function setupIpcHandlers() {
   ipcMain.on(IPC.RECORDING_ERROR, (event, error: string) => {
     if (!validateIpcSender(event, IPC.RECORDING_ERROR)) return;
     logger.warn({ error }, "Recording warning");
+    const currentSeq = recordingLifecycle.snapshot().sequenceId;
     pasteCoordinator.invalidate();
     recordingLifecycle.reset();
-    restoreCapturedSelection();
+    restoreCapturedSelection(currentSeq);
     setState("error", error);
   });
 
