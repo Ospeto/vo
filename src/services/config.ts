@@ -19,7 +19,7 @@ export interface KeyBinding {
 }
 
 export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
-export type GeminiModelChoice = "gemini-3.1-flash-lite" | "gemini-2.5-flash";
+export type GeminiModelChoice = "gemini-3.6-flash" | "gemini-3.5-flash-lite" | "gemini-3.1-flash-lite" | "gemini-3.1-pro" | "gemini-2.5-flash" | "gemini-2.5-pro";
 export type DictationPreset = "auto" | "careful" | "code_comment" | "fast" | "email_polish" | "burmese_written" | "translate";
 export type DictationMode = "toggle" | "hold";
 export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
@@ -587,10 +587,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
 
   const mergedRaw: Record<string, unknown> = { ...globalJson, ...projJson };
   let result = configFileSchema.safeParse(mergedRaw);
-
-  if (!result.success) {
-    result = configFileSchema.safeParse({});
-  }
+  const config = result.success ? result.data : configFileSchema.parse({});
 
   const {
     key: keyStr,
@@ -615,7 +612,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     geminiApiKey,
     geminiFallbackApiKey,
     audioDeviceId,
-  } = result.data;
+  } = config;
 
   let keyBinding: KeyBinding;
   try {
