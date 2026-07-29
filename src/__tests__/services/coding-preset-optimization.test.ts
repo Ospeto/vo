@@ -68,6 +68,12 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
       expect(result).toBe("Refactor this function to handle errors gracefully");
       expect(result).not.toContain("ပြန်ကြည့်ပေးပါ");
     });
+
+    test("sanitizeTranscribedText removes Burmese-only output when translateEnabled is true", () => {
+      const result = sanitizeTranscribedText("ပြန်တော့လုပ်ရဦးမလားလို့", "Cursor", "code_comment", undefined, true);
+
+      expect(result).toBe("");
+    });
   });
 
   describe("3. Selection Transform Mode under Coding Preset", () => {

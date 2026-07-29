@@ -359,9 +359,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
       .map(line => line.replace(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]+/g, "").trim())
       .filter(line => line.length > 0)
       .join("\n");
-    if (purged.length > 0) {
-      cleaned = purged;
-    }
+    cleaned = purged;
   }
 
   // 1. Strip wrapping quotes added by LLMs
