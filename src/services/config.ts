@@ -1,5 +1,5 @@
 import { join, dirname } from "node:path";
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
@@ -702,6 +702,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
 
   let legacyProjectKeyBlocked = false;
   let legacyProjectKeyRemediation: string | undefined;
+  const originalGlobalJson = { ...globalJson };
 
   // Project secret migration & blocking
   // Repository scan command for project owners to locate legacy project keys:
@@ -737,6 +738,19 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
             atomicWriteJson(projConfigPath, projJson);
           }
         } catch (migErr: any) {
+          globalJson = originalGlobalJson;
+          try {
+            if (globalExists) {
+              atomicWriteJson(userConfigPath, originalGlobalJson, { mode: 0o600 });
+            } else if (existsSync(userConfigPath)) {
+              unlinkSync(userConfigPath);
+            }
+          } catch (rollbackErr: any) {
+            logger.error({ err: rollbackErr?.message }, "Failed to roll back legacy project key migration");
+          }
+          projJson = { ...projJson };
+          if (projGeminiState?.status === "available") projJson.geminiApiKey = projGeminiState.ciphertext;
+          if (projFallbackState?.status === "available") projJson.geminiFallbackApiKey = projFallbackState.ciphertext;
           logger.warn({ err: migErr?.message }, "Failed to complete legacy project key migration");
           legacyProjectKeyBlocked = true;
           legacyProjectKeyRemediation = "Failed to complete legacy project key migration to user config.";
@@ -745,9 +759,10 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     }
   }
 
-  // Ensure secret keys are excluded from project JSON before merging
-  delete projJson.geminiApiKey;
-  delete projJson.geminiFallbackApiKey;
+  if (!legacyProjectKeyBlocked) {
+    delete projJson.geminiApiKey;
+    delete projJson.geminiFallbackApiKey;
+  }
 
   if (!globalExists && !projExists) {
     logger.info({ userConfigPath }, "Config file not found, using defaults");
@@ -1070,6 +1085,11 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       const content = readFileSync(projConfigPath, "utf-8");
       existingProjJson = JSON.parse(content);
     } catch {}
+    const hasProjectGeminiKey = typeof existingProjJson.geminiApiKey === "string" && existingProjJson.geminiApiKey.trim().length > 0;
+    const hasProjectFallbackKey = typeof existingProjJson.geminiFallbackApiKey === "string" && existingProjJson.geminiFallbackApiKey.trim().length > 0;
+    if ((hasProjectGeminiKey && patch.geminiApiKey === undefined) || (hasProjectFallbackKey && patch.geminiFallbackApiKey === undefined)) {
+      throw new ConfigError(projConfigPath, "Legacy project API keys must be migrated or explicitly cleared before updating project config");
+    }
     toSaveProj = preparePatchSave(existingProjJson!, patch, projConfigPath, false);
   }
 
