@@ -1,5 +1,5 @@
 ---
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
+description: Use Bun instead of Node.js, npm, or pnpm; use the existing Electron Vite pipeline for renderer builds.
 globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
 alwaysApply: false
 ---
@@ -38,7 +38,7 @@ test("hello world", () => {
 
 ## Frontend
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+Use HTML imports with `Bun.serve()` for Bun-served frontends. For the Electron renderer, use the repository's existing `electron-vite` pipeline; do not add a standalone Vite setup. HTML imports fully support React, CSS, Tailwind.
 
 Server:
 
