@@ -57,15 +57,15 @@ When `translateEnabled` is false, dictation SHALL preserve the original spoken l
 - **THEN** the system persists or resolves `dictationPreset: "careful"`, enables translation, and preserves the configured `targetLanguage`.
 
 ### Requirement: Code Preset Language and Formatting
-The system SHALL use a Systematic Code Dictation prompt for the `code_comment` preset. With translation disabled, it SHALL preserve the spoken language while applying syntax-friendly technical formatting; with translation enabled, it SHALL produce a detailed, actionable prompt in the configured target language.
+The system SHALL use a Systematic Code Dictation prompt for the `code_comment` preset. With translation disabled, it SHALL preserve the spoken language while applying syntax-friendly technical formatting; with translation enabled, it SHALL produce a concise English technical specification and remove residual Burmese script from the final Gemini output.
 
 #### Scenario: User dictates a coding idea in Code preset
 - **WHEN** user selects `code_comment` preset and dictates a coding requirement
-- **THEN** Gemini STT preserves the spoken language and formats the intent as a syntax-friendly technical instruction; with translation enabled, it outputs the configured target language.
+- **THEN** Gemini STT preserves the spoken language and formats the intent as a syntax-friendly technical instruction; with translation enabled, it outputs an English technical specification without Burmese script.
 
 #### Scenario: Prompt instructions formatting for code preset
 - **WHEN** `getPresetPromptInstructions("code_comment")` is called
-- **THEN** the system returns instructions for syntax-friendly technical dictation that preserve the spoken language unless translation is enabled.
+- **THEN** the system returns detect-mode instructions for syntax-friendly technical dictation that preserve the spoken language unless translation is enabled; translation mode returns strict English-only instructions.
 
 ### Requirement: Smart Auto Preset Resolution
 The system SHALL support `auto` in `DictationPreset` to dynamically resolve effective dictation presets based on frontmost active application metadata.

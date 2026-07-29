@@ -44,7 +44,7 @@
 
 ### 1. ⚡ Multimodal Speech-to-Text & Translation Engine
 - Supports **Gemini 3.6 Flash**, **Gemini 3.5 Flash Lite**, **Gemini 3.1 Flash Lite**, and **Gemini 2.5 Pro**.
-- Automatically translates spoken Burmese instructions into pure Senior Software Engineer English specifications.
+- Transcribes spoken Burmese, English, and mixed technical dictation according to the selected preset; `code_comment` preserves the spoken language unless auto-translation is enabled.
 - Sends a bounded, deduplicated list of enabled trusted vocabulary and spoken aliases as soft hints to Gemini and OpenAI, then applies the enabled dictionary locally with exact, deterministic matching across supported speech providers.
 - Applies a safe local post-transcription correction pass for spoken punctuation, accidental repeats, and spacing while preserving code regions, URLs, identifiers, and intentional repeated lines.
 - Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
@@ -58,11 +58,11 @@
 
 ### 3. 🎯 Smart App Preset Routing
 - **`auto`**: Automatically detects your active application and routes dictation mode:
-  - Code Editors (`VS Code`, `Cursor`, `Myanso`, `Terminal`) ➔ `code_comment` (English Tech Spec)
+  - Code Editors (`VS Code`, `Cursor`, `Myanso`, `Terminal`) ➔ `code_comment` (technical dictation; translation follows the Auto-Translation setting)
   - Notes & Vaults (`Obsidian`) ➔ `burmese_written` (Standard Burmese Prose)
   - Mail & Chat (`Slack`, `Mail`) ➔ `email_polish` (Polished English)
 - **`careful`**: Deep proofreading and semantic reasoning while preserving the speaker's intent.
-- **`code_comment`**: Software engineering specification mode.
+- **`code_comment`**: Syntax-friendly software engineering dictation and specification mode; preserves the spoken language when translation is off and emits an English technical specification when translation is on.
 - **`burmese_written`**: Natural written prose in the original spoken language, preserving embedded English technical terms.
 - **`email_polish`**: Refined professional communication.
 - **Auto-Translation**: Optional translation mode using the configured target language; the legacy `translate` preset enables this mode while preserving the selected target language.
