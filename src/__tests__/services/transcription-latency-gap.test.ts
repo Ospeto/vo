@@ -174,14 +174,22 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
 
   describe("4. Config Persistence for transcriptionDelaySec & autoEndpointEnabled", () => {
     let testCwd: string;
+    let origXdg: string | undefined;
 
     beforeEach(() => {
       testCwd = join(tmpdir(), `pi-voice-test-delay-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      origXdg = process.env.XDG_CONFIG_HOME;
+      process.env.XDG_CONFIG_HOME = join(testCwd, "global-config");
       mkdirSync(join(testCwd, ".pi"), { recursive: true });
       writeFileSync(join(testCwd, ".pi", "pi-voice.json"), "{}");
     });
 
     afterEach(() => {
+      if (origXdg === undefined) {
+        delete process.env.XDG_CONFIG_HOME;
+      } else {
+        process.env.XDG_CONFIG_HOME = origXdg;
+      }
       try {
         rmSync(testCwd, { recursive: true, force: true });
       } catch {}

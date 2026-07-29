@@ -12,6 +12,7 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "pi-voice-lang-stability-"));
+    process.env.XDG_CONFIG_HOME = join(tempDir, "global-config");
     process.env.GEMINI_API_KEY = "test-gemini-key";
     _resetGeminiClient();
   });

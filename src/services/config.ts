@@ -414,49 +414,93 @@ export function decryptSecret(encrypted?: string): string | undefined {
   return encrypted;
 }
 
+export function getUserConfigPath(): string {
+  if (process.env.PI_VOICE_CONFIG_PATH) {
+    return process.env.PI_VOICE_CONFIG_PATH;
+  }
+  const configHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+  return join(configHome, "pi-voice", "config.json");
+}
+
+export function getProjConfigPath(cwd: string = process.cwd()): string | null {
+  if (!cwd || cwd === "/" || cwd === homedir()) {
+    return null;
+  }
+  return join(cwd, ".pi", "pi-voice.json");
+}
+
 export function resolveConfigPath(cwd: string = process.cwd()): string {
-  const projPath = join(cwd, ".pi", "pi-voice.json");
-  if (cwd && cwd !== "/" && cwd !== homedir() && existsSync(projPath)) {
+  const projPath = getProjConfigPath(cwd);
+  if (projPath && existsSync(projPath)) {
     return projPath;
   }
-  const userConfigPath = join(homedir(), ".config", "pi-voice", "config.json");
-  if (existsSync(userConfigPath)) {
-    return userConfigPath;
-  }
-  if (cwd && cwd !== "/" && cwd !== homedir()) {
-    return projPath;
-  }
-  return userConfigPath;
+  return getUserConfigPath();
 }
 
 export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const defaults = defaultConfig();
-  const configPath = resolveConfigPath(cwd);
+  const userConfigPath = getUserConfigPath();
+  const projConfigPath = getProjConfigPath(cwd);
 
-  let rawContent: string;
-  try {
-    rawContent = readFileSync(configPath, "utf-8");
-  } catch (err: any) {
-    if (err.code === "ENOENT") {
-      logger.info({ configPath }, "Config file not found, using defaults");
-      return defaults;
+  let globalJson: Record<string, unknown> = {};
+  let globalExists = false;
+  if (existsSync(userConfigPath)) {
+    try {
+      const rawContent = readFileSync(userConfigPath, "utf-8");
+      globalJson = JSON.parse(rawContent);
+      globalExists = true;
+    } catch (err: any) {
+      if (err instanceof SyntaxError || err.name === "SyntaxError" || err.message?.includes("JSON")) {
+        throw new ConfigError(userConfigPath, `JSON parse error: ${err.message}`);
+      }
+      throw new ConfigError(userConfigPath, err.message);
     }
-    throw new ConfigError(configPath, err.message);
   }
 
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(rawContent);
-  } catch (err: any) {
-    throw new ConfigError(configPath, `JSON parse error: ${err.message}`);
+  let projJson: Record<string, unknown> = {};
+  let projExists = false;
+  if (projConfigPath && existsSync(projConfigPath)) {
+    try {
+      const rawContent = readFileSync(projConfigPath, "utf-8");
+      projJson = JSON.parse(rawContent);
+      projExists = true;
+    } catch (err: any) {
+      if (err instanceof SyntaxError || err.name === "SyntaxError" || err.message?.includes("JSON")) {
+        throw new ConfigError(projConfigPath, `JSON parse error: ${err.message}`);
+      }
+      throw new ConfigError(projConfigPath, err.message);
+    }
   }
 
-  const result = configFileSchema.safeParse(parsedJson);
+  if (!globalExists && !projExists) {
+    logger.info({ userConfigPath }, "Config file not found, using defaults");
+    return defaults;
+  }
+
+  const primaryPath = projExists ? projConfigPath! : userConfigPath;
+
+  if (globalJson.dictationPreset === "translate") {
+    globalJson.dictationPreset = "careful";
+    if (globalJson.translateEnabled === undefined) {
+      globalJson.translateEnabled = true;
+    }
+  }
+
+  if (projJson.dictationPreset === "translate") {
+    projJson.dictationPreset = "careful";
+    if (projJson.translateEnabled === undefined) {
+      projJson.translateEnabled = true;
+    }
+  }
+
+  let mergedRaw = { ...globalJson, ...projJson };
+
+  const result = configFileSchema.safeParse(mergedRaw);
   if (!result.success) {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new ConfigError(configPath, issues);
+    throw new ConfigError(primaryPath, issues);
   }
 
   const { key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset: rawDictationPreset, dictationMode, translateEnabled: rawTranslateEnabled, targetLanguage, audioChimesEnabled, chimeSoundStart, chimeSoundEnd, symbolScannerEnabled, transcriptionDelaySec, autoEndpointEnabled, customVocabulary, presetVocabulary, dictionaryEntries, appPresetMappings, geminiApiKey, geminiFallbackApiKey, audioDeviceId } = result.data;
@@ -466,9 +510,9 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   // Migrate legacy "translate" preset to careful preset + translateEnabled toggle
   let dictationPreset = rawDictationPreset;
   let translateEnabled = rawTranslateEnabled;
-  if ((parsedJson as any)?.dictationPreset === "translate" || rawDictationPreset === "translate") {
+  if ((mergedRaw as any)?.dictationPreset === "translate" || rawDictationPreset === "translate") {
     dictationPreset = "careful";
-    if ((parsedJson as any)?.translateEnabled === undefined) {
+    if ((mergedRaw as any)?.translateEnabled === undefined) {
       translateEnabled = true;
     }
   }
@@ -484,11 +528,11 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     : migrateVocabulary(mergedCustomVocab, mergedPresetVocab, persistedVocab.entries || []);
   const dictionaryErrors = validateDictionaryEntries(mergedDictionaryEntries);
   if (dictionaryErrors.length > 0) {
-    throw new ConfigError(configPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
+    throw new ConfigError(primaryPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
   }
 
   logger.info(
-    { configPath, key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
+    { configPath: primaryPath, key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
     "Loaded config",
   );
 
@@ -520,52 +564,46 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   };
 }
 
-export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
-  const configPath = resolveConfigPath(cwd);
-  const targetDir = dirname(configPath);
-  const tmpPath = `${configPath}.tmp`;
-
+function atomicWriteJson(filePath: string, data: unknown): void {
+  const targetDir = dirname(filePath);
+  const tmpPath = `${filePath}.tmp`;
   if (!existsSync(targetDir)) {
     mkdirSync(targetDir, { recursive: true });
   }
+  writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+  renameSync(tmpPath, filePath);
+}
 
-  let existingJson: Record<string, unknown> = {};
-  if (existsSync(configPath)) {
-    try {
-      const content = readFileSync(configPath, "utf-8");
-      existingJson = JSON.parse(content);
-    } catch {}
+function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceConfigPatch, targetPath: string): Record<string, unknown> {
+  let baseJson = { ...existingJson };
+  if (baseJson.dictationPreset === "translate" && baseJson.translateEnabled === undefined) {
+    baseJson = { ...baseJson, dictationPreset: "careful", translateEnabled: true };
   }
 
-  if (existingJson.dictationPreset === "translate" && existingJson.translateEnabled === undefined) {
-    existingJson = { ...existingJson, dictationPreset: "careful", translateEnabled: true };
-  }
+  const patchCopy = { ...patch };
 
-  // Encrypt secrets if provided in patch
-  if (patch.geminiApiKey !== undefined) {
-    patch.geminiApiKey = encryptSecret(patch.geminiApiKey);
+  if (patchCopy.geminiApiKey !== undefined) {
+    patchCopy.geminiApiKey = encryptSecret(patchCopy.geminiApiKey);
   }
-  if (patch.geminiFallbackApiKey !== undefined) {
-    patch.geminiFallbackApiKey = encryptSecret(patch.geminiFallbackApiKey);
+  if (patchCopy.geminiFallbackApiKey !== undefined) {
+    patchCopy.geminiFallbackApiKey = encryptSecret(patchCopy.geminiFallbackApiKey);
   }
-
-  // Keep legacy vocabulary lossless; the dictionary editor validates its structured entries.
 
   const persistedVocab = loadPersistedVocabulary();
-  const existingPresetVocab = (existingJson.presetVocabulary as Record<string, string[]>) || {};
-  const mergedPresetVocab = patch.presetVocabulary !== undefined
-    ? { ...persistedVocab.presetVocabulary, ...existingPresetVocab, ...patch.presetVocabulary }
+  const existingPresetVocab = (baseJson.presetVocabulary as Record<string, string[]>) || {};
+  const mergedPresetVocab = patchCopy.presetVocabulary !== undefined
+    ? { ...persistedVocab.presetVocabulary, ...existingPresetVocab, ...patchCopy.presetVocabulary }
     : { ...persistedVocab.presetVocabulary, ...existingPresetVocab };
 
-  const finalCustomVocab = patch.customVocabulary !== undefined
-    ? patch.customVocabulary.map((term) => term.trim()).filter(Boolean)
-    : Array.from(new Set([...persistedVocab.customVocabulary, ...((existingJson.customVocabulary as string[]) || [])]));
-  const finalDictionaryEntries = patch.dictionaryEntries !== undefined
-    ? patch.dictionaryEntries
+  const finalCustomVocab = patchCopy.customVocabulary !== undefined
+    ? patchCopy.customVocabulary.map((term) => term.trim()).filter(Boolean)
+    : Array.from(new Set([...persistedVocab.customVocabulary, ...((baseJson.customVocabulary as string[]) || [])]));
+  const finalDictionaryEntries = patchCopy.dictionaryEntries !== undefined
+    ? patchCopy.dictionaryEntries
     : (persistedVocab.entries || migrateVocabulary(finalCustomVocab, mergedPresetVocab));
   const dictionaryErrors = validateDictionaryEntries(finalDictionaryEntries);
   if (dictionaryErrors.length > 0) {
-    throw new ConfigError(configPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
+    throw new ConfigError(targetPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
   }
 
   savePersistedVocabulary({
@@ -574,44 +612,42 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     entries: finalDictionaryEntries,
   });
 
-  const existingAppMappings = (existingJson.appPresetMappings as Record<string, DictationPreset>) || DEFAULT_APP_PRESET_MAPPINGS;
-  const mergedAppMappings = patch.appPresetMappings !== undefined
-    ? patch.appPresetMappings
+  const existingAppMappings = (baseJson.appPresetMappings as Record<string, DictationPreset>) || DEFAULT_APP_PRESET_MAPPINGS;
+  const mergedAppMappings = patchCopy.appPresetMappings !== undefined
+    ? patchCopy.appPresetMappings
     : existingAppMappings;
 
-  // Migrate legacy "translate" dictationPreset in patch
-  if (patch.dictationPreset === "translate") {
-    patch.dictationPreset = "careful";
-    if (patch.translateEnabled === undefined) {
-      patch.translateEnabled = true;
+  if (patchCopy.dictationPreset === "translate") {
+    patchCopy.dictationPreset = "careful";
+    if (patchCopy.translateEnabled === undefined) {
+      patchCopy.translateEnabled = true;
     }
   }
 
-  // Preserve unrelated keys while merging patch
   const mergedJson = {
-    ...existingJson,
-    ...(patch.key !== undefined ? { key: patch.key } : {}),
-    ...(patch.editKey !== undefined ? { editKey: patch.editKey } : {}),
-    ...(patch.provider !== undefined ? { provider: patch.provider } : {}),
-    ...(patch.geminiModel !== undefined ? { geminiModel: patch.geminiModel } : {}),
-    ...(patch.inputGain !== undefined ? { inputGain: Math.max(0.0, Math.min(2.0, patch.inputGain)) } : {}),
-    ...(patch.dictationPreset !== undefined ? { dictationPreset: patch.dictationPreset } : {}),
-    ...(patch.dictationMode !== undefined ? { dictationMode: patch.dictationMode } : {}),
-    ...(patch.translateEnabled !== undefined ? { translateEnabled: patch.translateEnabled } : {}),
-    ...(patch.targetLanguage !== undefined ? { targetLanguage: patch.targetLanguage } : {}),
-    ...(patch.audioChimesEnabled !== undefined ? { audioChimesEnabled: patch.audioChimesEnabled } : {}),
-    ...(patch.chimeSoundStart !== undefined ? { chimeSoundStart: patch.chimeSoundStart } : {}),
-    ...(patch.chimeSoundEnd !== undefined ? { chimeSoundEnd: patch.chimeSoundEnd } : {}),
-    ...(patch.symbolScannerEnabled !== undefined ? { symbolScannerEnabled: patch.symbolScannerEnabled } : {}),
-    ...(patch.transcriptionDelaySec !== undefined ? { transcriptionDelaySec: Math.max(0.0, Math.min(10.0, patch.transcriptionDelaySec)) } : {}),
-    ...(patch.autoEndpointEnabled !== undefined ? { autoEndpointEnabled: patch.autoEndpointEnabled } : {}),
+    ...baseJson,
+    ...(patchCopy.key !== undefined ? { key: patchCopy.key } : {}),
+    ...(patchCopy.editKey !== undefined ? { editKey: patchCopy.editKey } : {}),
+    ...(patchCopy.provider !== undefined ? { provider: patchCopy.provider } : {}),
+    ...(patchCopy.geminiModel !== undefined ? { geminiModel: patchCopy.geminiModel } : {}),
+    ...(patchCopy.inputGain !== undefined ? { inputGain: Math.max(0.0, Math.min(2.0, patchCopy.inputGain)) } : {}),
+    ...(patchCopy.dictationPreset !== undefined ? { dictationPreset: patchCopy.dictationPreset } : {}),
+    ...(patchCopy.dictationMode !== undefined ? { dictationMode: patchCopy.dictationMode } : {}),
+    ...(patchCopy.translateEnabled !== undefined ? { translateEnabled: patchCopy.translateEnabled } : {}),
+    ...(patchCopy.targetLanguage !== undefined ? { targetLanguage: patchCopy.targetLanguage } : {}),
+    ...(patchCopy.audioChimesEnabled !== undefined ? { audioChimesEnabled: patchCopy.audioChimesEnabled } : {}),
+    ...(patchCopy.chimeSoundStart !== undefined ? { chimeSoundStart: patchCopy.chimeSoundStart } : {}),
+    ...(patchCopy.chimeSoundEnd !== undefined ? { chimeSoundEnd: patchCopy.chimeSoundEnd } : {}),
+    ...(patchCopy.symbolScannerEnabled !== undefined ? { symbolScannerEnabled: patchCopy.symbolScannerEnabled } : {}),
+    ...(patchCopy.transcriptionDelaySec !== undefined ? { transcriptionDelaySec: Math.max(0.0, Math.min(10.0, patchCopy.transcriptionDelaySec)) } : {}),
+    ...(patchCopy.autoEndpointEnabled !== undefined ? { autoEndpointEnabled: patchCopy.autoEndpointEnabled } : {}),
     customVocabulary: finalCustomVocab,
     presetVocabulary: mergedPresetVocab,
     dictionaryEntries: finalDictionaryEntries,
     appPresetMappings: mergedAppMappings,
-    ...(patch.geminiApiKey !== undefined ? { geminiApiKey: patch.geminiApiKey.trim() } : {}),
-    ...(patch.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patch.geminiFallbackApiKey.trim() } : {}),
-    ...(patch.audioDeviceId !== undefined ? { audioDeviceId: patch.audioDeviceId.trim() } : {}),
+    ...(patchCopy.geminiApiKey !== undefined ? { geminiApiKey: patchCopy.geminiApiKey.trim() } : {}),
+    ...(patchCopy.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patchCopy.geminiFallbackApiKey.trim() } : {}),
+    ...(patchCopy.audioDeviceId !== undefined ? { audioDeviceId: patchCopy.audioDeviceId.trim() } : {}),
   };
 
   const validationResult = configFileSchema.safeParse(mergedJson);
@@ -619,24 +655,52 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
     const issues = validationResult.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new ConfigError(configPath, issues);
+    throw new ConfigError(targetPath, issues);
   }
 
-  // Ensure defaulted explicit fields are cleanly persisted
-  const toSave = {
+  return {
     ...mergedJson,
     translateEnabled: validationResult.data.translateEnabled,
     targetLanguage: validationResult.data.targetLanguage,
     dictationPreset: validationResult.data.dictationPreset,
   };
+}
 
-  // Atomic write via temporary file + atomic rename
+export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
+  const userConfigPath = getUserConfigPath();
+  const projConfigPath = getProjConfigPath(cwd);
+  const hasProjConfig = projConfigPath ? existsSync(projConfigPath) : false;
+
+  // Always update global user config
+  let existingUserJson: Record<string, unknown> = {};
+  if (existsSync(userConfigPath)) {
+    try {
+      const content = readFileSync(userConfigPath, "utf-8");
+      existingUserJson = JSON.parse(content);
+    } catch {}
+  }
+  const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath);
   try {
-    writeFileSync(tmpPath, JSON.stringify(toSave, null, 2), "utf-8");
-    renameSync(tmpPath, configPath);
+    atomicWriteJson(userConfigPath, toSaveUser);
   } catch (err: any) {
-    logger.error({ err: String(err), configPath }, "Failed atomic write of config patch");
-    throw new ConfigError(configPath, `Atomic write failed: ${err.message}`);
+    logger.error({ err: String(err), configPath: userConfigPath }, "Failed atomic write of global user config patch");
+    throw new ConfigError(userConfigPath, `Atomic write failed: ${err.message}`);
+  }
+
+  // Also update project-local config if present
+  if (hasProjConfig && projConfigPath) {
+    let existingProjJson: Record<string, unknown> = {};
+    try {
+      const content = readFileSync(projConfigPath, "utf-8");
+      existingProjJson = JSON.parse(content);
+    } catch {}
+    const toSaveProj = preparePatchSave(existingProjJson, patch, projConfigPath);
+    try {
+      atomicWriteJson(projConfigPath, toSaveProj);
+    } catch (err: any) {
+      logger.error({ err: String(err), configPath: projConfigPath }, "Failed atomic write of project config patch");
+      throw new ConfigError(projConfigPath, `Atomic write failed: ${err.message}`);
+    }
   }
 
   return loadConfig(cwd);

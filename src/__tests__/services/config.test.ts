@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeEach, mock } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 // Mock logger to prevent file I/O during tests
@@ -17,6 +17,10 @@ import {
   parseKeyBinding,
   formatKeyDisplay,
   loadConfig,
+  updateConfig,
+  getUserConfigPath,
+  getProjConfigPath,
+  resolveConfigPath,
   ConfigError,
 } from "../../services/config.js";
 
@@ -161,10 +165,22 @@ describe("formatKeyDisplay", () => {
 
 describe("loadConfig", () => {
   let tmpDir: string;
+  let origXdg: string | undefined;
 
   beforeEach(() => {
     tmpDir = join(tmpdir(), `pi-voice-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
+    origXdg = process.env.XDG_CONFIG_HOME;
+    process.env.XDG_CONFIG_HOME = join(tmpDir, "global-config");
+  });
+
+  afterEach(() => {
+    if (origXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = origXdg;
+    }
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test("returns defaults when no config file exists", () => {
@@ -261,5 +277,164 @@ describe("loadConfig", () => {
       expect(ce.details).toBeDefined();
       expect(ce.name).toBe("ConfigError");
     }
+  });
+});
+
+describe("Global User Config Persistence & Overlay Suite", () => {
+  let testRoot: string;
+  let dirA: string;
+  let dirB: string;
+  let origXdg: string | undefined;
+
+  beforeEach(() => {
+    testRoot = join(tmpdir(), `pi-voice-global-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    dirA = join(testRoot, "project-a");
+    dirB = join(testRoot, "project-b");
+    mkdirSync(dirA, { recursive: true });
+    mkdirSync(dirB, { recursive: true });
+
+    origXdg = process.env.XDG_CONFIG_HOME;
+    process.env.XDG_CONFIG_HOME = join(testRoot, "global-config");
+  });
+
+  afterEach(() => {
+    if (origXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = origXdg;
+    }
+    rmSync(testRoot, { recursive: true, force: true });
+  });
+
+  test("updateConfig always writes patches to canonical global user config path", () => {
+    const globalPath = getUserConfigPath();
+    expect(existsSync(globalPath)).toBe(false);
+
+    updateConfig(dirA, {
+      key: "ctrl+shift+p",
+      editKey: "ctrl+shift+e",
+      provider: "openai",
+      geminiModel: "gemini-2.5-flash",
+      inputGain: 1.75,
+      dictationPreset: "email_polish",
+      dictationMode: "hold",
+      translateEnabled: true,
+      targetLanguage: "German",
+      audioChimesEnabled: false,
+      chimeSoundStart: "pop",
+      chimeSoundEnd: "tink",
+      transcriptionDelaySec: 1.5,
+      autoEndpointEnabled: false,
+      geminiApiKey: "sk-test-secret-key-12345",
+    });
+
+    expect(existsSync(globalPath)).toBe(true);
+    const content = JSON.parse(readFileSync(globalPath, "utf-8"));
+
+    expect(content.key).toBe("ctrl+shift+p");
+    expect(content.editKey).toBe("ctrl+shift+e");
+    expect(content.provider).toBe("openai");
+    expect(content.geminiModel).toBe("gemini-2.5-flash");
+    expect(content.inputGain).toBe(1.75);
+    expect(content.dictationPreset).toBe("email_polish");
+    expect(content.dictationMode).toBe("hold");
+    expect(content.translateEnabled).toBe(true);
+    expect(content.targetLanguage).toBe("German");
+    expect(content.audioChimesEnabled).toBe(false);
+    expect(content.chimeSoundStart).toBe("pop");
+    expect(content.chimeSoundEnd).toBe("tink");
+    expect(content.transcriptionDelaySec).toBe(1.5);
+    expect(content.autoEndpointEnabled).toBe(false);
+    expect(content.geminiApiKey).toBeDefined();
+  });
+
+  test("updateConfig updates project-local .pi/pi-voice.json if present, but does not create it if absent", () => {
+    // 1. Without project config in dirA
+    const projPathA = getProjConfigPath(dirA)!;
+    expect(existsSync(projPathA)).toBe(false);
+
+    updateConfig(dirA, { inputGain: 1.2 });
+    expect(existsSync(projPathA)).toBe(false);
+
+    // 2. With project config in dirB
+    const projDirB = join(dirB, ".pi");
+    mkdirSync(projDirB, { recursive: true });
+    const projPathB = getProjConfigPath(dirB)!;
+    writeFileSync(projPathB, JSON.stringify({ dictationPreset: "code_comment" }));
+
+    updateConfig(dirB, { inputGain: 1.6 });
+
+    expect(existsSync(projPathB)).toBe(true);
+    const projContent = JSON.parse(readFileSync(projPathB, "utf-8"));
+    expect(projContent.inputGain).toBe(1.6);
+    expect(projContent.dictationPreset).toBe("code_comment");
+  });
+
+  test("loadConfig uses global user config as baseline and overlays project-local overrides", () => {
+    // Write global config baseline
+    updateConfig(dirA, {
+      provider: "openai",
+      inputGain: 1.8,
+      dictationPreset: "careful",
+      targetLanguage: "French",
+    });
+
+    // Create project-local override in dirB
+    const projDirB = join(dirB, ".pi");
+    mkdirSync(projDirB, { recursive: true });
+    writeFileSync(join(projDirB, "pi-voice.json"), JSON.stringify({ dictationPreset: "code_comment" }));
+
+    // loadConfig(dirB) should have global provider, inputGain, targetLanguage, but project's dictationPreset
+    const loadedB = loadConfig(dirB);
+    expect(loadedB.provider).toBe("openai");
+    expect(loadedB.inputGain).toBe(1.8);
+    expect(loadedB.targetLanguage).toBe("French");
+    expect(loadedB.dictationPreset).toBe("code_comment");
+  });
+
+  test("guarantees user setting changes persist losslessly across directory changes and app launches", () => {
+    // Save settings from dirA
+    updateConfig(dirA, {
+      key: "ctrl+shift+u",
+      editKey: "ctrl+shift+k",
+      provider: "gemini",
+      geminiModel: "gemini-2.5-flash",
+      inputGain: 1.4,
+      dictationPreset: "fast",
+      dictationMode: "hold",
+      translateEnabled: true,
+      targetLanguage: "Spanish",
+      transcriptionDelaySec: 2.0,
+      autoEndpointEnabled: false,
+      geminiApiKey: "my-custom-api-key",
+      audioChimesEnabled: false,
+      chimeSoundStart: "hero",
+      chimeSoundEnd: "ping",
+    });
+
+    // Load config from dirB (which has no .pi/pi-voice.json)
+    const loadedB = loadConfig(dirB);
+    expect(loadedB.keyDisplay).toBeDefined();
+    expect(loadedB.provider).toBe("gemini");
+    expect(loadedB.geminiModel).toBe("gemini-2.5-flash");
+    expect(loadedB.inputGain).toBe(1.4);
+    expect(loadedB.dictationPreset).toBe("fast");
+    expect(loadedB.dictationMode).toBe("hold");
+    expect(loadedB.translateEnabled).toBe(true);
+    expect(loadedB.targetLanguage).toBe("Spanish");
+    expect(loadedB.transcriptionDelaySec).toBe(2.0);
+    expect(loadedB.autoEndpointEnabled).toBe(false);
+    expect(loadedB.geminiApiKey).toBe("my-custom-api-key");
+    expect(loadedB.audioChimesEnabled).toBe(false);
+    expect(loadedB.chimeSoundStart).toBe("hero");
+    expect(loadedB.chimeSoundEnd).toBe("ping");
+
+    // Load config simulating app launch from / or /Applications/vo.app
+    const loadedRoot = loadConfig("/");
+    expect(loadedRoot.provider).toBe("gemini");
+    expect(loadedRoot.inputGain).toBe(1.4);
+    expect(loadedRoot.dictationPreset).toBe("fast");
+    expect(loadedRoot.targetLanguage).toBe("Spanish");
+    expect(loadedRoot.geminiApiKey).toBe("my-custom-api-key");
   });
 });
