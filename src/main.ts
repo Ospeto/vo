@@ -718,9 +718,12 @@ function setupIpcHandlers() {
         return;
       }
 
-      // Clear selection ownership before SafePaste begins so SafePaste alone owns its short clipboard mutation
-      selectionOwnershipManager.clearOwnership(currentSeq);
-      const pasteResult = await pasteCoordinator.pasteText(text, currentSeq, isCurrentTranscription);
+      const pasteResult = await pasteCoordinator.pasteText(
+        text,
+        currentSeq,
+        isCurrentTranscription,
+        () => selectionOwnershipManager.clearOwnership(currentSeq),
+      );
 
       if (!isCurrentTranscription(currentSeq) || pasteResult.status === "stale") {
         logger.warn({ currentSeq, pasteResult }, "Discarding stale paste result");
@@ -767,14 +770,16 @@ function setupIpcHandlers() {
     cancelDictation("Cancelled via user interface");
   });
 
-  ipcMain.on(IPC.RECORDING_ERROR, (event, error: string) => {
+  ipcMain.on(IPC.RECORDING_ERROR, (event, payload: { error?: unknown; sequenceId?: unknown }) => {
     if (!validateIpcSender(event, IPC.RECORDING_ERROR)) return;
-    logger.warn({ error }, "Recording warning");
+    if (typeof payload?.error !== "string" || !Number.isSafeInteger(payload.sequenceId)) return;
     const currentSeq = recordingLifecycle.snapshot().sequenceId;
+    if (payload.sequenceId !== currentSeq) return;
+    logger.warn({ error: payload.error }, "Recording warning");
     pasteCoordinator.invalidate();
     recordingLifecycle.reset();
     restoreCapturedSelection(currentSeq);
-    setState("error", error);
+    setState("error", payload.error);
   });
 
   ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
@@ -929,7 +934,7 @@ async function startRecordingFlow() {
   playStartChime();
 
   // Start pre-roll audio capture immediately in starting state to prevent first-phoneme clipping
-  captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain);
+  captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain, reqRes.sequenceId);
 
   const selectionAbortController = new AbortController();
   activeSelectionAbortController = selectionAbortController;

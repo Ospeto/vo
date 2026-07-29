@@ -47,6 +47,12 @@ let sessionTrackEnded = false;
 
 let isStartingUp = false;
 
+let recordingSequenceId = 0;
+
+function sendRecordingError(error: string): void {
+  window.piVoice?.sendRecordingError(error, recordingSequenceId);
+}
+
 function sendRecordingErrorOnce(generation: number, error: string): void {
   if (generation !== recordingGeneration || finalizedRecordingGeneration === generation) return;
   finalizedRecordingGeneration = generation;
@@ -55,7 +61,7 @@ function sendRecordingErrorOnce(generation: number, error: string): void {
     postRollTimer = null;
   }
   audioChunks = [];
-  window.piVoice?.sendRecordingError(error);
+  sendRecordingError(error);
 }
 
 function cleanupPartialPipeline() {
@@ -115,14 +121,14 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
           sessionTrackEnded = true;
           mediaStream = null;
           if (mediaRecorder && mediaRecorder.state !== "inactive") {
-            window.piVoice?.sendRecordingError("Microphone disconnected");
+            sendRecordingError("Microphone disconnected");
           }
         };
       });
     }
     if (!mediaStream || mediaStream.getAudioTracks().length === 0) {
       cleanupPartialPipeline();
-      window.piVoice?.sendRecordingError("Microphone input unavailable");
+      sendRecordingError("Microphone input unavailable");
       return false;
     }
     audioCtx = new AudioContext({ sampleRate: 16000 });
@@ -162,7 +168,7 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
     return true;
   } catch (err: any) {
     cleanupPartialPipeline();
-    window.piVoice?.sendRecordingError(`Microphone access error: ${err.message}`);
+    sendRecordingError(`Microphone access error: ${err.message}`);
     return false;
   }
 }
@@ -285,20 +291,20 @@ async function finalizeRecording(generation: number) {
   }
 
   if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
-    window.piVoice?.sendRecordingError("Microphone disconnected");
+    sendRecordingError("Microphone disconnected");
     audioChunks = [];
     return;
   }
 
   const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
   if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
-    window.piVoice?.sendRecordingError("Microphone input clipped");
+    sendRecordingError("Microphone input clipped");
     audioChunks = [];
     return;
   }
 
   if (sessionMaxAbs < 0.002 && sessionMaxRms < 0.001) {
-    window.piVoice?.sendRecordingError("Microphone input extremely quiet");
+    sendRecordingError("Microphone input extremely quiet");
     audioChunks = [];
     return;
   }
@@ -316,17 +322,17 @@ async function finalizeRecording(generation: number) {
 
   const diag = diagnoseAudioStats(stats);
   if (diag.status === "clipped") {
-    window.piVoice?.sendRecordingError("Microphone input clipped or distorted");
+    sendRecordingError("Microphone input clipped or distorted");
     audioChunks = [];
     return;
   }
   if (diag.status === "near_silence") {
-    window.piVoice?.sendRecordingError("No speech detected (silent audio)");
+    sendRecordingError("No speech detected (silent audio)");
     audioChunks = [];
     return;
   }
   if (diag.status === "too_short") {
-    window.piVoice?.sendRecordingError("Recording too short");
+    sendRecordingError("Recording too short");
     audioChunks = [];
     return;
   }
@@ -347,8 +353,9 @@ window.piVoice?.onGainUpdate((newGain: number) => {
   }
 });
 
-window.piVoice?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
+window.piVoice?.onStartRecording(async (format: RecordingFormat, inputGain: number, sequenceId: number) => {
   const generation = ++recordingGeneration;
+  recordingSequenceId = sequenceId;
   stopRequestedDuringStartup = false;
   isStartingUp = true;
   finalizedRecordingGeneration = -1;

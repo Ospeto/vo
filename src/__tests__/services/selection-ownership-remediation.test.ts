@@ -247,26 +247,27 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       // User changes clipboard before paste execution
       adapter.writeText("New user copy before paste");
 
-      // Clear ownership before SafePaste begins
-      ownershipManager.clearOwnership(204);
-
       const targetApp: TargetIdentity = { bundleId: "com.editor", appName: "Editor", pid: 1, windowId: 1 };
-      let injected = false;
 
       const safePaste = new SafePasteService(
         () => targetApp,
-        async () => { injected = true; },
+        async () => {},
         createClipboardPort(adapter as unknown as ClipboardAdapter<any>),
         async () => { throw new Error("target_mismatch"); } // Simulate target reauthorization denial
       );
 
-      const pasteResult = await safePaste.paste("transcribed output");
-      expect(pasteResult.ok).toBe(false);
+      const coordinator = new PasteCoordinator((text, isCurrent, beforeWrite) => safePaste.paste(text, isCurrent, beforeWrite));
+      const pasteResult = await coordinator.pasteText(
+        "transcribed output",
+        204,
+        () => true,
+        () => ownershipManager.clearOwnership(204),
+      );
+      expect(pasteResult.status).toBe("denied");
 
-      // Post-paste restoreCapturedSelection runs
       const restored = ownershipManager.restoreCapturedSelection(204, port);
-      expect(restored).toBe(false);
-      expect(adapter.readText()).toBe("New user copy before paste");
+      expect(restored).toBe(true);
+      expect(adapter.readText()).toBe("Original Clipboard Text");
     });
   });
 

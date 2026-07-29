@@ -97,7 +97,7 @@ export class SafePasteService {
     this.capturedTarget = captured.target && isValidTarget(captured.target) ? captured.target : null;
     this.captureFailure = captured.target && !isValidTarget(captured.target) ? "target_malformed" : (captured.reason ? safeReason(captured.reason, "target_unavailable") as TargetFailureReason : null);
   }
-  async paste(text: string, isCurrent: () => boolean = () => true): Promise<SafePasteResult> {
+  async paste(text: string, isCurrent: () => boolean = () => true, beforeWrite?: () => void): Promise<SafePasteResult> {
     if (this.capturePromise) { await this.capturePromise; this.capturePromise = null; }
     const expectedTarget = this.capturedTarget;
     const operationId = `paste-${SafePasteService.nextOperationId++}`;
@@ -136,6 +136,7 @@ export class SafePasteService {
         this.emitTotal(operationId, started, result);
         return result;
       }
+      beforeWrite?.();
     } catch {
       const result = { ok: false as const, reason: "clipboard_snapshot_failed" as ClipboardFailureReason };
       this.emit({ operationId, stage: "clipboard_snapshot", durationMs: this.elapsed(snapshotStarted), outcome: "failure", reason: result.reason });
