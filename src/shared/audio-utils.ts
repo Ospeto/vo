@@ -49,7 +49,7 @@ export interface EndpointDetectorConfig {
  */
 export function analyzePcmFrame(
   samples: Float32Array,
-  speechThresholdRms = 0.01,
+  speechThresholdRms = 0.005,
   silenceThresholdRms = 0.004,
   clippingThreshold = 0.99
 ): AudioFrameMetrics {
@@ -92,7 +92,7 @@ export class SpeechEndpointDetector {
   private isEndpointed = false;
 
   constructor(config?: EndpointDetectorConfig) {
-    this.speechThresholdRms = config?.speechThresholdRms ?? 0.01;
+    this.speechThresholdRms = config?.speechThresholdRms ?? 0.005;
     this.silenceThresholdRms = config?.silenceThresholdRms ?? 0.004;
     const frameIntervalMs = config?.frameIntervalMs ?? 50;
     const minSpeechMs = config?.minSpeechDurationMs ?? 150;
@@ -129,7 +129,7 @@ export class SpeechEndpointDetector {
         this.hasDetectedSpeech = true;
       }
     } else if (rms < this.silenceThresholdRms) {
-      if (this.hasDetectedSpeech) {
+      if (this.hasDetectedSpeech || this.speechFrameCount > 0) {
         this.consecutiveSilenceFrames++;
         if (this.consecutiveSilenceFrames >= this.confirmSilenceFrames) {
           this.isEndpointed = true;

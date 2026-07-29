@@ -1,9 +1,10 @@
 ## 1. Core Optimizations
 
 - [ ] 1.1 Add advanced Burmese & English hesitation stripping in `sanitizeTranscribedText` in `src/services/stt.ts`
-- [ ] 1.2 Implement Hybrid Tap & Hold auto-detection logic in `src/main.ts` & `src/services/hotkey-service.ts`
-- [ ] 1.3 Add hesitation sanitizer unit tests in `src/__tests__/services/stt.test.ts`
-- [ ] 1.4 Run test suite (`bun test`) to ensure all tests pass
+- [ ] 1.2 Implement persisted Toggle Mode and Hold Mode handling in `src/main.ts`
+- [ ] 1.3 Add configurable transcription delay and auto-endpointing settings to config, capture, and renderer settings UI
+- [ ] 1.4 Add hesitation sanitizer and transcription endpointing unit tests
+- [ ] 1.5 Run test suite (`bun test`) to ensure all tests pass
 
 ## 2. Re-build & Distribution
 

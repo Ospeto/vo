@@ -847,8 +847,10 @@ function setupIpcHandlers() {
 let lastHotkeyDownTime = 0;
 let keyHoldPressStartTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
+let stopQueuedOnStart = false;
 
 async function startRecordingFlow() {
+  stopQueuedOnStart = false;
   const reqRes = recordingLifecycle.requestStart();
   if (!reqRes.accepted) {
     logger.warn({ reason: reqRes.reason }, "Cannot start recording flow");
@@ -900,6 +902,16 @@ async function startRecordingFlow() {
   logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
   setState("recording", "Recording...");
   recordingLifecycle.acknowledgeStart(reqRes.sequenceId, true);
+
+  if (stopQueuedOnStart && currentConfig.dictationMode === "hold") {
+    logger.info("Queued stop executing immediately upon entering recording state");
+    const stopRes = recordingLifecycle.requestStop();
+    if (stopRes.accepted) {
+      setState("stopping", "Stopping...");
+      playToggleStopChime();
+      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+    }
+  }
 }
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
@@ -930,22 +942,19 @@ function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
 }
 
 function handleHotkeyUp() {
+  if (currentConfig.dictationMode !== "hold") return;
+
   const pressDuration = Date.now() - keyHoldPressStartTime;
-  if (currentConfig.dictationMode === "hold" || (currentConfig.dictationMode === "toggle" && pressDuration > 350)) {
-    if (currentState === "starting") {
-      abortSelectionCapture();
-      pasteCoordinator.invalidate();
-      recordingLifecycle.reset();
-      captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
-      setState("idle", "Ready");
-    } else if (currentState === "recording") {
-      logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Auto-Detect)");
-      const stopRes = recordingLifecycle.requestStop();
-      if (stopRes.accepted) {
-        setState("stopping", "Stopping...");
-        playToggleStopChime();
-        captureWindow?.webContents.send(IPC.STOP_RECORDING);
-      }
+  if (currentState === "starting") {
+    logger.info({ pressDuration }, "Key Up during starting state: queuing stop");
+    stopQueuedOnStart = true;
+  } else if (currentState === "recording") {
+    logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Mode)");
+    const stopRes = recordingLifecycle.requestStop();
+    if (stopRes.accepted) {
+      setState("stopping", "Stopping...");
+      playToggleStopChime();
+      captureWindow?.webContents.send(IPC.STOP_RECORDING);
     }
   }
 }

@@ -18,14 +18,18 @@ let currentGainValue = 1.0;
 let recordingStartTime = 0;
 let recordingGeneration = 0;
 let postRollTimer: ReturnType<typeof setTimeout> | null = null;
+let stopRequestedDuringStartup = false;
 
-const endpointDetector = new SpeechEndpointDetector({
-  speechThresholdRms: 0.008,
+let endpointDetector = new SpeechEndpointDetector({
+  speechThresholdRms: 0.005,
   silenceThresholdRms: 0.003,
-  confirmSilenceMs: 800,
+  confirmSilenceMs: 500,
   minSpeechDurationMs: 150,
   frameIntervalMs: 50,
 });
+
+let autoEndpointEnabled = true;
+let transcriptionDelaySec = 0.5;
 
 let sessionMaxRms = 0;
 let sessionPeakAmplitude = 0;
@@ -163,7 +167,7 @@ function startMetering() {
       sumSquares += qualityVal * qualityVal;
     }
     const gain = Math.max(currentGainValue, 0.0001);
-    const metrics = analyzePcmFrame(buffer, 0.008 * gain, 0.003 * gain, 0.99 * gain);
+    const metrics = analyzePcmFrame(buffer, 0.005 * gain, 0.003 * gain, 0.99 * gain);
     const normalizedRms = metrics.rms / gain;
     const normalizedPeak = metrics.peak / gain;
     sessionTotalFrames++;
@@ -172,15 +176,17 @@ function startMetering() {
     if (metrics.isSpeech) sessionSpeechFrames++;
     if (metrics.isClipped) sessionClippingFrames++;
 
-    const endpointStatus = endpointDetector.processFrame(normalizedRms);
-    if (
-      endpointStatus.isEndpointed &&
-      !autoEndpointTriggered &&
-      mediaRecorder &&
-      mediaRecorder.state === "recording"
-    ) {
-      autoEndpointTriggered = true;
-      triggerAutoStop();
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      const endpointStatus = endpointDetector.processFrame(normalizedRms);
+      if (
+        endpointStatus.isEndpointed &&
+        !autoEndpointTriggered &&
+        autoEndpointEnabled &&
+        transcriptionDelaySec > 0
+      ) {
+        autoEndpointTriggered = true;
+        triggerAutoStop();
+      }
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
     if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -300,11 +306,26 @@ async function finalizeRecording(generation: number) {
 
 window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
   const generation = ++recordingGeneration;
+  stopRequestedDuringStartup = false;
   finalizedRecordingGeneration = -1;
   audioChunks = [];
   currentGainValue = inputGain;
   recordingStartTime = Date.now();
+
+  const config = await window.electronIPC?.getConfig();
+  autoEndpointEnabled = config?.autoEndpointEnabled ?? true;
+  transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
+
+  const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
+  endpointDetector = new SpeechEndpointDetector({
+    speechThresholdRms: 0.005,
+    silenceThresholdRms: 0.003,
+    confirmSilenceMs: confirmSilenceMs > 0 ? confirmSilenceMs : 500,
+    minSpeechDurationMs: 150,
+    frameIntervalMs: 50,
+  });
   endpointDetector.reset();
+
   sessionMaxRms = 0;
   sessionPeakAmplitude = 0;
   sessionTotalFrames = 0;
@@ -349,14 +370,20 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
       };
       mediaRecorder.onstop = () => { void finalizeRecording(generation); };
       mediaRecorder.start(100);
+      if (stopRequestedDuringStartup && generation === recordingGeneration) {
+        stopRequestedDuringStartup = false;
+        stopRecording();
+      }
     }
   } catch (err: any) {
+    stopRequestedDuringStartup = false;
     window.electronIPC?.sendRecordingError(`MediaRecorder start failed: ${err.message}`);
   }
 });
 
 (window.electronIPC as any)?.onCancelRecording(() => {
   recordingGeneration++;
+  stopRequestedDuringStartup = false;
   if (postRollTimer) {
     clearTimeout(postRollTimer);
     postRollTimer = null;
@@ -370,11 +397,10 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   audioChunks = [];
 });
 
-window.electronIPC?.onStopRecording(() => {
+function stopRecording() {
   try {
-    if (!mediaRecorder) {
-      recordingGeneration++;
-      window.electronIPC?.sendRecordingError("No media recorder instance");
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      stopRequestedDuringStartup = true;
       return;
     }
     const generation = recordingGeneration;
@@ -404,4 +430,6 @@ window.electronIPC?.onStopRecording(() => {
   } catch (err: any) {
     window.electronIPC?.sendRecordingError(`MediaRecorder stop failed: ${err.message}`);
   }
-});
+}
+
+window.electronIPC?.onStopRecording(stopRecording);

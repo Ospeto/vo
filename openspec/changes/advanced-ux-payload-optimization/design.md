@@ -8,8 +8,8 @@
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  [ Global Hotkey Event Engine ]                                             │
-│  ├── Press Duration < 350ms ➔ Tap Mode (Toggle Recording)                  │
-│  └── Press Duration >= 350ms ➔ Hold Mode (Auto-Stop on Keyup)               │
+│  ├── Toggle Mode ➔ Tap once to start, tap again to stop                    │
+│  └── Hold Mode ➔ Release the hotkey to stop                                │
 │                                                                             │
 │  [ Audio Payload Stream ]                                                   │
 │  └── Lightweight PCM WebM Chunk Slicing (<50KB Optimized Buffer)            │
