@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 // Mock logger to prevent file I/O during tests
@@ -174,12 +174,15 @@ describe("formatKeyDisplay", () => {
 describe("loadConfig", () => {
   let tmpDir: string;
   let origHome: string | undefined;
+  let origXdg: string | undefined;
 
   beforeEach(() => {
     tmpDir = join(tmpdir(), `pi-voice-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
     origHome = process.env.HOME;
+    origXdg = process.env.XDG_CONFIG_HOME;
     process.env.HOME = join(tmpDir, "home");
+    process.env.XDG_CONFIG_HOME = join(tmpDir, "home", ".config");
   });
 
   afterEach(() => {
@@ -187,6 +190,11 @@ describe("loadConfig", () => {
       delete process.env.HOME;
     } else {
       process.env.HOME = origHome;
+    }
+    if (origXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = origXdg;
     }
     rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -233,65 +241,142 @@ describe("loadConfig", () => {
     }
   });
 
-  test("throws ConfigError on invalid JSON syntax", () => {
+  test("auto-recovers corrupt JSON syntax to defaultConfig and renames broken file to config.json.corrupt.bak", () => {
     const piDir = join(tmpDir, ".pi");
     mkdirSync(piDir, { recursive: true });
-    writeFileSync(join(piDir, "pi-voice.json"), "not json {{{");
+    const brokenPath = join(piDir, "pi-voice.json");
+    writeFileSync(brokenPath, "not json {{{");
 
-    expect(() => loadConfig(tmpDir)).toThrow(ConfigError);
-    try {
-      loadConfig(tmpDir);
-    } catch (err) {
-      expect(err).toBeInstanceOf(ConfigError);
-      expect((err as ConfigError).details).toContain("JSON parse error");
-    }
+    const config = loadConfig(tmpDir);
+    expect(config.provider).toBe("gemini");
+    expect(config.dictationPreset).toBe("careful");
+
+    const backupPath = join(piDir, "config.json.corrupt.bak");
+    expect(existsSync(backupPath)).toBe(true);
+    expect(existsSync(brokenPath)).toBe(false);
   });
 
-  test("throws ConfigError for a non-object JSON config", () => {
+  test("auto-recovers non-object JSON config to defaultConfig and renames file", () => {
     const piDir = join(tmpDir, ".pi");
     mkdirSync(piDir, { recursive: true });
-    writeFileSync(join(piDir, "pi-voice.json"), "null");
+    const brokenPath = join(piDir, "pi-voice.json");
+    writeFileSync(brokenPath, "null");
 
-    expect(() => loadConfig(tmpDir)).toThrow(ConfigError);
+    const config = loadConfig(tmpDir);
+    expect(config.provider).toBe("gemini");
+    expect(existsSync(join(piDir, "config.json.corrupt.bak"))).toBe(true);
   });
 
-  test("throws ConfigError on invalid provider", () => {
-    const piDir = join(tmpDir, ".pi");
-    mkdirSync(piDir, { recursive: true });
-    writeFileSync(
-      join(piDir, "pi-voice.json"),
-      JSON.stringify({ provider: "invalid-provider" }),
-    );
-
-    expect(() => loadConfig(tmpDir)).toThrow(ConfigError);
-  });
-
-  test("throws ConfigError on invalid key binding", () => {
-    const piDir = join(tmpDir, ".pi");
-    mkdirSync(piDir, { recursive: true });
-    writeFileSync(
-      join(piDir, "pi-voice.json"),
-      JSON.stringify({ key: "unknownkey" }),
-    );
-
-    expect(() => loadConfig(tmpDir)).toThrow(ConfigError);
-  });
-
-  test("ConfigError includes configPath and details", () => {
+  test("auto-heals legacy model names like gemini-1.5-flash to valid models without throwing", () => {
     const piDir = join(tmpDir, ".pi");
     mkdirSync(piDir, { recursive: true });
     const configPath = join(piDir, "pi-voice.json");
-    writeFileSync(configPath, "bad json");
+    writeFileSync(configPath, JSON.stringify({ geminiModel: "gemini-1.5-flash", inputGain: 1.25 }));
 
-    try {
-      loadConfig(tmpDir);
-      expect.unreachable("should have thrown");
-    } catch (err) {
-      expect(err).toBeInstanceOf(ConfigError);
-      const ce = err as ConfigError;
-      expect(ce.configPath).toBe(configPath);
-      expect(ce.details).toBeDefined();
-      expect(ce.name).toBe("ConfigError");
+    const config = loadConfig(tmpDir);
+    expect(config.geminiModel).toBe("gemini-3.1-flash-lite");
+    expect(config.inputGain).toBe(1.25);
+
+    const updatedRaw = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(updatedRaw.geminiModel).toBe("gemini-3.1-flash-lite");
+  });
+
+  test("repairs global and project configs independently", () => {
+    const globalPath = getUserConfigPath();
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    const projectPath = join(piDir, "pi-voice.json");
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    writeFileSync(globalPath, JSON.stringify({ geminiModel: "gemini-1.5-flash", geminiApiKey: "secret" }));
+    writeFileSync(projectPath, JSON.stringify({ dictationPreset: "code_comment" }));
+
+    expect(loadConfig(tmpDir).geminiModel).toBe("gemini-3.1-flash-lite");
+    expect(JSON.parse(readFileSync(projectPath, "utf-8"))).toEqual({ dictationPreset: "code_comment" });
+    expect(JSON.parse(readFileSync(globalPath, "utf-8")).geminiApiKey).toBe("secret");
+  });
+
+  test("uses valid global settings after recovering a corrupt project config", () => {
+    const globalPath = getUserConfigPath();
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    writeFileSync(globalPath, JSON.stringify({ provider: "openai", inputGain: 1.5 }));
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    writeFileSync(join(piDir, "pi-voice.json"), "broken");
+
+    const config = loadConfig(tmpDir);
+    expect(config.provider).toBe("openai");
+    expect(config.inputGain).toBe(1.5);
+  });
+
+  test("falls back to the legacy user config when XDG config is absent", () => {
+    const legacyPath = join(tmpDir, "home", ".config", "pi-voice", "config.json");
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    process.env.XDG_CONFIG_HOME = join(tmpDir, "xdg");
+    writeFileSync(legacyPath, JSON.stringify({ provider: "openai" }));
+
+    expect(loadConfig(tmpDir).provider).toBe("openai");
+  });
+
+  test("falls back to a valid legacy config after backing up corrupt XDG config", () => {
+    const legacyPath = join(tmpDir, "home", ".config", "pi-voice", "config.json");
+    const xdgPath = join(tmpDir, "xdg", "pi-voice", "config.json");
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    mkdirSync(join(tmpDir, "xdg", "pi-voice"), { recursive: true });
+    process.env.XDG_CONFIG_HOME = join(tmpDir, "xdg");
+    writeFileSync(legacyPath, JSON.stringify({ provider: "openai" }));
+    writeFileSync(xdgPath, "broken");
+
+    expect(loadConfig(tmpDir).provider).toBe("openai");
+    expect(existsSync(xdgPath)).toBe(false);
+  });
+
+  test("keeps prior corrupt backups", () => {
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    const brokenPath = join(piDir, "pi-voice.json");
+    writeFileSync(brokenPath, "first");
+    loadConfig(tmpDir);
+    writeFileSync(brokenPath, "second");
+    loadConfig(tmpDir);
+
+    expect(readdirSync(piDir).filter((name) => name.startsWith("config.json.corrupt")).length).toBe(2);
+  });
+
+  test("auto-heals invalid provider and invalid key binding without throwing", () => {
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    const configPath = join(piDir, "pi-voice.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ provider: "invalid-provider", key: "unknownkey", inputGain: 1.5 }),
+    );
+
+    const config = loadConfig(tmpDir);
+    expect(config.provider).toBe("gemini");
+    expect(config.inputGain).toBe(1.5);
+    expect(config.key.ctrl).toBe(true);
+
+    const updatedRaw = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(updatedRaw.provider).toBeUndefined();
+    expect(updatedRaw.key).toBeUndefined();
+    expect(updatedRaw.inputGain).toBe(1.5);
+  });
+
+  test("app startup never crashes on malformed, old, or invalid config files", () => {
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+
+    const badConfigs = [
+      "bad json {",
+      "123",
+      "[]",
+      JSON.stringify({ geminiModel: "gemini-1.5-pro", dictationPreset: "translate" }),
+      JSON.stringify({ key: "bad+binding", obsoleteField: "foo" }),
+    ];
+
+    for (const badContent of badConfigs) {
+      writeFileSync(join(piDir, "pi-voice.json"), badContent);
+      expect(() => loadConfig(tmpDir)).not.toThrow();
     }
   });
 });
@@ -301,6 +386,7 @@ describe("Global User Config Persistence & Overlay Suite", () => {
   let dirA: string;
   let dirB: string;
   let origHome: string | undefined;
+  let origXdg: string | undefined;
 
   beforeEach(() => {
     testRoot = join(tmpdir(), `pi-voice-global-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -310,7 +396,9 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     mkdirSync(dirB, { recursive: true });
 
     origHome = process.env.HOME;
+    origXdg = process.env.XDG_CONFIG_HOME;
     process.env.HOME = join(testRoot, "home");
+    process.env.XDG_CONFIG_HOME = join(testRoot, "home", ".config");
   });
 
   afterEach(() => {
@@ -318,6 +406,11 @@ describe("Global User Config Persistence & Overlay Suite", () => {
       delete process.env.HOME;
     } else {
       process.env.HOME = origHome;
+    }
+    if (origXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = origXdg;
     }
     rmSync(testRoot, { recursive: true, force: true });
   });
@@ -384,6 +477,21 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     const projContent = JSON.parse(readFileSync(projPathB, "utf-8"));
     expect(projContent.inputGain).toBe(1.6);
     expect(projContent.dictationPreset).toBe("code_comment");
+  });
+
+  test("preserves valid legacy settings when updating over corrupt XDG config", () => {
+    const legacyPath = join(testRoot, "home", ".config", "pi-voice", "config.json");
+    const xdgPath = join(testRoot, "xdg", "pi-voice", "config.json");
+    mkdirSync(join(testRoot, "home", ".config", "pi-voice"), { recursive: true });
+    mkdirSync(join(testRoot, "xdg", "pi-voice"), { recursive: true });
+    process.env.XDG_CONFIG_HOME = join(testRoot, "xdg");
+    writeFileSync(legacyPath, JSON.stringify({ provider: "openai", inputGain: 1.7 }));
+    writeFileSync(xdgPath, "broken");
+
+    const updated = updateConfig(dirA, { targetLanguage: "French" });
+    expect(updated.provider).toBe("openai");
+    expect(updated.inputGain).toBe(1.7);
+    expect(updated.targetLanguage).toBe("French");
   });
 
   test("loadConfig uses global user config as baseline and overlays project-local overrides", () => {

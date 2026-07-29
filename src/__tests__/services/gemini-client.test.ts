@@ -35,13 +35,15 @@ describe("gemini-client", () => {
       GEMINI_API_KEY: process.env.GEMINI_API_KEY,
       GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
       GOOGLE_GENAI_USE_VERTEXAI: process.env.GOOGLE_GENAI_USE_VERTEXAI,
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
     };
-    // Clear all relevant env vars
+    // Clear all relevant env vars and point config home to isolated tmp dir
     delete process.env.GOOGLE_CLOUD_PROJECT;
     delete process.env.GOOGLE_CLOUD_LOCATION;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GOOGLE_API_KEY;
     delete process.env.GOOGLE_GENAI_USE_VERTEXAI;
+    process.env.XDG_CONFIG_HOME = join(tmpdir(), `pi-voice-gemini-test-${Date.now()}`);
     _resetGeminiClient();
   });
 
