@@ -1085,12 +1085,13 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       const content = readFileSync(projConfigPath, "utf-8");
       existingProjJson = JSON.parse(content);
     } catch {}
-    const hasProjectGeminiKey = typeof existingProjJson.geminiApiKey === "string" && existingProjJson.geminiApiKey.trim().length > 0;
-    const hasProjectFallbackKey = typeof existingProjJson.geminiFallbackApiKey === "string" && existingProjJson.geminiFallbackApiKey.trim().length > 0;
+    const projJson = existingProjJson ?? {};
+    const hasProjectGeminiKey = typeof projJson.geminiApiKey === "string" && projJson.geminiApiKey.trim().length > 0;
+    const hasProjectFallbackKey = typeof projJson.geminiFallbackApiKey === "string" && projJson.geminiFallbackApiKey.trim().length > 0;
     if ((hasProjectGeminiKey && patch.geminiApiKey === undefined) || (hasProjectFallbackKey && patch.geminiFallbackApiKey === undefined)) {
       throw new ConfigError(projConfigPath, "Legacy project API keys must be migrated or explicitly cleared before updating project config");
     }
-    toSaveProj = preparePatchSave(existingProjJson!, patch, projConfigPath, false);
+    toSaveProj = preparePatchSave(projJson, patch, projConfigPath, false);
   }
 
   if (toSaveProj && projConfigPath && existingProjJson) {

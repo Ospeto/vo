@@ -17,7 +17,7 @@ import { IPC, type AppState, type StatePayload, type RendererRole } from "./shar
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
 import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonResponse } from "./services/daemon-ipc.js";
 import { HotkeyService } from "./services/hotkey-service.js";
-import { captureActiveSelection, createElectronClipboardAdapter, getClipboardPort, restoreClipboard } from "./services/selection-service.js";
+import { captureActiveSelection, createElectronClipboardAdapter, getClipboardPort, restoreClipboard, selectionOwnershipManager } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
 import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-paste-addon.js";
 import { createMacSafePasteService, type ClipboardAdapter, type ClipboardSnapshot } from "./services/safe-paste.js";
@@ -59,8 +59,6 @@ let lastPastedText = "";
 let lastPasteTime = 0;
 
 let activeSelectionText = "";
-let previousClipboardContent: ClipboardSnapshot | string = "";
-let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 let shortTapStopTimer: ReturnType<typeof setTimeout> | null = null;
@@ -72,11 +70,10 @@ function clearShortTapStopTimer() {
   }
 }
 
-function restoreCapturedSelection() {
-  if (selectionCaptured) restoreClipboard(previousClipboardContent, selectionClipboardPort);
-  previousClipboardContent = "";
+function restoreCapturedSelection(sequenceId?: number) {
+  const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, selectionClipboardPort);
   activeSelectionText = "";
-  selectionCaptured = false;
+  return restored;
 }
 
 function isCurrentTranscription(sequenceId: number): boolean {
@@ -94,6 +91,7 @@ function abortSelectionCapture() {
 
 function cancelDictation(reason: string = "Cancelled") {
   abortSelectionCapture();
+  const currentSeq = recordingLifecycle.snapshot().sequenceId;
   if (currentState === "idle") {
     if (hudWindow && hudWindow.isVisible()) {
       hudWindow.hide();
@@ -110,7 +108,7 @@ function cancelDictation(reason: string = "Cancelled") {
 
   pasteCoordinator.invalidate();
   recordingLifecycle.cancel();
-  restoreCapturedSelection();
+  restoreCapturedSelection(currentSeq);
 
   captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
 
@@ -156,9 +154,10 @@ function setState(state: AppState, message?: string, options?: { usedPaidKey?: b
     stoppingSafetyTimer = setTimeout(() => {
       if (currentState === "stopping") {
         logger.warn("Stopping state timed out, auto-resetting state machine to idle");
+        const currentSeq = recordingLifecycle.snapshot().sequenceId;
         pasteCoordinator.invalidate();
         recordingLifecycle.reset();
-        restoreCapturedSelection();
+        restoreCapturedSelection(currentSeq);
         setState("idle", "Ready");
       }
     }, 2500);
@@ -634,9 +633,10 @@ function setupIpcHandlers() {
     if (currentState !== "recording" && currentState !== "stopping") return;
 
     if (data.byteLength < 1000) {
+      const currentSeq = recordingLifecycle.snapshot().sequenceId;
       pasteCoordinator.invalidate();
       recordingLifecycle.reset();
-      restoreCapturedSelection();
+      restoreCapturedSelection(currentSeq);
       setState("idle", "Recording too short");
       return;
     }
@@ -675,7 +675,7 @@ function setupIpcHandlers() {
 
       if (!text || text.trim().length === 0) {
         recordingLifecycle.finishTranscription(currentSeq, true);
-        restoreCapturedSelection();
+        restoreCapturedSelection(currentSeq);
         setState("idle", "No speech detected", { usedPaidKey });
         return;
       }
@@ -697,7 +697,7 @@ function setupIpcHandlers() {
       const isUndo = handleVoiceUndoCheck(text);
       if (isUndo) {
         recordingLifecycle.finishTranscription(currentSeq, true);
-        restoreCapturedSelection();
+        restoreCapturedSelection(currentSeq);
         setState("idle", "Voice undo executed", { usedPaidKey });
         return;
       }
@@ -718,6 +718,8 @@ function setupIpcHandlers() {
         return;
       }
 
+      // Clear selection ownership before SafePaste begins so SafePaste alone owns its short clipboard mutation
+      selectionOwnershipManager.clearOwnership(currentSeq);
       const pasteResult = await pasteCoordinator.pasteText(text, currentSeq, isCurrentTranscription);
 
       if (!isCurrentTranscription(currentSeq) || pasteResult.status === "stale") {
@@ -727,7 +729,7 @@ function setupIpcHandlers() {
 
       if (pasteResult.status === "submitted") {
         recordingLifecycle.finishTranscription(currentSeq, true);
-        restoreCapturedSelection();
+        restoreCapturedSelection(currentSeq);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
         lastPastedText = text;
         lastPasteTime = Date.now();
@@ -736,7 +738,7 @@ function setupIpcHandlers() {
       } else {
         recordingLifecycle.finishTranscription(currentSeq, false);
         recordingLifecycle.settle();
-        restoreCapturedSelection();
+        restoreCapturedSelection(currentSeq);
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
         logger.warn({ pasteResult }, "Target window changed or paste denied - transcript saved to history");
         setState("idle", "Target changed - transcript saved to history", { usedPaidKey });
@@ -744,7 +746,7 @@ function setupIpcHandlers() {
     } catch (err: any) {
       if (!isCurrentTranscription(currentSeq)) return;
       recordingLifecycle.finishTranscription(currentSeq, false);
-      restoreCapturedSelection();
+      restoreCapturedSelection(currentSeq);
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);
       setTimeout(() => {
@@ -939,6 +941,7 @@ async function startRecordingFlow() {
     if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
     pasteCoordinator.invalidate();
     recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
+    selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
     captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
     logger.error({ err: err?.message || String(err) }, "Selection capture failed");
     setState("error", "Selection capture failed");
@@ -948,12 +951,38 @@ async function startRecordingFlow() {
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
     captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
-    if (currentState === "idle" && selection.hasSelection) restoreClipboard(selection.previousClipboard, selectionClipboardPort);
+    if (selection.hasSelection) {
+      const ownershipSnapshot = selectionClipboardPort
+        ? selectionClipboardPort.snapshot()
+        : { formats: [], text: selection.selectedText };
+      selectionOwnershipManager.setOwnership({
+        sequenceId: reqRes.sequenceId,
+        previousClipboard: selection.previousClipboard,
+        hasSelection: true,
+        selectedText: selection.selectedText,
+        ownershipSnapshot,
+      });
+      restoreCapturedSelection(reqRes.sequenceId);
+    } else {
+      selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
+    }
     return;
   }
 
-  previousClipboardContent = selection.previousClipboard;
-  selectionCaptured = selection.hasSelection;
+  if (selection.hasSelection) {
+    const ownershipSnapshot = selectionClipboardPort
+      ? selectionClipboardPort.snapshot()
+      : { formats: [], text: selection.selectedText };
+    selectionOwnershipManager.setOwnership({
+      sequenceId: reqRes.sequenceId,
+      previousClipboard: selection.previousClipboard,
+      hasSelection: true,
+      selectedText: selection.selectedText,
+      ownershipSnapshot,
+    });
+  } else {
+    selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
+  }
 
   if (currentTriggerMode === "edit" && selection.hasSelection) {
     activeSelectionText = selection.selectedText;
