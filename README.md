@@ -108,11 +108,16 @@
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |
 
-Configuration settings are stored atomically at the canonical user path
-`~/.config/pi-voice/config.json`, so they survive app updates and launches from
-`/Applications/vo.app`. When a project already contains `.pi/pi-voice.json`,
-that file is loaded as a project-local override and setting changes update both
-files; the project file is never created solely by saving settings.
+Configuration settings are stored atomically at `$XDG_CONFIG_HOME/pi-voice/config.json`
+when `XDG_CONFIG_HOME` is set, or at the default path
+`~/.config/pi-voice/config.json`. Existing files at the default path are also
+read as a legacy fallback when an XDG-specific file is absent. These settings
+survive app updates and launches from `/Applications/vo.app`. When a project
+already contains `.pi/pi-voice.json`, that file is loaded as a project-local
+override and setting changes update both files; the project file is never
+created solely by saving settings. Malformed config files are backed up as
+`config.json.corrupt*.bak` and replaced with safe defaults so they cannot
+prevent vo from starting.
 
 ---
 
