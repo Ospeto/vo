@@ -24,6 +24,7 @@ export interface StatePayload {
   state: AppState;
   message?: string;
   sequenceId?: number;
+  usedPaidKey?: boolean;
 }
 
 export interface AudioLevelPayload {

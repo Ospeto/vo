@@ -132,4 +132,20 @@ describe("VO HUD Usefulness & Aesthetic Pass Contract Suite", () => {
       expect(hudHtmlContent).toContain("hudTitle.textContent = msg || defaultTitles[state] || state.toUpperCase()");
     });
   });
+
+  describe("8. Paid API Key HUD Badge Contract", () => {
+    test("verifies hud.html contains .hud-paid-badge and $ dollar sign currency display for paid API key usage", () => {
+      expect(hudHtmlContent).toContain("id=\"hudPaidBadge\"");
+      expect(hudHtmlContent).toContain("class=\"hud-paid-badge\"");
+      expect(hudHtmlContent).toContain(">$<");
+      expect(hudHtmlContent).toContain("color: #F59E0B");
+      expect(hudHtmlContent).toContain("background: rgba(245, 158, 11, 0.15)");
+      expect(hudHtmlContent).toContain("border: 1px solid rgba(245, 158, 11, 0.4)");
+      expect(hudHtmlContent).toContain("font-weight: 800");
+      expect(hudHtmlContent).toContain("border-radius: 9999px");
+      expect(hudHtmlContent).toContain("payload.usedPaidKey === true");
+      expect(hudHtmlContent).toContain("hudPaidBadge.style.display = \"inline-flex\"");
+      expect(hudHtmlContent).toContain("hudPaidBadge.style.display = \"none\"");
+    });
+  });
 });
