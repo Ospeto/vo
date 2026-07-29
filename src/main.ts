@@ -105,11 +105,30 @@ function cancelDictation(reason: string = "Cancelled") {
 
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
+let activeUsedPaidKey = false;
 
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
   sequenceId++;
-  const usedPaidKey = typeof options === "boolean" ? options : Boolean(options?.usedPaidKey);
+
+  const isPaidConfigured = Boolean(
+    currentConfig?.geminiFallbackApiKey && currentConfig.geminiFallbackApiKey.trim()
+  ) || currentConfig?.provider === "openai" || currentConfig?.provider === "elevenlabs";
+
+  let usedPaidKey = typeof options === "boolean" ? options : Boolean(options?.usedPaidKey);
+
+  if (state === "starting" || state === "recording") {
+    if (!isPaidConfigured) {
+      activeUsedPaidKey = false;
+    }
+  }
+
+  if (usedPaidKey) {
+    activeUsedPaidKey = true;
+  } else if (activeUsedPaidKey || isPaidConfigured) {
+    usedPaidKey = true;
+  }
+
   const payload: StatePayload & { hasSelection?: boolean } = {
     state,
     message,
@@ -608,7 +627,7 @@ function setupIpcHandlers() {
     activeSTTAbortController = sttAbortController;
 
     try {
-      setState("transcribing", "Transcribing...");
+      setState("transcribing", "Transcribing...", { usedPaidKey: activeUsedPaidKey });
       const { text, usedPaidKey, modelUsed } = await transcribeDetailed(data, {
         provider: currentConfig.provider,
         geminiModel: currentConfig.geminiModel,

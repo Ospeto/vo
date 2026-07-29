@@ -325,7 +325,7 @@
       <span id="hudDetail" class="hud-detail"></span>
     </div>
 
-    <span id="hudPaidBadge" class="hud-paid-badge">$</span>
+    <span id="hudPaidBadge" class="hud-paid-badge">$ Paid</span>
 
     <button id="hudCancelBtn" class="hud-action-btn" aria-label="Cancel dictation" title="Cancel (Esc)">✕</button>
   </div>
@@ -438,7 +438,7 @@
 
       // Paid Key Badge Display
       if (hudPaidBadge) {
-        if (payload && payload.usedPaidKey === true) {
+        if (payload && payload.usedPaidKey === true && (state === "transcribing" || state === "idle")) {
           hudPaidBadge.style.display = "inline-flex";
         } else {
           hudPaidBadge.style.display = "none";

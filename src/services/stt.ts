@@ -774,6 +774,19 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
   const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
   let paidFallbackInFlight: Promise<unknown> | null = null;
 
+  const { getGeminiFallbackClient, isFallbackClient } = await import("./gemini-client.js");
+  const fallbackClient = getGeminiFallbackClient();
+  const isPaidClient = isFallbackClient(client);
+
+  let hasPaidConfig = false;
+  try {
+    const { loadConfig } = await import("./config.js");
+    const cfg = loadConfig();
+    hasPaidConfig = Boolean(cfg.geminiFallbackApiKey && cfg.geminiFallbackApiKey.trim());
+  } catch {}
+
+  const initialUsedPaidKey = isPaidClient || hasPaidConfig;
+
   for (const model of modelsToTry) {
     if (abortSignal?.aborted) {
       throw new Error("Transcription aborted");
@@ -800,13 +813,10 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
           },
         });
         const text = response.text?.trim() ?? "";
-        return { text, usedPaidKey: false };
+        return { text, usedPaidKey: initialUsedPaidKey };
       };
 
       const primaryPromise = runPrimary();
-
-      const { getGeminiFallbackClient } = await import("./gemini-client.js");
-      const fallbackClient = getGeminiFallbackClient();
 
       let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
       const fallbackAbortController = new AbortController();

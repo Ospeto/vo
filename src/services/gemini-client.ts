@@ -141,6 +141,12 @@ export function getGeminiFallbackClient(): GoogleGenAI | null {
   return null;
 }
 
+export function isFallbackClient(client: GoogleGenAI | null): boolean {
+  if (!client) return false;
+  const fbClient = getGeminiFallbackClient();
+  return Boolean(fbClient && client === fbClient);
+}
+
 export function prewarmConnection(): void {
   try {
     const req = fetch("https://generativelanguage.googleapis.com", { method: "HEAD" });
