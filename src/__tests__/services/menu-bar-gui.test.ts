@@ -250,7 +250,7 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
 
     test("returns correct prompt instructions and temperature for each dictation preset", () => {
       expect(getPresetPromptInstructions("code_comment")).toContain("SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION");
-      expect(getPresetPromptInstructions("code_comment")).toContain("FAITHFUL TRANSLATION & ZERO IMPROVISATION");
+      expect(getPresetPromptInstructions("code_comment", true)).toContain("FAITHFUL TRANSLATION & ZERO IMPROVISATION");
       expect(getPresetPromptInstructions("code_comment")).toContain("SPOKEN IDENTIFIER FORMATTING");
       expect(getPresetPromptInstructions("careful")).toContain("CAREFUL DEEP PROOFREADING");
 

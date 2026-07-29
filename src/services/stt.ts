@@ -238,23 +238,41 @@ The speaker naturally mixes spoken Burmese natural prose with English technical 
 4. SPOKEN HESITATION PURGING: Completely ignore and filter out all spoken vocalizations, throat-clearing, and hesitation filler phonemes (e.g. 'အာ', 'ဟာ', 'အင်း', 'အင်', 'အာ့', 'အမ်', 'ဟိုဟာ', 'ဒီဥစ္စာ', 'like', 'you know', 'nd-sat', 'um', 'uh'). Do NOT transcribe these vocal fillers into text.
 `.trim();
 
-export function getPresetPromptInstructions(preset?: DictationPreset): string {
+export function getPresetPromptInstructions(preset?: DictationPreset, translateEnabled?: boolean): string {
   switch (preset) {
     case "code_comment":
-      return `
-Preset Mode: SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION.
-Transcribe and translate the developer's spoken Burmese/English dictation into clean, direct, systematic English instructions for AI coding assistants (Cursor / Antigravity / Claude / Copilot).
+      if (translateEnabled) {
+        return `
+Preset Mode: SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION (TRANSLATION MODE).
+Translate the developer's spoken Burmese/English dictation directly into clean, precise, professional English technical specifications optimized for AI coding assistants (Cursor / Antigravity / Claude / Copilot).
 
 CORE DIRECTIVES:
-1. FAITHFUL TRANSLATION & ZERO IMPROVISATION: Translate spoken Burmese/English directly into clean technical English without inventing unmentioned requirements, unsaid state management, unsaid code blocks, or extra architectural steps. Output ONLY what the user explicitly dictated.
-2. CONCISE IMPERATIVE STRUCTURING: Convert spoken intent into clear, direct English engineering imperatives (e.g., "user id မပါရင် ဘာမှမလုပ်ဘဲ ပြန်ထွက်" -> "Return early if userId is null or undefined").
+1. FAITHFUL TRANSLATION & ZERO IMPROVISATION: Translate spoken Burmese/English directly into clean technical English specifications. Do NOT invent unmentioned requirements, unsaid state management, unsaid code blocks, or extra architectural steps. Output ONLY what the user explicitly dictated.
+2. CONCISE IMPERATIVE STRUCTURING: Convert spoken intent into clear, direct English engineering specifications and imperatives (e.g., "user id မပါရင် ဘာမှမလုပ်ဘဲ ပြန်ထွက်" -> "Return early if userId is null or undefined").
 3. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers:
    - "camel case user id" -> userId
    - "snake case created at" -> created_at
-   - "pascal case data model" -> DataModel
+   - "pascal case user response" -> UserResponse
    - "upper case api key" -> API_KEY
    - "kebab case user-card" -> user-card
-4. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the instruction:"), or raw dictation repeats be included.
+4. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the specification:"), or raw dictation repeats be included.
+5. ZERO BOILERPLATE & ZERO PREAMBLES: Output NO conversational intros, commentary, or unrequested code blocks. Return ONLY clean technical specifications ready for AI coding agents.
+`.trim();
+      }
+      return `
+Preset Mode: SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION (DETECT MODE).
+Transcribe spoken audio (Burmese or English) faithfully in its original spoken language. Apply syntax-friendly code formatting, identifier casing, inline backticks, and code comments. Do NOT force English translation.
+
+CORE DIRECTIVES:
+1. FAITHFUL TRANSCRIPTION IN ORIGINAL LANGUAGE: Transcribe spoken Burmese text in clean Burmese script (မြန်မာစာ) and spoken English technical terms in exact English. Do NOT forcibly translate spoken Burmese into English when translation mode is inactive.
+2. SYNTAX-FRIENDLY CODE FORMATTING & COMMENTS: Apply syntax-friendly code formatting, inline backticks for code symbols (\`userId\`, \`created_at\`), and inline code comment structure (# or //) where dictated.
+3. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers:
+   - "camel case user id" -> userId
+   - "snake case created at" -> created_at
+   - "pascal case user response" -> UserResponse
+   - "upper case api key" -> API_KEY
+   - "kebab case user-card" -> user-card
+4. ZERO CONVERSATIONAL PREAMBLES & ZERO BOILERPLATE: Output NO conversational intros (e.g. "Here is the specification:"), NO unrequested boilerplate code generation, and NO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding agents.
 `.trim();
     case "translate":
       return `
@@ -327,7 +345,7 @@ function removeSpokenRepeats(text: string): string {
   return transformOutsideCodeRegions(text, removeRepeats);
 }
 
-export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[]): string {
+export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean): string {
   if (!text) return "";
 
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
@@ -335,9 +353,15 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
   let cleaned = text.trim();
 
   // Filter out unwanted Burmese raw text lines or inline Burmese script ONLY when code_comment preset is active AND translate toggle is ON
-  if (effectivePreset === "code_comment") {
-    // Only purge Burmese script if code_comment is combined with active translation toggle
-    // If translate toggle is OFF, preserve Burmese characters faithfully!
+  if (effectivePreset === "code_comment" && translateEnabled === true) {
+    const purged = cleaned
+      .split("\n")
+      .map(line => line.replace(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]+/g, "").trim())
+      .filter(line => line.length > 0)
+      .join("\n");
+    if (purged.length > 0) {
+      cleaned = purged;
+    }
   }
 
   // 1. Strip wrapping quotes added by LLMs
@@ -687,7 +711,7 @@ async function transcribeGemini(
   if (resolvedPreset === "translate") {
     isTranslationActive = true;
   }
-  const presetHint = getPresetPromptInstructions(effectivePreset);
+  const presetHint = getPresetPromptInstructions(effectivePreset, isTranslationActive);
   const targetTemperature = getPresetTemperature(effectivePreset);
 
   const diskTerms = loadUserDictionary();
@@ -717,21 +741,25 @@ async function transcribeGemini(
       ? `\nTRANSLATION DIRECTIVE: Translation mode is ACTIVE. Target language is ${resolvedTargetLang}. If the spoken audio is an editing or translation command, or if translating the selected text, produce the result in ${resolvedTargetLang}.`
       : `\nTRANSLATION DIRECTIVE: Translation mode is INACTIVE. Maintain original language of selected text and spoken dictation. Do NOT force translation to ${resolvedTargetLang} unless spoken audio explicitly dictates a translation target.`;
 
-    sttBasePrompt = `You are an expert AI Dual-Mode Voice Editor and Dictation Assistant. Your task is to analyze the spoken audio together with the provided [SELECTED TEXT].${translationDirective}
+    const codeDirective = isCodePreset
+      ? `\nCODING PRESET DIRECTIVE: Coding mode is ACTIVE. Apply syntax-friendly code formatting, identifier casing ("camel case user id" -> userId, "snake case created at" -> created_at, "pascal case user response" -> UserResponse), inline backticks, or inline code comments as requested. Ensure ZERO conversational preambles ("Here is the specification:") and ZERO unrequested code block boilerplate.`
+      : "";
+
+    sttBasePrompt = `You are an expert AI Dual-Mode Voice Editor and Dictation Assistant. Your task is to analyze the spoken audio together with the provided [SELECTED TEXT].${translationDirective}${codeDirective}
 
 EVALUATION RULES:
-1. ACTION INSTRUCTION: If the spoken audio contains an editing or translation command (e.g. "translate into English", "translate into ${resolvedTargetLang}", "fix grammar", "make bullet points", "rephrase", "summarize", "make shorter", "rewrite"), apply that command to the [SELECTED TEXT] and return ONLY the modified replacement text.
+1. ACTION INSTRUCTION: If the spoken audio contains an editing, refactoring, or translation command (e.g. "add code comments", "convert to camel case", "refactor this function", "translate into English", "fix grammar", "make bullet points", "rephrase", "summarize", "make shorter", "rewrite"), apply that command to the [SELECTED TEXT] and return ONLY the modified replacement text or comments.
 2. NEW DICTATION: If the spoken audio is new text or dictation content, ignore the [SELECTED TEXT] and return ONLY the clean transcription of the new spoken audio.
 
 OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductory phrases, or explanatory commentary.`;
     const formattedSelectedText = formatSelectedTextForPrompt(selectedText!.trim());
-    userPromptText = `[SELECTED TEXT]:\n${formattedSelectedText}\n\nSPOKEN AUDIO: Listen to the audio. If it's an editing/translation command, transform the selected text. If it's new dictation content, transcribe the new audio directly. Output ONLY the final text.`;
+    userPromptText = `[SELECTED TEXT]:\n${formattedSelectedText}\n\nSPOKEN AUDIO: Listen to the audio. If it's an editing/refactoring/translation command, transform the selected text. If it's new dictation content, transcribe the new audio directly. Output ONLY the final text.`;
   } else if (isCodePreset) {
     if (isTranslationActive) {
-      sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting.`;
-      userPromptText = `Translate the spoken audio into clear technical specifications in ${resolvedTargetLang}.`;
+      sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting. Ensure ZERO conversational preambles ("Here is the specification:"), ZERO unrequested boilerplate code generation, and ZERO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding assistants (Cursor, Antigravity, Claude, Copilot).`;
+      userPromptText = `Translate the spoken audio into clear technical specifications in ${resolvedTargetLang}. Output ONLY clean specifications without conversational intros or boilerplate code blocks.`;
     } else {
-      sttBasePrompt = "You are an expert real-time Speech Dictation and Code Specification Architect. Your single imperative task is to listen to the spoken audio (in Burmese, English, or technical code terms) and transcribe/format it accurately in its original spoken language with syntax-friendly formatting, technical identifier spellings, and inline code comment structure. Preserve the spoken language (Burmese or English) faithfully.";
+      sttBasePrompt = `You are an expert real-time Speech Dictation and Code Specification Architect. Your single imperative task is to listen to the spoken audio (in Burmese, English, or technical code terms) and transcribe/format it accurately in its original spoken language with syntax-friendly formatting, technical identifier spellings ("camel case user id" -> userId, "snake case created at" -> created_at, "pascal case user response" -> UserResponse), inline backticks, and inline code comment structure. Preserve the spoken language (Burmese or English) faithfully. Ensure ZERO conversational preambles ("Here is the specification:"), ZERO unrequested boilerplate code generation, and ZERO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding assistants.`;
       userPromptText = "Transcribe the spoken audio with syntax-friendly technical code formatting in its original spoken language. Do NOT force translation unless auto-translation is active.";
     }
   } else if (isTranslationActive) {
@@ -1028,8 +1056,21 @@ export async function transcribeDetailed(
     }
   }
 
-  const effectivePreset = resolveEffectivePreset(dictationPreset, activeApp);
-  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries);
+  const rawPreset = resolveEffectivePreset(dictationPreset, activeApp);
+  const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
+  let isTranslationActive = translateEnabled;
+  if (rawPreset === "translate") {
+    isTranslationActive = true;
+  } else if (isTranslationActive === undefined) {
+    try {
+      const { loadConfig } = await import("./config.js");
+      isTranslationActive = loadConfig().translateEnabled ?? false;
+    } catch {
+      isTranslationActive = false;
+    }
+  }
+
+  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, isTranslationActive);
   logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawText, sanitized, usedPaidKey }, "Transcribed detailed and sanitized");
   return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
 }
