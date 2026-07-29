@@ -50,7 +50,7 @@
 - Includes only safe active-app and dictation-mode context in provider prompts; clipboard and document text are never included.
 - Monitors microphone input during dictation and reports unavailable, disconnected, extremely quiet, or clipped input before transcription.
 - Starts capture before recording-state handoff to reduce clipped first phonemes, optionally stops after a configurable confirmed-speech silence gap, and diagnoses unavailable, disconnected, silent, clipped, or too-short microphone input instead of submitting it for transcription.
-- Shows a translucent `$` badge in the HUD when transcription uses the paid fallback API key.
+- Shows a golden `$ Paid` badge in the HUD during transcribing and idle states when a paid API key is used or configured.
 
 ### 2. 🧠 Dynamic Workspace Symbol Scanner (Zero-Hallucination Engine)
 - Automatically scans exported functions, classes, interfaces, and file names from your active project workspace.
