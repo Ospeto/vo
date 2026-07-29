@@ -1,12 +1,16 @@
 import { describe, test, expect } from "bun:test";
 import { SpeechEndpointDetector } from "../../shared/audio-utils.js";
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
+import {
+  isAutoEndpointEnabled,
+  MINIMUM_HOLD_RECORDING_MS,
+  shouldEnsureMinimumDuration,
+} from "../../services/hold-mode-protections.js";
 
 describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () => {
   describe("1. Hold mode minimum capture window protection", () => {
     test("queues pending stop when key up occurs during starting state and enforces 800ms minimum capture duration", async () => {
       const lifecycle = new RecordingLifecycle();
-      const keyHoldPressStartTime = Date.now();
       let pendingStopOnStart = false;
       let stopRecordingCalledWith: boolean | undefined = undefined;
 
@@ -15,7 +19,6 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
       expect(startRes.accepted).toBe(true);
 
       // Key up occurs immediately (10ms after press) while state is still 'starting'
-      const pressDuration = 10;
       if (lifecycle.snapshot().state === "starting") {
         pendingStopOnStart = true;
       }
@@ -29,7 +32,7 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
       // Pending stop handler checks minimum capture duration
       if (pendingStopOnStart) {
         const elapsed = Date.now() - recordingStartTime;
-        const delay = Math.max(0, 800 - elapsed);
+        const delay = Math.max(0, MINIMUM_HOLD_RECORDING_MS - elapsed);
         expect(delay).toBeGreaterThan(0);
         expect(delay).toBeLessThanOrEqual(800);
 
@@ -44,7 +47,6 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
 
     test("hold mode hotkey release shortly after press during recording state passes ensureMinimumDuration = true", () => {
       const lifecycle = new RecordingLifecycle();
-      const keyHoldPressStartTime = Date.now();
       const recordingStartTime = Date.now();
 
       const startRes = lifecycle.requestStart();
@@ -52,10 +54,9 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
       expect(lifecycle.snapshot().state).toBe("recording");
 
       // Key released 100ms after press (under 800ms threshold)
-      const pressDuration = 100;
       const elapsed = Date.now() - recordingStartTime; // ~0-10ms
 
-      const ensureMinimumDuration = pressDuration < 800 || elapsed < 800;
+      const ensureMinimumDuration = shouldEnsureMinimumDuration(100, elapsed);
       expect(ensureMinimumDuration).toBe(true);
 
       const stopRes = lifecycle.requestStop();
@@ -64,27 +65,21 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
     });
 
     test("hold mode hotkey release after 800ms duration passes ensureMinimumDuration = false", () => {
-      const keyHoldPressStartTime = Date.now() - 1000;
       const recordingStartTime = Date.now() - 900;
 
-      const pressDuration = Date.now() - keyHoldPressStartTime; // 1000ms
       const elapsed = Date.now() - recordingStartTime; // 900ms
 
-      const ensureMinimumDuration = pressDuration < 800 || elapsed < 800;
+      const ensureMinimumDuration = shouldEnsureMinimumDuration(1000, elapsed);
       expect(ensureMinimumDuration).toBe(false);
     });
   });
 
   describe("2. Auto-endpointing disabled in hold mode", () => {
     test("autoEndpointEnabled is set to false when dictationMode === 'hold'", () => {
-      const getAutoEndpointEnabled = (dictationMode: "hold" | "toggle", userAutoEndpoint?: boolean) => {
-        return dictationMode === "hold" ? false : (userAutoEndpoint ?? true);
-      };
-
-      expect(getAutoEndpointEnabled("hold", true)).toBe(false);
-      expect(getAutoEndpointEnabled("hold", false)).toBe(false);
-      expect(getAutoEndpointEnabled("toggle", true)).toBe(true);
-      expect(getAutoEndpointEnabled("toggle", false)).toBe(false);
+      expect(isAutoEndpointEnabled("hold", true)).toBe(false);
+      expect(isAutoEndpointEnabled("hold", false)).toBe(false);
+      expect(isAutoEndpointEnabled("toggle", true)).toBe(true);
+      expect(isAutoEndpointEnabled("toggle", false)).toBe(false);
     });
 
     test("auto-endpoint trigger is bypassed when autoEndpointEnabled is false even if SpeechEndpointDetector endpoints", () => {

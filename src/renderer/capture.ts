@@ -5,6 +5,7 @@ import {
   diagnoseAudioStats,
   type AudioRecordingStats,
 } from "../shared/audio-utils.js";
+import { isAutoEndpointEnabled } from "../services/hold-mode-protections.js";
 
 let mediaStream: MediaStream | null = null;
 let audioCtx: AudioContext | null = null;
@@ -317,7 +318,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
 
   const config = await window.electronIPC?.getConfig();
   const dictationMode = config?.dictationMode ?? "hold";
-  autoEndpointEnabled = dictationMode === "hold" ? false : (config?.autoEndpointEnabled ?? true);
+  autoEndpointEnabled = isAutoEndpointEnabled(dictationMode, config?.autoEndpointEnabled ?? true);
   transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
 
   const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
