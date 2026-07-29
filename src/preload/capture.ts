@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type CaptureElectronAPI, type RecordingFormat } from "../shared/types.js";
+import type { RecordingErrorPayload } from "../services/recording-error.js";
 import { subscribe } from "./shared.js";
 
 const api: CaptureElectronAPI = {
@@ -8,7 +9,7 @@ const api: CaptureElectronAPI = {
     ipcRenderer.send(IPC.RECORDING_DATA, data);
   },
   sendRecordingError: (error: string, sequenceId: number) => {
-    ipcRenderer.send(IPC.RECORDING_ERROR, { error, sequenceId });
+    ipcRenderer.send(IPC.RECORDING_ERROR, { error, sequenceId } satisfies RecordingErrorPayload);
   },
   sendAudioLevelUpdate: (payload: any) => {
     ipcRenderer.send(IPC.AUDIO_LEVEL_UPDATE, payload);

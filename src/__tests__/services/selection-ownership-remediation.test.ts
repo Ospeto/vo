@@ -13,6 +13,7 @@ import {
 } from "../../services/safe-paste.js";
 import { PasteCoordinator } from "../../services/paste-flow.js";
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
+import { handleRecordingError } from "../../services/recording-error.js";
 
 function createMockRichClipboardAdapter(initialText = "Original Clipboard Text") {
   let text = initialText;
@@ -425,15 +426,33 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       expect(adapter.readText()).toBe("Second sequence selection");
     });
 
-    test("renderer and main IPC contract carries the originating sequence", async () => {
-      const renderer = await Bun.file(new URL("../../renderer/capture.ts", import.meta.url)).text();
-      const preload = await Bun.file(new URL("../../preload/capture.ts", import.meta.url)).text();
-      const main = await Bun.file(new URL("../../main.ts", import.meta.url)).text();
+    test("main recording-error handler accepts active payloads and rejects late same-sequence payloads", () => {
+      const lifecycle = new RecordingLifecycle();
+      const start = lifecycle.requestStart();
+      const restored: number[] = [];
+      const errors: string[] = [];
+      let invalidated = 0;
 
-      expect(renderer).toContain("sendRecordingError(error, sequenceId)");
-      expect(renderer).toContain("finalizeRecording(generation, sequenceId)");
-      expect(preload).toContain("{ error, sequenceId }");
-      expect(main).toContain("payload.sequenceId !== currentSeq");
+      expect(handleRecordingError(
+        { error: "Microphone failed", sequenceId: start.sequenceId },
+        lifecycle,
+        () => invalidated++,
+        (sequenceId) => restored.push(sequenceId),
+        (message) => errors.push(message),
+      )).toBe(true);
+      expect(invalidated).toBe(1);
+      expect(restored).toEqual([start.sequenceId]);
+      expect(errors).toEqual(["Microphone failed"]);
+
+      expect(handleRecordingError(
+        { error: "Late microphone failed", sequenceId: start.sequenceId },
+        lifecycle,
+        () => invalidated++,
+        (sequenceId) => restored.push(sequenceId),
+        (message) => errors.push(message),
+      )).toBe(false);
+      expect(invalidated).toBe(1);
+      expect(errors).toEqual(["Microphone failed"]);
     });
   });
 });

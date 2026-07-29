@@ -23,6 +23,7 @@ import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-
 import { createMacSafePasteService, type ClipboardAdapter, type ClipboardSnapshot } from "./services/safe-paste.js";
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
+import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
 import { MINIMUM_HOLD_RECORDING_MS, SHORT_TAP_THRESHOLD_MS, getHoldModeMinimumDuration, shouldEnsureMinimumDuration } from "./services/hold-mode-protections.js";
 import logger from "./services/logger.js";
 
@@ -770,16 +771,18 @@ function setupIpcHandlers() {
     cancelDictation("Cancelled via user interface");
   });
 
-  ipcMain.on(IPC.RECORDING_ERROR, (event, payload: { error?: unknown; sequenceId?: unknown }) => {
+  ipcMain.on(IPC.RECORDING_ERROR, (event, payload: RecordingErrorPayload) => {
     if (!validateIpcSender(event, IPC.RECORDING_ERROR)) return;
-    if (typeof payload?.error !== "string" || !Number.isSafeInteger(payload.sequenceId)) return;
-    const currentSeq = recordingLifecycle.snapshot().sequenceId;
-    if (payload.sequenceId !== currentSeq) return;
-    logger.warn({ error: payload.error }, "Recording warning");
-    pasteCoordinator.invalidate();
-    recordingLifecycle.reset();
-    restoreCapturedSelection(currentSeq);
-    setState("error", payload.error);
+    if (handleRecordingError(
+      payload,
+      recordingLifecycle,
+      () => pasteCoordinator.invalidate(),
+      restoreCapturedSelection,
+      (message) => {
+        logger.warn({ error: message }, "Recording warning");
+        setState("error", message);
+      },
+    )) return;
   });
 
   ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
