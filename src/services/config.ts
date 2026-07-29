@@ -704,10 +704,12 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
   const patchCopy = { ...patch };
 
   if (patchCopy.geminiApiKey !== undefined) {
-    patchCopy.geminiApiKey = encryptSecret(patchCopy.geminiApiKey);
+    const trimmed = patchCopy.geminiApiKey.trim();
+    patchCopy.geminiApiKey = trimmed ? encryptSecret(trimmed) : "";
   }
   if (patchCopy.geminiFallbackApiKey !== undefined) {
-    patchCopy.geminiFallbackApiKey = encryptSecret(patchCopy.geminiFallbackApiKey);
+    const trimmed = patchCopy.geminiFallbackApiKey.trim();
+    patchCopy.geminiFallbackApiKey = trimmed ? encryptSecret(trimmed) : "";
   }
 
   const persistedVocab = loadPersistedVocabulary();
@@ -766,8 +768,8 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
     presetVocabulary: mergedPresetVocab,
     dictionaryEntries: finalDictionaryEntries,
     appPresetMappings: mergedAppMappings,
-    ...(patchCopy.geminiApiKey !== undefined ? { geminiApiKey: patchCopy.geminiApiKey.trim() } : {}),
-    ...(patchCopy.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patchCopy.geminiFallbackApiKey.trim() } : {}),
+    ...(patchCopy.geminiApiKey !== undefined ? { geminiApiKey: patchCopy.geminiApiKey } : {}),
+    ...(patchCopy.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patchCopy.geminiFallbackApiKey } : {}),
     ...(patchCopy.audioDeviceId !== undefined ? { audioDeviceId: patchCopy.audioDeviceId.trim() } : {}),
   };
 

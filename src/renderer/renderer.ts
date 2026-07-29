@@ -417,8 +417,8 @@ async function initUI() {
       if (geminiApiKey2Input && keys[1]) geminiApiKey2Input.value = keys[1];
       if (geminiApiKey3Input && keys[2]) geminiApiKey3Input.value = keys[2];
     }
-    if (geminiFallbackApiKeyInput && config.geminiFallbackApiKey) {
-      geminiFallbackApiKeyInput.value = config.geminiFallbackApiKey;
+    if (geminiFallbackApiKeyInput) {
+      geminiFallbackApiKeyInput.value = config.geminiFallbackApiKey || "";
     }
     if (chimeStartSelect && config.chimeSoundStart) {
       chimeStartSelect.value = config.chimeSoundStart;

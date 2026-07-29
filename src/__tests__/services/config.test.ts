@@ -561,4 +561,22 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     expect(loadedRoot.targetLanguage).toBe("Spanish");
     expect(loadedRoot.geminiApiKey).toBe("my-custom-api-key");
   });
+
+  test("clears geminiApiKey and geminiFallbackApiKey cleanly when empty string is passed to updateConfig", () => {
+    updateConfig(dirA, {
+      geminiApiKey: "some-key",
+      geminiFallbackApiKey: "some-fallback-key",
+    });
+    const loadedWithKeys = loadConfig(dirA);
+    expect(loadedWithKeys.geminiApiKey).toBe("some-key");
+    expect(loadedWithKeys.geminiFallbackApiKey).toBe("some-fallback-key");
+
+    updateConfig(dirA, {
+      geminiApiKey: "",
+      geminiFallbackApiKey: " ",
+    });
+    const loadedCleared = loadConfig(dirA);
+    expect(loadedCleared.geminiApiKey).toBeUndefined();
+    expect(loadedCleared.geminiFallbackApiKey).toBeUndefined();
+  });
 });
