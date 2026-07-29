@@ -177,15 +177,19 @@ function startMetering() {
     if (metrics.isClipped) sessionClippingFrames++;
 
     if (mediaRecorder && mediaRecorder.state === "recording") {
-      const endpointStatus = endpointDetector.processFrame(normalizedRms);
-      if (
-        endpointStatus.isEndpointed &&
-        !autoEndpointTriggered &&
-        autoEndpointEnabled &&
-        transcriptionDelaySec > 0
-      ) {
-        autoEndpointTriggered = true;
-        triggerAutoStop();
+      const elapsedMs = recordingStartTime > 0 ? Date.now() - recordingStartTime : 0;
+      const isWarmingUp = elapsedMs < 200;
+      if (!isWarmingUp) {
+        const endpointStatus = endpointDetector.processFrame(normalizedRms);
+        if (
+          endpointStatus.isEndpointed &&
+          !autoEndpointTriggered &&
+          autoEndpointEnabled &&
+          transcriptionDelaySec > 0
+        ) {
+          autoEndpointTriggered = true;
+          triggerAutoStop();
+        }
       }
     }
     const rms = Math.sqrt(sumSquares / buffer.length);
@@ -312,7 +316,8 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   currentGainValue = inputGain;
 
   const config = await window.electronIPC?.getConfig();
-  autoEndpointEnabled = config?.autoEndpointEnabled ?? true;
+  const dictationMode = config?.dictationMode ?? "hold";
+  autoEndpointEnabled = dictationMode === "hold" ? false : (config?.autoEndpointEnabled ?? true);
   transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
 
   const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);

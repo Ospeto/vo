@@ -985,12 +985,14 @@ function handleHotkeyUp() {
     logger.info({ pressDuration }, "Key Up during starting state: queuing stop");
     pendingStopOnStart = true;
   } else if (currentState === "recording") {
-    logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Mode)");
+    const elapsed = recordingStartTime > 0 ? Date.now() - recordingStartTime : pressDuration;
+    const ensureMinimumDuration = pressDuration < 800 || elapsed < 800;
+    logger.info({ pressDuration, elapsed, ensureMinimumDuration }, "Key Up: STOPPING recording (Hold Mode)");
     const stopRes = recordingLifecycle.requestStop();
     if (stopRes.accepted) {
       setState("stopping", "Stopping...");
       playToggleStopChime();
-      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+      captureWindow?.webContents.send(IPC.STOP_RECORDING, ensureMinimumDuration);
     }
   }
 }
