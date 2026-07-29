@@ -17,7 +17,7 @@ import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-
 import { createMacSafePasteService, type ClipboardAdapter, type ClipboardSnapshot } from "./services/safe-paste.js";
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
-import { MINIMUM_HOLD_RECORDING_MS, shouldEnsureMinimumDuration } from "./services/hold-mode-protections.js";
+import { MINIMUM_HOLD_RECORDING_MS, SHORT_TAP_THRESHOLD_MS, getHoldModeMinimumDuration, shouldEnsureMinimumDuration } from "./services/hold-mode-protections.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -57,6 +57,14 @@ let previousClipboardContent: ClipboardSnapshot | string = "";
 let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+let shortTapStopTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearShortTapStopTimer() {
+  if (shortTapStopTimer) {
+    clearTimeout(shortTapStopTimer);
+    shortTapStopTimer = null;
+  }
+}
 
 function restoreCapturedSelection() {
   if (selectionCaptured) restoreClipboard(previousClipboardContent, selectionClipboardPort);
@@ -111,6 +119,7 @@ let activeUsedPaidKey = false;
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
   sequenceId++;
+  clearShortTapStopTimer();
 
   const isPaidConfigured = Boolean(
     currentConfig?.geminiFallbackApiKey && currentConfig.geminiFallbackApiKey.trim()
@@ -873,6 +882,7 @@ function setupIpcHandlers() {
 
 let lastHotkeyDownTime = 0;
 let keyHoldPressStartTime = 0;
+let lastHoldPressDuration = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
 let pendingStopOnStart = false;
 let recordingStartTime = 0;
@@ -933,19 +943,25 @@ async function startRecordingFlow() {
   recordingLifecycle.acknowledgeStart(reqRes.sequenceId, true);
 
   if (pendingStopOnStart && currentConfig.dictationMode === "hold") {
-    logger.info("Queued stop executing upon entering recording state with minimum capture window");
-    const elapsed = Date.now() - recordingStartTime;
-    const delay = Math.max(0, MINIMUM_HOLD_RECORDING_MS - elapsed);
-    if (delay > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-    const snapshot = recordingLifecycle.snapshot();
-    if (snapshot.sequenceId === reqRes.sequenceId && snapshot.state === "recording") {
-      const stopRes = recordingLifecycle.requestStop();
-      if (stopRes.accepted) {
-        setState("stopping", "Stopping...");
-        playToggleStopChime();
-        captureWindow?.webContents.send(IPC.STOP_RECORDING, true);
+    if (hotkeyService?.isFnDown()) {
+      logger.info("Live key state isFnDown is true upon entering recording state; clearing pendingStopOnStart");
+      pendingStopOnStart = false;
+    } else {
+      logger.info({ lastHoldPressDuration }, "Queued stop executing upon entering recording state with minimum capture window");
+      const elapsed = Date.now() - recordingStartTime;
+      const minDuration = getHoldModeMinimumDuration(lastHoldPressDuration, false);
+      const delay = Math.max(0, minDuration - elapsed);
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      const snapshot = recordingLifecycle.snapshot();
+      if (snapshot.sequenceId === reqRes.sequenceId && snapshot.state === "recording") {
+        const stopRes = recordingLifecycle.requestStop();
+        if (stopRes.accepted) {
+          setState("stopping", "Stopping...");
+          playToggleStopChime();
+          captureWindow?.webContents.send(IPC.STOP_RECORDING, true);
+        }
       }
     }
   }
@@ -982,11 +998,35 @@ function handleHotkeyUp() {
   if (currentConfig.dictationMode !== "hold") return;
 
   const pressDuration = Date.now() - keyHoldPressStartTime;
+  lastHoldPressDuration = pressDuration;
+
   if (currentState === "starting") {
     logger.info({ pressDuration }, "Key Up during starting state: queuing stop");
     pendingStopOnStart = true;
   } else if (currentState === "recording") {
     const elapsed = recordingStartTime > 0 ? Date.now() - recordingStartTime : pressDuration;
+    const liveFnDown = hotkeyService?.isFnDown() ?? false;
+    const minDuration = getHoldModeMinimumDuration(pressDuration, liveFnDown);
+    const remainingDelay = minDuration - elapsed;
+
+    if (pressDuration < SHORT_TAP_THRESHOLD_MS && !liveFnDown && remainingDelay > 0) {
+      logger.info({ pressDuration, elapsed, remainingDelay }, "Short tap (<250ms) in Hold Mode: extending recording duration");
+      const recordingSequenceId = recordingLifecycle.snapshot().sequenceId;
+      shortTapStopTimer = setTimeout(() => {
+        shortTapStopTimer = null;
+        const snapshot = recordingLifecycle.snapshot();
+        if (snapshot.sequenceId === recordingSequenceId && snapshot.state === "recording") {
+          const stopRes = recordingLifecycle.requestStop();
+          if (stopRes.accepted) {
+            setState("stopping", "Stopping...");
+            playToggleStopChime();
+            captureWindow?.webContents.send(IPC.STOP_RECORDING, true);
+          }
+        }
+      }, remainingDelay);
+      return;
+    }
+
     const ensureMinimumDuration = shouldEnsureMinimumDuration(pressDuration, elapsed);
     logger.info({ pressDuration, elapsed, ensureMinimumDuration }, "Key Up: STOPPING recording (Hold Mode)");
     const stopRes = recordingLifecycle.requestStop();
