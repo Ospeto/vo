@@ -389,6 +389,7 @@ function createCaptureWindow() {
       preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
