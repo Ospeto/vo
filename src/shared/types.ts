@@ -146,6 +146,8 @@ export interface SettingsConfigPayload {
   hasOpenAIKey?: boolean;
   geminiKeyError?: string;
   geminiFallbackKeyError?: string;
+  legacyProjectKeyBlocked?: boolean;
+  legacyProjectKeyRemediation?: string;
 }
 
 export interface SettingsElectronAPI {

@@ -1,5 +1,5 @@
 import { join, dirname } from "node:path";
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
@@ -33,6 +33,10 @@ export interface PiVoiceConfig {
   appPresetMappings?: Record<string, DictationPreset>;
   geminiApiKey?: string;
   geminiFallbackApiKey?: string;
+  geminiKeyError?: string;
+  geminiFallbackKeyError?: string;
+  legacyProjectKeyBlocked?: boolean;
+  legacyProjectKeyRemediation?: string;
   audioDeviceId?: string;
 }
 
@@ -363,6 +367,77 @@ export const configFileSchema = z.object({
   audioDeviceId: z.string().optional(),
 });
 
+export const configPatchSchema = z
+  .object({
+    key: z
+      .string()
+      .max(100)
+      .refine(
+        (v) => {
+          try {
+            parseKeyBinding(v);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: "Invalid key binding" },
+      )
+      .optional(),
+    editKey: z
+      .string()
+      .max(100)
+      .refine(
+        (v) => {
+          try {
+            parseKeyBinding(v);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: "Invalid edit key binding" },
+      )
+      .optional(),
+    provider: z.enum(["local", "gemini", "openai", "elevenlabs"]).optional(),
+    geminiModel: z.enum(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-pro"]).optional(),
+    inputGain: z.number().min(0.0).max(2.0).optional(),
+    dictationPreset: z.enum(["auto", "careful", "code_comment", "fast", "email_polish", "burmese_written", "translate"]).optional(),
+    dictationMode: z.enum(["toggle", "hold"]).optional(),
+    translateEnabled: z.boolean().optional(),
+    targetLanguage: z.string().max(200).optional(),
+    audioChimesEnabled: z.boolean().optional(),
+    chimeSoundStart: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional(),
+    chimeSoundEnd: z.enum(["glass", "submarine", "hero", "ping", "pop", "tink"]).optional(),
+    symbolScannerEnabled: z.boolean().optional(),
+    transcriptionDelaySec: z.number().min(0.0).max(10.0).optional(),
+    autoEndpointEnabled: z.boolean().optional(),
+    customVocabulary: z.array(z.string().max(200)).max(1000).optional(),
+    presetVocabulary: z.record(z.string(), z.array(z.string().max(200)).max(1000)).optional(),
+    dictionaryEntries: z
+      .array(
+        z
+          .object({
+            id: z.string().max(100),
+            phrase: z.string().max(500),
+            spokenAliases: z.array(z.string().max(200)).max(50),
+            enabled: z.boolean(),
+            legacyWhitespace: z.boolean().optional(),
+            category: z.enum(["general", "person_name", "technical"]).optional(),
+          })
+          .strict(),
+      )
+      .max(1000)
+      .optional(),
+    appPresetMappings: z
+      .record(z.string().max(100), z.enum(["auto", "careful", "code_comment", "fast", "email_polish", "burmese_written", "translate"]))
+      .optional(),
+    geminiApiKey: z.string().max(1000).optional(),
+    geminiFallbackApiKey: z.string().max(1000).optional(),
+    audioDeviceId: z.string().max(200).optional(),
+  })
+  .strict();
+
 export class ConfigError extends Error {
   constructor(
     public readonly configPath: string,
@@ -373,30 +448,102 @@ export class ConfigError extends Error {
   }
 }
 
-export function encryptSecret(secret?: string): string | undefined {
-  if (!secret) return undefined;
+export class SecretStoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SecretStoreError";
+  }
+}
+
+export interface SafeStorageProvider {
+  isEncryptionAvailable: () => boolean;
+  encryptString: (plainText: string) => Buffer;
+  decryptString: (cipherText: Buffer) => string;
+  getSelectedStorageBackend?: () => string;
+}
+
+let safeStorageOverride: SafeStorageProvider | null = null;
+
+export function setSafeStorageProvider(provider: SafeStorageProvider | null): void {
+  safeStorageOverride = provider;
+}
+
+function getSafeStorage(): SafeStorageProvider | null {
+  if (safeStorageOverride !== null) {
+    return safeStorageOverride;
+  }
   try {
     const electron = require("electron");
-    if (electron?.safeStorage?.isEncryptionAvailable?.()) {
-      return `enc:${electron.safeStorage.encryptString(secret).toString("base64")}`;
+    if (electron?.safeStorage) {
+      return electron.safeStorage;
     }
   } catch {}
-  return secret;
+  return null;
+}
+
+export function isStrongEncryptionAvailable(): boolean {
+  try {
+    const ss = getSafeStorage();
+    if (!ss || typeof ss.isEncryptionAvailable !== "function") return false;
+    if (!ss.isEncryptionAvailable()) return false;
+    if (process.platform === "linux" && typeof ss.getSelectedStorageBackend === "function") {
+      const backend = ss.getSelectedStorageBackend();
+      if (backend === "basic_text") return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function encryptSecret(secret: string): string {
+  if (!secret) return secret;
+  if (!isStrongEncryptionAvailable()) {
+    throw new SecretStoreError("Strong encryption is unavailable (safeStorage missing or Linux basic_text)");
+  }
+  const ss = getSafeStorage()!;
+  try {
+    const buf = ss.encryptString(secret);
+    return `enc:${buf.toString("base64")}`;
+  } catch (err: any) {
+    throw new SecretStoreError(`Encryption failed: ${err?.message || err}`);
+  }
+}
+
+export type SecretState =
+  | { status: "absent" }
+  | { status: "available"; value: string; ciphertext: string; needsMigration?: boolean }
+  | { status: "decrypt-error"; error: string; rawCiphertext: string };
+
+export function resolveSecretState(raw?: unknown): SecretState {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return { status: "absent" };
+  }
+  const str = raw.trim();
+  if (str.startsWith("enc:")) {
+    if (!isStrongEncryptionAvailable()) {
+      return { status: "decrypt-error", error: "Strong encryption is unavailable", rawCiphertext: str };
+    }
+    const ss = getSafeStorage();
+    try {
+      const buf = Buffer.from(str.slice(4), "base64");
+      const decrypted = ss!.decryptString(buf);
+      return { status: "available", value: decrypted, ciphertext: str };
+    } catch (err: any) {
+      return { status: "decrypt-error", error: "Failed to decrypt API key", rawCiphertext: str };
+    }
+  } else {
+    // Legacy plaintext
+    if (!isStrongEncryptionAvailable()) {
+      return { status: "decrypt-error", error: "Strong encryption is unavailable for legacy plaintext key", rawCiphertext: str };
+    }
+    return { status: "available", value: str, ciphertext: str, needsMigration: true };
+  }
 }
 
 export function decryptSecret(encrypted?: string): string | undefined {
-  if (!encrypted) return undefined;
-  if (encrypted.startsWith("enc:")) {
-    try {
-      const electron = require("electron");
-      if (electron?.safeStorage?.isEncryptionAvailable?.()) {
-        const buffer = Buffer.from(encrypted.slice(4), "base64");
-        return electron.safeStorage.decryptString(buffer);
-      }
-    } catch {}
-    return undefined;
-  }
-  return encrypted;
+  const state = resolveSecretState(encrypted);
+  return state.status === "available" ? state.value : undefined;
 }
 
 function getUserHome(): string {
@@ -553,6 +700,55 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     }
   }
 
+  let legacyProjectKeyBlocked = false;
+  let legacyProjectKeyRemediation: string | undefined;
+
+  // Project secret migration & blocking
+  // Repository scan command for project owners to locate legacy project keys:
+  // rg '"gemini(Fallback)?ApiKey"' --glob '.pi/pi-voice.json'
+  // or: find . -name pi-voice.json -exec grep -H 'gemini.*ApiKey' {} +
+  const projHasGeminiKey = typeof projJson.geminiApiKey === "string" && projJson.geminiApiKey.trim().length > 0;
+  const projHasFallbackKey = typeof projJson.geminiFallbackApiKey === "string" && projJson.geminiFallbackApiKey.trim().length > 0;
+
+  if (projHasGeminiKey || projHasFallbackKey) {
+    if (!isStrongEncryptionAvailable()) {
+      legacyProjectKeyBlocked = true;
+      legacyProjectKeyRemediation = "A legacy API key was found in project config (.pi/pi-voice.json), but strong encryption is unavailable. Please move your key to global user config and remove it from .pi/pi-voice.json.";
+    } else {
+      const projGeminiState = projHasGeminiKey ? resolveSecretState(projJson.geminiApiKey) : null;
+      const projFallbackState = projHasFallbackKey ? resolveSecretState(projJson.geminiFallbackApiKey) : null;
+
+      if ((projGeminiState && projGeminiState.status !== "available") || (projFallbackState && projFallbackState.status !== "available")) {
+        legacyProjectKeyBlocked = true;
+        legacyProjectKeyRemediation = "A legacy API key in project config (.pi/pi-voice.json) could not be decrypted/migrated safely. Please move your key to global user config and remove it from .pi/pi-voice.json.";
+      } else {
+        // Write-before-remove migration
+        if (projGeminiState?.status === "available") {
+          globalJson.geminiApiKey = encryptSecret(projGeminiState.value);
+        }
+        if (projFallbackState?.status === "available") {
+          globalJson.geminiFallbackApiKey = encryptSecret(projFallbackState.value);
+        }
+        try {
+          atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
+          delete projJson.geminiApiKey;
+          delete projJson.geminiFallbackApiKey;
+          if (projConfigPath) {
+            atomicWriteJson(projConfigPath, projJson);
+          }
+        } catch (migErr: any) {
+          logger.warn({ err: migErr?.message }, "Failed to complete legacy project key migration");
+          legacyProjectKeyBlocked = true;
+          legacyProjectKeyRemediation = "Failed to complete legacy project key migration to user config.";
+        }
+      }
+    }
+  }
+
+  // Ensure secret keys are excluded from project JSON before merging
+  delete projJson.geminiApiKey;
+  delete projJson.geminiFallbackApiKey;
+
   if (!globalExists && !projExists) {
     logger.info({ userConfigPath }, "Config file not found, using defaults");
     return defaults;
@@ -564,7 +760,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   globalJson = repairedGlobal.json;
   projJson = repairedProject.json;
   try {
-    if (repairedGlobal.changed) atomicWriteJson(userConfigPath, globalJson);
+    if (repairedGlobal.changed) atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
     if (repairedProject.changed && projConfigPath) atomicWriteJson(projConfigPath, projJson);
   } catch (saveErr: any) {
     logger.warn({ err: saveErr?.message }, "Failed to auto-heal config to disk");
@@ -573,6 +769,39 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const mergedRaw: Record<string, unknown> = { ...globalJson, ...projJson };
   let result = configFileSchema.safeParse(mergedRaw);
   const config = result.success ? result.data : configFileSchema.parse({});
+
+  // Resolve secret states from globalJson
+  const geminiState = resolveSecretState(globalJson.geminiApiKey);
+  let geminiApiKey: string | undefined;
+  let geminiKeyError: string | undefined;
+
+  if (geminiState.status === "available") {
+    geminiApiKey = geminiState.value;
+    if (geminiState.needsMigration) {
+      try {
+        globalJson.geminiApiKey = encryptSecret(geminiState.value);
+        atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
+      } catch {}
+    }
+  } else if (geminiState.status === "decrypt-error") {
+    geminiKeyError = geminiState.error;
+  }
+
+  const fallbackState = resolveSecretState(globalJson.geminiFallbackApiKey);
+  let geminiFallbackApiKey: string | undefined;
+  let geminiFallbackKeyError: string | undefined;
+
+  if (fallbackState.status === "available") {
+    geminiFallbackApiKey = fallbackState.value;
+    if (fallbackState.needsMigration) {
+      try {
+        globalJson.geminiFallbackApiKey = encryptSecret(fallbackState.value);
+        atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
+      } catch {}
+    }
+  } else if (fallbackState.status === "decrypt-error") {
+    geminiFallbackKeyError = fallbackState.error;
+  }
 
   const {
     key: keyStr,
@@ -594,8 +823,6 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     presetVocabulary,
     dictionaryEntries,
     appPresetMappings,
-    geminiApiKey,
-    geminiFallbackApiKey,
     audioDeviceId,
   } = config;
 
@@ -640,7 +867,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   }
 
   logger.info(
-    { configPath: primaryPath, key: keyStr, editKey: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
+    { configPath: primaryPath, keyBinding: keyStr, editKeyBinding: editKeyStr, provider, geminiModel, inputGain, dictationPreset, dictationMode, translateEnabled, targetLanguage, audioChimesEnabled, symbolScannerEnabled, vocabularyCount: mergedCustomVocab.length },
     "Loaded config",
   );
 
@@ -666,23 +893,39 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
     presetVocabulary: mergedPresetVocab,
     dictionaryEntries: mergedDictionaryEntries,
     appPresetMappings: (appPresetMappings || DEFAULT_APP_PRESET_MAPPINGS) as Record<string, DictationPreset>,
-    geminiApiKey: decryptSecret(geminiApiKey),
-    geminiFallbackApiKey: decryptSecret(geminiFallbackApiKey),
+    geminiApiKey,
+    geminiFallbackApiKey,
+    geminiKeyError,
+    geminiFallbackKeyError,
+    legacyProjectKeyBlocked: legacyProjectKeyBlocked ? true : undefined,
+    legacyProjectKeyRemediation,
     audioDeviceId,
   };
 }
 
-function atomicWriteJson(filePath: string, data: unknown): void {
+function atomicWriteJson(filePath: string, data: unknown, options: { mode?: number } = {}): void {
   const targetDir = dirname(filePath);
   const tmpPath = `${filePath}.tmp`;
   if (!existsSync(targetDir)) {
-    mkdirSync(targetDir, { recursive: true });
+    mkdirSync(targetDir, { recursive: true, mode: 0o700 });
   }
-  writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+  const mode = options.mode ?? 0o600;
+  writeFileSync(tmpPath, JSON.stringify(data, null, 2), { encoding: "utf-8", mode });
+  try {
+    chmodSync(tmpPath, mode);
+  } catch {}
   renameSync(tmpPath, filePath);
+  try {
+    chmodSync(filePath, mode);
+  } catch {}
 }
 
-function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceConfigPatch, targetPath: string): Record<string, unknown> {
+function preparePatchSave(
+  existingJson: Record<string, unknown>,
+  patch: PiVoiceConfigPatch,
+  targetPath: string,
+  isUserScope: boolean
+): Record<string, unknown> {
   let baseJson = { ...existingJson };
   if (baseJson.dictationPreset === "translate" && baseJson.translateEnabled === undefined) {
     baseJson = { ...baseJson, dictationPreset: "careful", translateEnabled: true };
@@ -690,14 +933,22 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
 
   const patchCopy = { ...patch };
 
-  if (patchCopy.geminiApiKey !== undefined) {
-    const trimmed = patchCopy.geminiApiKey.trim();
-    patchCopy.geminiApiKey = trimmed ? encryptSecret(trimmed) : "";
+  let newGeminiApiKey: string | undefined = undefined;
+  let newGeminiFallbackApiKey: string | undefined = undefined;
+
+  if (isUserScope) {
+    if (patchCopy.geminiApiKey !== undefined) {
+      const trimmed = patchCopy.geminiApiKey.trim();
+      newGeminiApiKey = trimmed ? encryptSecret(trimmed) : "";
+    }
+    if (patchCopy.geminiFallbackApiKey !== undefined) {
+      const trimmed = patchCopy.geminiFallbackApiKey.trim();
+      newGeminiFallbackApiKey = trimmed ? encryptSecret(trimmed) : "";
+    }
   }
-  if (patchCopy.geminiFallbackApiKey !== undefined) {
-    const trimmed = patchCopy.geminiFallbackApiKey.trim();
-    patchCopy.geminiFallbackApiKey = trimmed ? encryptSecret(trimmed) : "";
-  }
+
+  delete patchCopy.geminiApiKey;
+  delete patchCopy.geminiFallbackApiKey;
 
   const persistedVocab = loadPersistedVocabulary();
   const existingPresetVocab = (baseJson.presetVocabulary as Record<string, string[]>) || {};
@@ -734,7 +985,7 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
     }
   }
 
-  const mergedJson = {
+  const mergedJson: Record<string, unknown> = {
     ...baseJson,
     ...(patchCopy.key !== undefined ? { key: patchCopy.key } : {}),
     ...(patchCopy.editKey !== undefined ? { editKey: patchCopy.editKey } : {}),
@@ -755,10 +1006,28 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
     presetVocabulary: mergedPresetVocab,
     dictionaryEntries: finalDictionaryEntries,
     appPresetMappings: mergedAppMappings,
-    ...(patchCopy.geminiApiKey !== undefined ? { geminiApiKey: patchCopy.geminiApiKey } : {}),
-    ...(patchCopy.geminiFallbackApiKey !== undefined ? { geminiFallbackApiKey: patchCopy.geminiFallbackApiKey } : {}),
     ...(patchCopy.audioDeviceId !== undefined ? { audioDeviceId: patchCopy.audioDeviceId.trim() } : {}),
   };
+
+  if (!isUserScope) {
+    delete mergedJson.geminiApiKey;
+    delete mergedJson.geminiFallbackApiKey;
+  } else {
+    if (newGeminiApiKey !== undefined) {
+      if (newGeminiApiKey) {
+        mergedJson.geminiApiKey = newGeminiApiKey;
+      } else {
+        delete mergedJson.geminiApiKey;
+      }
+    }
+    if (newGeminiFallbackApiKey !== undefined) {
+      if (newGeminiFallbackApiKey) {
+        mergedJson.geminiFallbackApiKey = newGeminiFallbackApiKey;
+      } else {
+        delete mergedJson.geminiFallbackApiKey;
+      }
+    }
+  }
 
   const validationResult = configFileSchema.safeParse(mergedJson);
   if (!validationResult.success) {
@@ -792,7 +1061,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       } catch {}
     }
   }
-  const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath);
+  const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath, true);
   let toSaveProj: Record<string, unknown> | undefined;
   let existingProjJson: Record<string, unknown> | undefined;
   if (hasProjConfig && projConfigPath) {
@@ -801,7 +1070,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       const content = readFileSync(projConfigPath, "utf-8");
       existingProjJson = JSON.parse(content);
     } catch {}
-    toSaveProj = preparePatchSave(existingProjJson!, patch, projConfigPath);
+    toSaveProj = preparePatchSave(existingProjJson!, patch, projConfigPath, false);
   }
 
   if (toSaveProj && projConfigPath && existingProjJson) {
@@ -814,7 +1083,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
   }
 
   try {
-    atomicWriteJson(userConfigPath, toSaveUser);
+    atomicWriteJson(userConfigPath, toSaveUser, { mode: 0o600 });
   } catch (err: any) {
     if (toSaveProj && projConfigPath && existingProjJson) {
       try {
@@ -822,6 +1091,9 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       } catch (rollbackErr: any) {
         logger.error({ err: String(rollbackErr), configPath: projConfigPath }, "Failed to roll back project config patch");
       }
+    }
+    if (err instanceof SecretStoreError || err instanceof ConfigError) {
+      throw err;
     }
     logger.error({ err: String(err), configPath: userConfigPath }, "Failed atomic write of global user config patch");
     throw new ConfigError(userConfigPath, `Atomic write failed: ${err.message}`);

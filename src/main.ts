@@ -9,7 +9,7 @@ import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, updateConfig, parseKeyBinding, formatKeyBinding, defaultConfig, ConfigError, type PiVoiceConfig } from "./services/config.js";
+import { loadConfig, updateConfig, configPatchSchema, parseKeyBinding, formatKeyBinding, defaultConfig, ConfigError, type PiVoiceConfig } from "./services/config.js";
 import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
@@ -789,12 +789,13 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.SAVE_CONFIG, (event, patch) => {
     validateIpcSenderPolicy(event, IPC.SAVE_CONFIG, popoverWindow, captureWindow, hudWindow);
-    currentConfig = updateConfig(workingCwd, patch);
-    if (patch.geminiApiKey !== undefined) {
-      process.env.GEMINI_API_KEY = patch.geminiApiKey.trim();
+    const validatedPatch = configPatchSchema.parse(patch);
+    currentConfig = updateConfig(workingCwd, validatedPatch);
+    if (validatedPatch.geminiApiKey !== undefined) {
+      process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
       _resetGeminiClient();
     }
-    if (patch.inputGain !== undefined) {
+    if (validatedPatch.inputGain !== undefined) {
       captureWindow?.webContents.send(IPC.GAIN_UPDATE, currentConfig.inputGain);
     }
     return getSanitizedSettingsConfig(currentConfig);

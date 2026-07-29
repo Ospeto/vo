@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 // Mock logger to prevent file I/O during tests
@@ -30,7 +30,11 @@ import {
   getProjConfigPath,
   resolveConfigPath,
   ConfigError,
+  SecretStoreError,
+  setSafeStorageProvider,
+  configPatchSchema,
 } from "../../services/config.js";
+import { getSanitizedSettingsConfig } from "../../services/ipc-policy.js";
 
 describe("parseKeyBinding", () => {
   test("parses simple key", () => {
@@ -399,9 +403,21 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     origXdg = process.env.XDG_CONFIG_HOME;
     process.env.HOME = join(testRoot, "home");
     process.env.XDG_CONFIG_HOME = join(testRoot, "home", ".config");
+
+    setSafeStorageProvider({
+      isEncryptionAvailable: () => true,
+      encryptString: (plainText: string) => Buffer.from(`MOCK_ENC:${plainText}`),
+      decryptString: (cipherText: Buffer) => {
+        const str = cipherText.toString("utf-8");
+        if (str.startsWith("MOCK_ENC:")) return str.slice(9);
+        return str;
+      },
+      getSelectedStorageBackend: () => "gnome_libsecret",
+    });
   });
 
   afterEach(() => {
+    setSafeStorageProvider(null);
     if (origHome === undefined) {
       delete process.env.HOME;
     } else {
@@ -578,5 +594,223 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     const loadedCleared = loadConfig(dirA);
     expect(loadedCleared.geminiApiKey).toBeUndefined();
     expect(loadedCleared.geminiFallbackApiKey).toBeUndefined();
+  });
+});
+
+describe("PR-04 Secret Persistence, Type Safety & Hardening Suite", () => {
+  let testRoot: string;
+  let dirProj: string;
+  let origHome: string | undefined;
+  let origXdg: string | undefined;
+
+  beforeEach(() => {
+    testRoot = join(tmpdir(), `pi-voice-pr04-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    dirProj = join(testRoot, "project-test");
+    mkdirSync(dirProj, { recursive: true });
+
+    origHome = process.env.HOME;
+    origXdg = process.env.XDG_CONFIG_HOME;
+    process.env.HOME = join(testRoot, "home");
+    process.env.XDG_CONFIG_HOME = join(testRoot, "home", ".config");
+
+    setSafeStorageProvider({
+      isEncryptionAvailable: () => true,
+      encryptString: (plainText: string) => Buffer.from(`MOCK_ENC:${plainText}`),
+      decryptString: (cipherText: Buffer) => {
+        const str = cipherText.toString("utf-8");
+        if (str.startsWith("MOCK_ENC:")) return str.slice(9);
+        throw new Error("Decryption failed");
+      },
+      getSelectedStorageBackend: () => "gnome_libsecret",
+    });
+  });
+
+  afterEach(() => {
+    setSafeStorageProvider(null);
+    if (origHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = origHome;
+    }
+    if (origXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = origXdg;
+    }
+    rmSync(testRoot, { recursive: true, force: true });
+  });
+
+  test("1. Save and clear never write secret fields to project config (.pi/pi-voice.json)", () => {
+    const projDir = join(dirProj, ".pi");
+    mkdirSync(projDir, { recursive: true });
+    const projPath = join(projDir, "pi-voice.json");
+    writeFileSync(projPath, JSON.stringify({ dictationPreset: "careful" }));
+
+    updateConfig(dirProj, {
+      geminiApiKey: "AIzaSyTestSecret123",
+      geminiFallbackApiKey: "AIzaSyFallbackSecret456",
+      dictationPreset: "fast",
+    });
+
+    const userPath = getUserConfigPath();
+    expect(existsSync(userPath)).toBe(true);
+    const userContent = JSON.parse(readFileSync(userPath, "utf-8"));
+    expect(userContent.geminiApiKey).toBe("enc:TU9DS19FTkM6QUl6YVN5VGVzdFNlY3JldDEyMw==");
+    expect(userContent.geminiFallbackApiKey).toBe("enc:TU9DS19FTkM6QUl6YVN5RmFsbGJhY2tTZWNyZXQ0NTY=");
+
+    const projContent = JSON.parse(readFileSync(projPath, "utf-8"));
+    expect(projContent.dictationPreset).toBe("fast");
+    expect(projContent.geminiApiKey).toBeUndefined();
+    expect(projContent.geminiFallbackApiKey).toBeUndefined();
+
+    // Clear keys
+    updateConfig(dirProj, { geminiApiKey: "", geminiFallbackApiKey: "" });
+    const projContentAfterClear = JSON.parse(readFileSync(projPath, "utf-8"));
+    expect(projContentAfterClear.geminiApiKey).toBeUndefined();
+    expect(projContentAfterClear.geminiFallbackApiKey).toBeUndefined();
+
+    const userContentAfterClear = JSON.parse(readFileSync(userPath, "utf-8"));
+    expect(userContentAfterClear.geminiApiKey).toBeUndefined();
+    expect(userContentAfterClear.geminiFallbackApiKey).toBeUndefined();
+  });
+
+  test("2. Plaintext legacy project key migration is ordered and idempotent", () => {
+    const projDir = join(dirProj, ".pi");
+    mkdirSync(projDir, { recursive: true });
+    const projPath = join(projDir, "pi-voice.json");
+    writeFileSync(projPath, JSON.stringify({ geminiApiKey: "legacy-proj-secret-key", inputGain: 1.5 }));
+
+    const loaded = loadConfig(dirProj);
+    expect(loaded.geminiApiKey).toBe("legacy-proj-secret-key");
+
+    // Verify project file has project key removed
+    const projContent = JSON.parse(readFileSync(projPath, "utf-8"));
+    expect(projContent.geminiApiKey).toBeUndefined();
+    expect(projContent.inputGain).toBe(1.5);
+
+    // Verify user file has encrypted key
+    const userContent = JSON.parse(readFileSync(getUserConfigPath(), "utf-8"));
+    expect(userContent.geminiApiKey).toBe("enc:TU9DS19FTkM6bGVnYWN5LXByb2otc2VjcmV0LWtleQ==");
+
+    // Second call is idempotent
+    const reloaded = loadConfig(dirProj);
+    expect(reloaded.geminiApiKey).toBe("legacy-proj-secret-key");
+    const projContentSecond = JSON.parse(readFileSync(projPath, "utf-8"));
+    expect(projContentSecond.geminiApiKey).toBeUndefined();
+  });
+
+  test("3. basic_text and encryption failure write nothing to disk and abort key write", () => {
+    const origPlat = process.platform;
+    try {
+      Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+      setSafeStorageProvider({
+        isEncryptionAvailable: () => true,
+        encryptString: () => Buffer.from("weak"),
+        decryptString: () => "weak",
+        getSelectedStorageBackend: () => "basic_text",
+      });
+
+      expect(() => {
+        updateConfig(dirProj, { geminiApiKey: "do-not-save-plaintext" });
+      }).toThrow(SecretStoreError);
+
+      expect(existsSync(getUserConfigPath())).toBe(false);
+    } finally {
+      Object.defineProperty(process, "platform", { value: origPlat, configurable: true });
+    }
+
+    setSafeStorageProvider({
+      isEncryptionAvailable: () => true,
+      encryptString: () => { throw new Error("OS Keychain Error"); },
+      decryptString: () => "",
+      getSelectedStorageBackend: () => "gnome_libsecret",
+    });
+
+    expect(() => {
+      updateConfig(dirProj, { geminiApiKey: "do-not-save-keychain-fail" });
+    }).toThrow(SecretStoreError);
+
+    expect(existsSync(getUserConfigPath())).toBe(false);
+  });
+
+  test("4. Malformed ciphertext survives unrelated patch and reports decrypt error", () => {
+    const userPath = getUserConfigPath();
+    mkdirSync(join(testRoot, "home", ".config", "pi-voice"), { recursive: true });
+    writeFileSync(userPath, JSON.stringify({ geminiApiKey: "enc:BAD_CIPHERTEXT", inputGain: 1.0 }), { mode: 0o600 });
+
+    setSafeStorageProvider({
+      isEncryptionAvailable: () => true,
+      encryptString: (str: string) => Buffer.from(`MOCK_ENC:${str}`),
+      decryptString: () => { throw new Error("Corrupted payload"); },
+    });
+
+    const loaded = loadConfig(dirProj);
+    expect(loaded.geminiApiKey).toBeUndefined();
+    expect(loaded.geminiKeyError).toBe("Failed to decrypt API key");
+
+    updateConfig(dirProj, { inputGain: 1.8 });
+
+    const userContent = JSON.parse(readFileSync(userPath, "utf-8"));
+    expect(userContent.geminiApiKey).toBe("enc:BAD_CIPHERTEXT");
+
+    const reloaded = loadConfig(dirProj);
+    expect(reloaded.geminiApiKey).toBeUndefined();
+    expect(reloaded.geminiKeyError).toBe("Failed to decrypt API key");
+  });
+
+  test("5. Wrong-account decrypt differs from absent key in settings payload", () => {
+    const loadedAbsent = loadConfig(dirProj);
+    const settingsAbsent = getSanitizedSettingsConfig(loadedAbsent);
+    expect(settingsAbsent.hasGeminiKey).toBe(false);
+    expect(settingsAbsent.geminiKeyError).toBeUndefined();
+
+    const userPath = getUserConfigPath();
+    mkdirSync(join(testRoot, "home", ".config", "pi-voice"), { recursive: true });
+    writeFileSync(userPath, JSON.stringify({ geminiApiKey: "enc:WRONG_ACCOUNT_KEY" }), { mode: 0o600 });
+
+    setSafeStorageProvider({
+      isEncryptionAvailable: () => true,
+      encryptString: (str: string) => Buffer.from(`MOCK_ENC:${str}`),
+      decryptString: () => { throw new Error("Mac Keychain Access Denied"); },
+    });
+
+    const loadedError = loadConfig(dirProj);
+    const settingsError = getSanitizedSettingsConfig(loadedError);
+    expect(settingsError.hasGeminiKey).toBe(false);
+    expect(settingsError.geminiKeyError).toBe("Failed to decrypt API key");
+  });
+
+  test("6. Strict IPC patch schema rejects unknown keys, wrong types, nulls, and excessive data", () => {
+    expect(configPatchSchema.safeParse({ unknownField: 123 }).success).toBe(false);
+    expect(configPatchSchema.safeParse({ inputGain: "not-a-number" }).success).toBe(false);
+    expect(configPatchSchema.safeParse({ provider: null }).success).toBe(false);
+    expect(configPatchSchema.safeParse({ geminiApiKey: "a".repeat(1001) }).success).toBe(false);
+
+    expect(configPatchSchema.safeParse({ geminiApiKey: "" }).success).toBe(true);
+    expect(configPatchSchema.safeParse({ inputGain: 1.5 }).success).toBe(true);
+    expect(configPatchSchema.safeParse({}).success).toBe(true);
+  });
+
+  test("7. Valid clear behavior removes secret keys cleanly", () => {
+    updateConfig(dirProj, { geminiApiKey: "AIzaSyToClear" });
+    expect(loadConfig(dirProj).geminiApiKey).toBe("AIzaSyToClear");
+
+    updateConfig(dirProj, { geminiApiKey: "" });
+    const cleared = loadConfig(dirProj);
+    expect(cleared.geminiApiKey).toBeUndefined();
+    expect(cleared.geminiKeyError).toBeUndefined();
+  });
+
+  test("8. User config writes enforce mode 0600 on creation and rewrite", () => {
+    updateConfig(dirProj, { geminiApiKey: "AIzaSyPermTest" });
+    const userPath = getUserConfigPath();
+    expect(existsSync(userPath)).toBe(true);
+
+    const mode = statSync(userPath).mode & 0o777;
+    expect(mode).toBe(0o600);
+
+    updateConfig(dirProj, { inputGain: 1.4 });
+    const rewrittenMode = statSync(userPath).mode & 0o777;
+    expect(rewrittenMode).toBe(0o600);
   });
 });
