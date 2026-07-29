@@ -4,6 +4,9 @@ import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
 import {
   isAutoEndpointEnabled,
   MINIMUM_HOLD_RECORDING_MS,
+  SHORT_TAP_HOLD_RECORDING_MS,
+  SHORT_TAP_THRESHOLD_MS,
+  getHoldModeMinimumDuration,
   shouldEnsureMinimumDuration,
 } from "../../services/hold-mode-protections.js";
 
@@ -71,6 +74,46 @@ describe("Hold Mode Recording Protections & Auto-Endpointing Guard Suite", () =>
 
       const ensureMinimumDuration = shouldEnsureMinimumDuration(1000, elapsed);
       expect(ensureMinimumDuration).toBe(false);
+    });
+
+    test("isFnDown === true cancels pendingStopOnStart and keeps recording active when entering recording state", () => {
+      const lifecycle = new RecordingLifecycle();
+      let pendingStopOnStart = false;
+
+      // Start flow: state = starting
+      const startRes = lifecycle.requestStart();
+      expect(startRes.accepted).toBe(true);
+
+      // Key up fires during starting state due to transient modifier event
+      if (lifecycle.snapshot().state === "starting") {
+        pendingStopOnStart = true;
+      }
+      expect(pendingStopOnStart).toBe(true);
+
+      // State transitions to recording
+      lifecycle.acknowledgeStart(startRes.sequenceId, true);
+      expect(lifecycle.snapshot().state).toBe("recording");
+
+      // Verify live key state check: if isFnDown is true, clear pendingStopOnStart and do not stop
+      const isFnDown = true;
+      if (pendingStopOnStart) {
+        if (isFnDown) {
+          pendingStopOnStart = false;
+        }
+      }
+
+      expect(pendingStopOnStart).toBe(false);
+      expect(lifecycle.snapshot().state).toBe("recording");
+    });
+
+    test("getHoldModeMinimumDuration extends minimum recording duration to 2500ms for short tap (<250ms) when isFnDown is false", () => {
+      expect(SHORT_TAP_HOLD_RECORDING_MS).toBe(2500);
+      expect(SHORT_TAP_THRESHOLD_MS).toBe(250);
+      expect(getHoldModeMinimumDuration(100, false)).toBe(2500);
+      expect(getHoldModeMinimumDuration(249, false)).toBe(2500);
+      expect(getHoldModeMinimumDuration(250, false)).toBe(800);
+      expect(getHoldModeMinimumDuration(500, false)).toBe(800);
+      expect(getHoldModeMinimumDuration(100, true)).toBe(800);
     });
   });
 

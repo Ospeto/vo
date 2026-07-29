@@ -13,6 +13,7 @@ export interface IHotkeyService {
   start(binding: KeyBinding, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBinding?: KeyBinding): Promise<void>;
   replace(newBindingStr: string, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBindingStr?: string): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }>;
   stop(): Promise<void>;
+  isFnDown(): boolean;
 }
 
 export class HotkeyService implements IHotkeyService {
@@ -159,5 +160,9 @@ export class HotkeyService implements IHotkeyService {
     } catch (err) {
       logger.error({ err: String(err) }, "Error stopping HotkeyService");
     }
+  }
+
+  isFnDown(): boolean {
+    return this.fnHook?.isFnDown ?? false;
   }
 }
