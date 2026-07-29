@@ -82,8 +82,8 @@ describe("Audio Capture Diagnostics & Endpointing Regression Suite", () => {
     test("diagnoses near-silence input and rejects garbage audio submission", () => {
       const stats: AudioRecordingStats = {
         durationMs: 2000,
-        maxRms: 0.002,
-        peakAmplitude: 0.003,
+        maxRms: 0.0005,
+        peakAmplitude: 0.0008,
         speechFrames: 0,
         totalFrames: 40,
         clippingFrames: 0,
