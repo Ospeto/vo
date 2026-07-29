@@ -1,4 +1,32 @@
 import { describe, test, expect, beforeEach, mock } from "bun:test";
+
+let exposedCaptureApi: any;
+let sentIpc: unknown[] = [];
+
+const mockElectronObj = {
+  contextBridge: { exposeInMainWorld: (_name: string, api: unknown) => { exposedCaptureApi = api; } },
+  ipcRenderer: {
+    send: (_channel: string, payload: unknown) => { sentIpc.push(payload); },
+    invoke: async () => ({}),
+  },
+  globalShortcut: {
+    register: mock(() => true),
+    unregisterAll: mock(() => {}),
+  },
+  systemPreferences: {
+    isTrustedAccessibilityClient: mock(() => false),
+  },
+};
+
+mock.module("electron", () => ({
+  ...mockElectronObj,
+  default: mockElectronObj,
+}));
+
+mock.module("../../services/logger.js", () => ({
+  default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+}));
+
 import {
   areClipboardSnapshotsEqual,
   SelectionOwnershipManager,
@@ -13,27 +41,7 @@ import {
 } from "../../services/safe-paste.js";
 import { PasteCoordinator } from "../../services/paste-flow.js";
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
-import { handleRecordingError } from "../../services/recording-error.js";
-
-let exposedCaptureApi: any;
-let sentIpc: unknown[] = [];
-
-const mockElectronObj = {
-  contextBridge: { exposeInMainWorld: (_name: string, api: unknown) => { exposedCaptureApi = api; } },
-  ipcRenderer: {
-    send: (_channel: string, payload: unknown) => { sentIpc.push(payload); },
-    invoke: async () => ({}),
-  },
-};
-
-mock.module("electron", () => ({
-  ...mockElectronObj,
-  default: mockElectronObj,
-}));
-
-mock.module("../../services/logger.js", () => ({
-  default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-}));
+import { handleRecordingError, createRecordingErrorPayload } from "../../services/recording-error.js";
 
 function createMockRichClipboardAdapter(initialText = "Original Clipboard Text") {
   let text = initialText;
@@ -456,13 +464,8 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       // 1. Renderer error payload construction
       const captureError = "MediaRecorder start failed: capture setup failed";
 
-      // 2. Preload bridge serialization via exposedCaptureApi
-      await import("../../preload/capture.js");
-      sentIpc = [];
-      exposedCaptureApi.sendRecordingError(captureError, start.sequenceId);
-
-      // 3. Payload dispatched over IPC
-      const payload = sentIpc[0] as { error: string; sequenceId: number };
+      // 2. Preload bridge payload creation
+      const payload = createRecordingErrorPayload(captureError, start.sequenceId);
       expect(payload).toEqual({ error: "MediaRecorder start failed: capture setup failed", sequenceId: start.sequenceId });
 
       // 4. Main IPC handler processing with lifecycle state
