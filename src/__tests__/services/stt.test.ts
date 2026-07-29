@@ -15,18 +15,21 @@ const mockGenerateContent = mock(async () => ({
   text: "gemini transcription",
 }));
 let mockFallbackGenerateContent: any = null;
+const mockGeminiClient = {
+  models: {
+    generateContent: mockGenerateContent,
+  },
+};
+const mockGeminiFallbackClient = {
+  models: {
+    generateContent: (...args: any[]) => mockFallbackGenerateContent?.(...args),
+  },
+};
 
 mock.module("../../services/gemini-client.js", () => ({
-  getGeminiClient: () => ({
-    models: {
-      generateContent: mockGenerateContent,
-    },
-  }),
-  getGeminiFallbackClient: () => (mockFallbackGenerateContent ? {
-    models: {
-      generateContent: mockFallbackGenerateContent,
-    },
-  } : null),
+  getGeminiClient: () => mockGeminiClient,
+  getGeminiFallbackClient: () => (mockFallbackGenerateContent ? mockGeminiFallbackClient : null),
+  isFallbackClient: (client: unknown) => client === mockGeminiFallbackClient,
   _resetGeminiClient: () => {},
 }));
 
