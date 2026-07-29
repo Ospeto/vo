@@ -121,21 +121,14 @@ function setState(state: AppState, message?: string, options?: { usedPaidKey?: b
   sequenceId++;
   clearShortTapStopTimer();
 
-  const isPaidConfigured = Boolean(
-    currentConfig?.geminiFallbackApiKey && currentConfig.geminiFallbackApiKey.trim()
-  ) || currentConfig?.provider === "openai" || currentConfig?.provider === "elevenlabs";
-
-  let usedPaidKey = typeof options === "boolean" ? options : Boolean(options?.usedPaidKey);
-
   if (state === "starting" || state === "recording") {
-    if (!isPaidConfigured) {
-      activeUsedPaidKey = false;
-    }
+    activeUsedPaidKey = false;
   }
 
+  let usedPaidKey = typeof options === "boolean" ? options : Boolean(options?.usedPaidKey);
   if (usedPaidKey) {
     activeUsedPaidKey = true;
-  } else if (activeUsedPaidKey || isPaidConfigured) {
+  } else if (activeUsedPaidKey) {
     usedPaidKey = true;
   }
 
