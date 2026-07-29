@@ -97,7 +97,7 @@
 | **Dictation Hotkey** | `Ctrl + Cmd + Option + V` | Global shortcut to start/stop dictation |
 | **Dictation Mode** | `toggle` | Tap once to start and again to stop; set to `hold` to stop when the hotkey is released. Very short hold-mode taps (under 250ms) retain a 2500ms minimum capture window; longer holds retain an 800ms minimum. |
 | **Cancel Dictation** | `Escape` or the dictation hotkey | Cancels active recording or transcription and returns vo to idle without pasting the result |
-| **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text; preserves clipboard formats while capturing and restoring the selection |
+| **Edit Hotkey** | `Ctrl + Cmd + Option + E` | Global shortcut to transform selected text; preserves clipboard formats and restores the selection only when the clipboard is unchanged |
 | **Dictation Preset** | `careful` | Default proofreading and semantic reasoning preset |
 | **Auto-Translation** | `false` (OFF) | Optional translation mode; uses the configured target language |
 | **Target Translation Language** | `English` | Language used when auto-translation is enabled |

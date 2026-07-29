@@ -50,7 +50,7 @@ describe("PR-03 HUD & Capture Window Stall Fix Regression Suite", () => {
 
     test("stopRecording handles inactive recorder without hanging when startup completes or fails", () => {
       expect(captureTsContent).toContain("isStartingUp");
-      expect(captureTsContent).toContain("sendRecordingErrorOnce(generation, \"Recorder inactive\")");
+      expect(captureTsContent).toContain("sendRecordingErrorOnce(generation, sequenceId, \"Recorder inactive\")");
     });
 
     test("window beforeunload listener cleans up WebAudio, MediaRecorder, and timers", () => {
