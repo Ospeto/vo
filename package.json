@@ -25,7 +25,7 @@
     "dev:cli": "bun src/cli.ts",
     "build": "bun run build:native && bun run build:electron && bun run build:cli",
     "build:native": "bun scripts/build-native-paste-addon.ts",
-    "build:electron": "electron-vite build && mkdir -p out/src/assets out/assets out/renderer && cp -R src/assets/* out/src/assets/ && cp -R src/assets/* out/assets/ && cp src/renderer/hud.html out/renderer/hud.html",
+    "build:electron": "electron-vite build && mkdir -p out/src/assets out/renderer && cp -R src/assets/* out/src/assets/",
     "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
     "dist": "bun run build && electron-builder --mac",
     "dist:dmg": "bun run build && electron-builder --mac dmg",
@@ -45,7 +45,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.35.0",
     "@google/genai": "^1.40.0",
     "@mariozechner/pi-coding-agent": "^0.52.7",
     "@napi-rs/whisper": "^0.0.4",

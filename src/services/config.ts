@@ -6,7 +6,7 @@ import { z } from "zod";
 import logger from "./logger.js";
 import { loadPersistedVocabulary, savePersistedVocabulary, migrateVocabulary, backfillLegacyWhitespace } from "./vocabulary-service.js";
 import { validateDictionaryEntries } from "./dictionary-engine.js";
-import type { DictionaryEntry } from "../shared/types.js";
+import type { ChimeSoundChoice, DictionaryEntry, GeminiModelChoice } from "../shared/types.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -19,10 +19,8 @@ export interface KeyBinding {
 }
 
 export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
-export type GeminiModelChoice = "gemini-3.6-flash" | "gemini-3.5-flash-lite" | "gemini-3.1-flash-lite" | "gemini-3.1-pro" | "gemini-2.5-flash" | "gemini-2.5-pro";
 export type DictationPreset = "auto" | "careful" | "code_comment" | "fast" | "email_polish" | "burmese_written" | "translate";
 export type DictationMode = "toggle" | "hold";
-export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
 
 export interface PiVoiceConfig {
   key: KeyBinding;

@@ -50,17 +50,13 @@ mock.module("openai", () => {
   };
 });
 
-// Mock ElevenLabs
-const mockElevenLabsSTT = mock(async () => ({
-  text: "elevenlabs transcription",
-}));
-mock.module("@elevenlabs/elevenlabs-js", () => ({
-  ElevenLabsClient: class {
-    speechToText = {
-      convert: mockElevenLabsSTT,
-    };
-  },
-}));
+const originalFetch = globalThis.fetch;
+const mockElevenLabsSTT = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+  new Response(JSON.stringify({ text: "elevenlabs transcription" }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  }),
+);
 
 // Mock Whisper
 const mockWhisperFull = mock(async () => "whisper transcription");
@@ -102,6 +98,7 @@ describe("transcribe", () => {
     mockGenerateContent.mockClear();
     mockOpenAITranscription.mockClear();
     mockElevenLabsSTT.mockClear();
+    globalThis.fetch = mockElevenLabsSTT as unknown as typeof fetch;
     mockWhisperFull.mockClear();
   });
 
@@ -110,6 +107,7 @@ describe("transcribe", () => {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;
     }
+    globalThis.fetch = originalFetch;
   });
 
   test("transcribes with gemini provider", async () => {
@@ -156,6 +154,9 @@ describe("transcribe", () => {
     const result = await transcribe(data, "elevenlabs");
     expect(result).toBe("Elevenlabs transcription");
     expect(mockElevenLabsSTT).toHaveBeenCalledTimes(1);
+    const [url, init] = mockElevenLabsSTT.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.elevenlabs.io/v1/speech-to-text");
+    expect((init.body as FormData).get("model_id")).toBe("scribe_v2");
   });
 
   test("transcribes with local provider", async () => {
