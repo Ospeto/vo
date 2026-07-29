@@ -414,12 +414,16 @@ export function decryptSecret(encrypted?: string): string | undefined {
   return encrypted;
 }
 
+function getUserHome(): string {
+  return process.env.HOME || homedir();
+}
+
 export function getUserConfigPath(): string {
-  return join(homedir(), ".config", "pi-voice", "config.json");
+  return join(getUserHome(), ".config", "pi-voice", "config.json");
 }
 
 export function getProjConfigPath(cwd: string = process.cwd()): string | null {
-  if (!cwd || cwd === "/" || cwd === homedir()) {
+  if (!cwd || cwd === "/" || cwd === getUserHome()) {
     return null;
   }
   return join(cwd, ".pi", "pi-voice.json");
