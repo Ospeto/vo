@@ -161,7 +161,7 @@ export function diagnoseAudioStats(stats: AudioRecordingStats): AudioDiagnosticR
   if (stats.durationMs < 300) {
     return { status: "too_short", message: "Recording too short" };
   }
-  if (!stats.hasSpeech || stats.maxRms < 0.005) {
+  if (stats.maxRms < 0.001) {
     return { status: "near_silence", message: "No speech detected (silent audio)" };
   }
   if (stats.totalFrames > 0 && stats.clippingFrames / stats.totalFrames > 0.4) {
@@ -212,7 +212,7 @@ export function convertToMono(buffer: Float32Array, channels: number): Float32Ar
 /**
  * Analyzes Float32 PCM audio data for input quality issues:
  * - Unavailable / disconnected (empty buffer or explicitly flagged track)
- * - Extremely quiet / near-silence (maxAbs < 0.008 && rms < 0.003)
+ * - Extremely quiet / near-silence (maxAbs < 0.002 && rms < 0.001)
  * - Clipped input (maxAbs >= 0.99 && (clipRatio > 0.05 || clippedCount > 50))
  * - Valid input (normal speech or quiet-but-valid speech)
  */
@@ -274,7 +274,7 @@ export function analyzeAudioQuality(
     };
   }
 
-  if (maxAbs < 0.008 && rms < 0.003) {
+  if (maxAbs < 0.002 && rms < 0.001) {
     return {
       maxAbs,
       rms,

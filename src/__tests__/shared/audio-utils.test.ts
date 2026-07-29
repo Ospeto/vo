@@ -94,8 +94,8 @@ describe("diagnoseAudioStats", () => {
   test("diagnoses near-silence input", () => {
     const diag = diagnoseAudioStats({
       durationMs: 1500,
-      maxRms: 0.002,
-      peakAmplitude: 0.003,
+      maxRms: 0.0005,
+      peakAmplitude: 0.0008,
       speechFrames: 0,
       totalFrames: 30,
       clippingFrames: 0,
@@ -103,6 +103,19 @@ describe("diagnoseAudioStats", () => {
     });
     expect(diag.status).toBe("near_silence");
     expect(diag.message).toContain("No speech detected");
+  });
+
+  test("accepts valid audio when maxRms >= 0.001 even without speech detection flag", () => {
+    const diag = diagnoseAudioStats({
+      durationMs: 1500,
+      maxRms: 0.002,
+      peakAmplitude: 0.003,
+      speechFrames: 0,
+      totalFrames: 30,
+      clippingFrames: 0,
+      hasSpeech: false,
+    });
+    expect(diag.status).toBe("valid_speech");
   });
 
   test("diagnoses clipped audio", () => {
@@ -216,10 +229,10 @@ describe("analyzeAudioQuality", () => {
   });
 
   test("detects extremely quiet / near-silence input", () => {
-    // Very quiet digital noise floor (max peak 0.002, RMS ~0.0005)
+    // Very quiet digital noise floor (max peak < 0.002, RMS < 0.001)
     const quietSamples = new Float32Array(1000);
     for (let i = 0; i < 1000; i++) {
-      quietSamples[i] = (Math.random() - 0.5) * 0.004;
+      quietSamples[i] = (Math.random() - 0.5) * 0.002;
     }
     const metrics = analyzeAudioQuality(quietSamples);
     expect(metrics.status).toBe("extremely_quiet");

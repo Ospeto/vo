@@ -254,7 +254,7 @@ async function finalizeRecording(generation: number) {
     return;
   }
 
-  if (sessionMaxAbs < 0.008 && sessionMaxRms < 0.003) {
+  if (sessionMaxAbs < 0.002 && sessionMaxRms < 0.001) {
     window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
     audioChunks = [];
     return;

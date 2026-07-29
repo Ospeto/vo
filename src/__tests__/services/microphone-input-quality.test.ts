@@ -25,22 +25,22 @@ describe("Microphone Input Quality & Diagnostics Pass Suite", () => {
 
   describe("2. Quality Detection & Threshold Calibration", () => {
     test("preserves valid quiet speech without false rejection", () => {
-      // Soft speech signal (peak ~0.03, RMS ~0.01)
+      // Soft speech signal (peak ~0.005, RMS ~0.002)
       const quietSpeech = new Float32Array(1600);
       for (let i = 0; i < 1600; i++) {
-        quietSpeech[i] = Math.sin(i * 0.05) * 0.03;
+        quietSpeech[i] = Math.sin(i * 0.05) * 0.005;
       }
       const quality = analyzeAudioQuality(quietSpeech);
       expect(quality.status).toBe("valid");
-      expect(quality.maxAbs).toBeGreaterThanOrEqual(0.008);
-      expect(quality.rms).toBeGreaterThanOrEqual(0.003);
+      expect(quality.maxAbs).toBeGreaterThanOrEqual(0.002);
+      expect(quality.rms).toBeGreaterThanOrEqual(0.001);
     });
 
     test("detects extremely quiet / dead microphone input before STT", () => {
-      // Near-silent digital noise floor (peak < 0.004, RMS < 0.001)
+      // Near-silent digital noise floor (peak < 0.001, RMS < 0.0005)
       const deadMic = new Float32Array(1600);
       for (let i = 0; i < 1600; i++) {
-        deadMic[i] = (Math.random() - 0.5) * 0.002;
+        deadMic[i] = (Math.random() - 0.5) * 0.001;
       }
       const quality = analyzeAudioQuality(deadMic);
       expect(quality.status).toBe("extremely_quiet");
