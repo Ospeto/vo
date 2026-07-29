@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 // Mock logger to prevent file I/O during tests
@@ -279,6 +279,54 @@ describe("loadConfig", () => {
 
     const updatedRaw = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(updatedRaw.geminiModel).toBe("gemini-3.1-flash-lite");
+  });
+
+  test("repairs global and project configs independently", () => {
+    const globalPath = getUserConfigPath();
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    const projectPath = join(piDir, "pi-voice.json");
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    writeFileSync(globalPath, JSON.stringify({ geminiModel: "gemini-1.5-flash", geminiApiKey: "secret" }));
+    writeFileSync(projectPath, JSON.stringify({ dictationPreset: "code_comment" }));
+
+    expect(loadConfig(tmpDir).geminiModel).toBe("gemini-3.1-flash-lite");
+    expect(JSON.parse(readFileSync(projectPath, "utf-8"))).toEqual({ dictationPreset: "code_comment" });
+    expect(JSON.parse(readFileSync(globalPath, "utf-8")).geminiApiKey).toBe("secret");
+  });
+
+  test("uses valid global settings after recovering a corrupt project config", () => {
+    const globalPath = getUserConfigPath();
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    writeFileSync(globalPath, JSON.stringify({ provider: "openai", inputGain: 1.5 }));
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    writeFileSync(join(piDir, "pi-voice.json"), "broken");
+
+    const config = loadConfig(tmpDir);
+    expect(config.provider).toBe("openai");
+    expect(config.inputGain).toBe(1.5);
+  });
+
+  test("falls back to the legacy user config when XDG config is absent", () => {
+    const legacyPath = join(tmpDir, "home", ".config", "pi-voice", "config.json");
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    process.env.XDG_CONFIG_HOME = join(tmpDir, "xdg");
+    writeFileSync(legacyPath, JSON.stringify({ provider: "openai" }));
+
+    expect(loadConfig(tmpDir).provider).toBe("openai");
+  });
+
+  test("keeps prior corrupt backups", () => {
+    const piDir = join(tmpDir, ".pi");
+    mkdirSync(piDir, { recursive: true });
+    const brokenPath = join(piDir, "pi-voice.json");
+    writeFileSync(brokenPath, "first");
+    loadConfig(tmpDir);
+    writeFileSync(brokenPath, "second");
+    loadConfig(tmpDir);
+
+    expect(readdirSync(piDir).filter((name) => name.startsWith("config.json.corrupt")).length).toBe(2);
   });
 
   test("auto-heals invalid provider and invalid key binding without throwing", () => {

@@ -423,6 +423,10 @@ export function getUserConfigPath(): string {
   return join(baseDir, "pi-voice", "config.json");
 }
 
+function getLegacyUserConfigPath(): string {
+  return join(getUserHome(), ".config", "pi-voice", "config.json");
+}
+
 export function getProjConfigPath(cwd: string = process.cwd()): string | null {
   if (!cwd || cwd === "/" || cwd === getUserHome()) {
     return null;
@@ -445,9 +449,62 @@ const LEGACY_MODEL_MAP: Record<string, GeminiModelChoice> = {
   "gemini-2.0-flash": "gemini-2.5-flash",
 };
 
+function backupCorruptConfig(filePath: string): void {
+  const basePath = join(dirname(filePath), "config.json.corrupt");
+  let backupPath = `${basePath}.bak`;
+  let suffix = 0;
+  while (existsSync(backupPath)) {
+    suffix += 1;
+    backupPath = `${basePath}.${Date.now()}${suffix}.bak`;
+  }
+  renameSync(filePath, backupPath);
+}
+
+function repairConfigJson(raw: Record<string, unknown>): { json: Record<string, unknown>; changed: boolean } {
+  const json = { ...raw };
+  let changed = false;
+
+  if (typeof json.geminiModel === "string") {
+    const rawModel = json.geminiModel;
+    if (LEGACY_MODEL_MAP[rawModel]) {
+      json.geminiModel = LEGACY_MODEL_MAP[rawModel];
+      changed = true;
+    } else if (rawModel.startsWith("gemini-1.")) {
+      json.geminiModel = "gemini-3.1-flash-lite";
+      changed = true;
+    } else if (rawModel.startsWith("gemini-2.0")) {
+      json.geminiModel = "gemini-2.5-flash";
+      changed = true;
+    }
+  }
+
+  if (json.dictationPreset === "translate") {
+    json.dictationPreset = "careful";
+    if (json.translateEnabled === undefined) json.translateEnabled = true;
+    changed = true;
+  }
+
+  let result = configFileSchema.safeParse(json);
+  while (!result.success) {
+    const fields = new Set(result.error.issues.map((issue) => issue.path[0]).filter((field): field is string => typeof field === "string"));
+    if (fields.size === 0) break;
+    for (const field of fields) {
+      delete json[field];
+      changed = true;
+    }
+    result = configFileSchema.safeParse(json);
+  }
+
+  return { json, changed };
+}
+
 export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const defaults = defaultConfig();
-  const userConfigPath = getUserConfigPath();
+  const canonicalUserConfigPath = getUserConfigPath();
+  const legacyUserConfigPath = getLegacyUserConfigPath();
+  const userConfigPath = existsSync(canonicalUserConfigPath) || canonicalUserConfigPath === legacyUserConfigPath
+    ? canonicalUserConfigPath
+    : legacyUserConfigPath;
   const projConfigPath = getProjConfigPath(cwd);
 
   let globalJson: Record<string, unknown> = {};
@@ -468,12 +525,10 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
         "Corrupt user config file, backing up to config.json.corrupt.bak and auto-recovering to defaults",
       );
       try {
-        const backupPath = join(dirname(userConfigPath), "config.json.corrupt.bak");
-        renameSync(userConfigPath, backupPath);
+        backupCorruptConfig(userConfigPath);
       } catch (backupErr: any) {
         logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt user config file");
       }
-      return defaults;
     }
   }
 
@@ -495,12 +550,10 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
         "Corrupt project config file, backing up to config.json.corrupt.bak and auto-recovering to defaults",
       );
       try {
-        const backupPath = join(dirname(projConfigPath), "config.json.corrupt.bak");
-        renameSync(projConfigPath, backupPath);
+        backupCorruptConfig(projConfigPath);
       } catch (backupErr: any) {
         logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt project config file");
       }
-      return defaults;
     }
   }
 
@@ -510,62 +563,22 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   }
 
   const primaryPath = projExists ? projConfigPath! : userConfigPath;
-  let mergedRaw: Record<string, any> = { ...globalJson, ...projJson };
-  let needsSave = false;
-
-  // Migrate legacy model names
-  if (typeof mergedRaw.geminiModel === "string") {
-    const rawModel = mergedRaw.geminiModel as string;
-    if (LEGACY_MODEL_MAP[rawModel]) {
-      mergedRaw.geminiModel = LEGACY_MODEL_MAP[rawModel];
-      needsSave = true;
-    } else if (rawModel.startsWith("gemini-1.")) {
-      mergedRaw.geminiModel = "gemini-3.1-flash-lite";
-      needsSave = true;
-    } else if (rawModel.startsWith("gemini-2.0")) {
-      mergedRaw.geminiModel = "gemini-2.5-flash";
-      needsSave = true;
-    }
+  const repairedGlobal = repairConfigJson(globalJson);
+  const repairedProject = repairConfigJson(projJson);
+  globalJson = repairedGlobal.json;
+  projJson = repairedProject.json;
+  try {
+    if (repairedGlobal.changed) atomicWriteJson(userConfigPath, globalJson);
+    if (repairedProject.changed && projConfigPath) atomicWriteJson(projConfigPath, projJson);
+  } catch (saveErr: any) {
+    logger.warn({ err: saveErr?.message }, "Failed to auto-heal config to disk");
   }
 
-  // Migrate legacy "translate" preset
-  if (mergedRaw.dictationPreset === "translate") {
-    mergedRaw.dictationPreset = "careful";
-    if (mergedRaw.translateEnabled === undefined) {
-      mergedRaw.translateEnabled = true;
-    }
-    needsSave = true;
-  }
-
-  // Validate merged raw against schema
+  const mergedRaw: Record<string, unknown> = { ...globalJson, ...projJson };
   let result = configFileSchema.safeParse(mergedRaw);
-  if (!result.success) {
-    needsSave = true;
-    logger.warn(
-      { issues: result.error.issues },
-      "Invalid config fields detected, stripping invalid properties and auto-healing",
-    );
-    for (const issue of result.error.issues) {
-      const field = issue.path[0];
-      if (typeof field === "string" || typeof field === "number") {
-        delete mergedRaw[field];
-      }
-    }
-    result = configFileSchema.safeParse(mergedRaw);
-  }
 
   if (!result.success) {
-    mergedRaw = {};
-    result = configFileSchema.safeParse(mergedRaw);
-  }
-
-  if (needsSave && primaryPath) {
-    try {
-      atomicWriteJson(primaryPath, mergedRaw);
-      logger.info({ configPath: primaryPath }, "Repaired valid configuration auto-healed to disk");
-    } catch (saveErr: any) {
-      logger.warn({ err: saveErr?.message }, "Failed to auto-heal config to disk");
-    }
+    result = configFileSchema.safeParse({});
   }
 
   const {
@@ -770,13 +783,14 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
 
 export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
   const userConfigPath = getUserConfigPath();
+  const existingUserConfigPath = existsSync(userConfigPath) ? userConfigPath : getLegacyUserConfigPath();
   const projConfigPath = getProjConfigPath(cwd);
   const hasProjConfig = projConfigPath ? existsSync(projConfigPath) : false;
 
   let existingUserJson: Record<string, unknown> = {};
-  if (existsSync(userConfigPath)) {
+  if (existsSync(existingUserConfigPath)) {
     try {
-      const content = readFileSync(userConfigPath, "utf-8");
+      const content = readFileSync(existingUserConfigPath, "utf-8");
       existingUserJson = JSON.parse(content);
     } catch {}
   }
