@@ -108,7 +108,11 @@
 | **Symbol Scanner** | `true` (ON) | Workspace symbol auto-extraction toggle |
 | **Audio Chimes** | `true` (Enabled) | Start & completion sound chimes |
 
-Configuration settings are stored atomically at `~/.config/pi-voice/config.json`.
+Configuration settings are stored atomically at the canonical user path
+`~/.config/pi-voice/config.json`, so they survive app updates and launches from
+`/Applications/vo.app`. When a project already contains `.pi/pi-voice.json`,
+that file is loaded as a project-local override and setting changes update both
+files; the project file is never created solely by saving settings.
 
 ---
 

@@ -8,14 +8,22 @@ import { _resetGeminiClient } from "../../services/gemini-client.js";
 
 describe("VO Translation Mode State & Target Language Preservation Suite", () => {
   let tempDir: string;
+  let origXdg: string | undefined;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "pi-voice-trans-test-"));
+    origXdg = process.env.XDG_CONFIG_HOME;
+    process.env.XDG_CONFIG_HOME = join(tempDir, "global-config");
     process.env.GEMINI_API_KEY = "AIzaSyTestKey_ForTranslationStateTest_12345";
     _resetGeminiClient();
   });
 
   afterEach(() => {
+    if (origXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = origXdg;
+    }
     _resetGeminiClient();
     try {
       rmSync(tempDir, { recursive: true, force: true });
