@@ -1121,4 +1121,6 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {});
-app.on("before-quit", () => gracefulShutdown());
+app.on("before-quit", () => {
+  if (gotSingleInstanceLock) gracefulShutdown();
+});
