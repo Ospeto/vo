@@ -5,7 +5,7 @@ This canonical implementation plan specifies the complete architecture, lifecycl
 
 ---
 
-## 1. Architectural Architecture & Two-Window Isolation
+## 1. Architectural Architecture & Renderer Isolation
 
 ```mermaid
 graph TD
@@ -26,13 +26,18 @@ graph TD
         Meter[RMS Metering @ 20Hz]
     end
 
-    subgraph Window 2: Frameless Popover Window (360x480)
+    subgraph Window 2: Frameless Settings Popover Window (390x560)
         PopWin[Popover BrowserWindow]
         PopoverUI[Native macOS SF Pro Glass UI]
         GainSlider[Gain Slider]
         ModelSelector[Gemini Model Selector]
         HotkeyRecorder[Hotkey Recorder UX]
         StateBadge[Status Badge & Aria-Live]
+    end
+
+    subgraph Window 3: Frameless HUD Window
+        HudWin[HUD BrowserWindow]
+        HudUI[Recording Status HUD]
     end
 
     Tray[macOS Menu Bar Tray Icon] -->|Click Event| Main
@@ -42,14 +47,17 @@ graph TD
     PopWin -->|IPC: Settings Patch| Main
     Main -->|IPC: STATE_SNAPSHOT / STATE_CHANGED| CapWin
     Main -->|IPC: STATE_SNAPSHOT / STATE_CHANGED| PopWin
+    Main -->|IPC: STATE_CHANGED / AUDIO_LEVEL_UPDATE| HudWin
     Main -->|Update Config| ConfigService
     Main -->|Transcribe API| Gemini[Gemini STT Service]
 ```
 
 ### Architectural Principles:
-1. **Two-Window Model**:
+1. **Three-Renderer Model**:
    - **Capture Window**: Hidden `BrowserWindow` dedicated strictly to audio stream capture, Web Audio DSP (`GainNode` + `DynamicsCompressor`), and `MediaRecorder`.
-   - **Popover Window**: `360px × 480px` frameless popover window for UI interactions.
+   - **Settings Window**: `390px × 560px` frameless popover window for UI interactions.
+   - **HUD Window**: Frameless status window dedicated to recording/transcription feedback.
+   - Each renderer receives only its role-scoped `window.piVoice` preload API.
 2. **Main Process Authority**:
    - Main process maintains the canonical recording state, hotkeys, config, model selection, and safe paste execution.
    - Opening, closing, reloading, or blurring the popover window **never** stops recording.
@@ -154,7 +162,7 @@ MediaStream
 ## 7. IPC Security & Sender Validation
 
 1. **Strict Channel Handlers**: Use `ipcMain.handle` and `ipcRenderer.invoke` exclusively for request/response methods.
-2. **Sender Identity Verification**: Every `ipcMain` handler validates `event.sender.id` against authorized `captureWindow.webContents.id` or `popoverWindow.webContents.id`.
+2. **Sender Identity Verification**: Every `ipcMain` handler validates the sender against the role-scoped renderer window, main-frame URL, expected page path, and channel allowlist; remote origins and subframes are rejected.
 3. **Payload Sanitization**: Validate all payloads via Zod schemas. Reject unknown senders, malformed payloads, and audio payloads exceeding max byte limits (e.g. 50MB).
 4. **Zero Privilege Exposure**: Renderer processes receive **no** access to `fs`, `child_process`, `clipboard`, `shell`, or direct `globalShortcut` APIs.
 
@@ -244,7 +252,7 @@ Helper functions are placed in production modules (`src/services/`) and imported
 - [ ] Gemini model fallback ordering and explicit parameter propagation (`src/__tests__/services/stt.test.ts`).
 - [ ] Hotkey replacement, validation, and rollback on failure (`src/__tests__/services/hotkey.test.ts`).
 - [ ] State machine sequence IDs & capture renderer crash recovery (`src/__tests__/services/state-machine.test.ts`).
-- [ ] IPC sender validation & payload schema enforcement (`src/__tests__/services/ipc-security.test.ts`).
+- [x] IPC sender validation, role allowlists, and payload sanitization (`src/__tests__/services/ipc-policy.test.ts`).
 - [ ] Web Audio gain graph & RMS metering semantics (`src/__tests__/audio/gain-meter.test.ts`).
 - [ ] Popover geometry math & multi-monitor display boundary flipping (`src/__tests__/services/popover-position.test.ts`).
 

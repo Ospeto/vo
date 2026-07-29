@@ -3,16 +3,16 @@
 > Status: Saved in project plan directory
 > Goal: Craft prompt → get user approval → delegate to teamwork_preview
 
-Implement a native macOS Menu Bar (Tray) GUI interface for `pi-voice` adhering to a two-window architecture (hidden capture window + 360x480 popover window), canonical 8-state lifecycle state machine with sequence IDs, HotkeyService single ownership, atomic configuration persistence, Web Audio DSP gain/metering graph, IPC sender security validation, and macOS native SF Pro translucency UI design.
+Implement a native macOS Menu Bar (Tray) GUI interface for `pi-voice` adhering to a three-renderer architecture (hidden capture window, settings popover window, and status HUD), canonical 8-state lifecycle state machine with sequence IDs, HotkeyService single ownership, atomic configuration persistence, Web Audio DSP gain/metering graph, IPC sender security validation, and macOS native SF Pro translucency UI design.
 
 Working directory: /Users/macbookair/pi_voice_gemini/pi-voice
 Integrity mode: development
 
 ## Requirements
 
-### R1. Two-Window Isolation Architecture
+### R1. Renderer Isolation Architecture
 - Separate audio capture into a hidden `BrowserWindow` (`MediaStream`, `GainNode`, `DynamicsCompressor`, `MediaRecorder`).
-- Implement popover UI in a separate `360px × 480px` frameless popover `BrowserWindow` with native macOS `vibrancy: "under-window"`.
+- Implement settings UI in a separate `390px × 560px` frameless popover `BrowserWindow`, plus an independent status HUD `BrowserWindow`, with native macOS translucency.
 - Main process remains authoritative for state, configuration, hotkeys, model selection, and safe paste.
 - Toggling, opening, closing, or blurring popover window must never interrupt active audio recording.
 
@@ -61,7 +61,7 @@ Integrity mode: development
 ## Acceptance Criteria
 
 ### Architecture & Lifecycle State
-- [ ] Hidden capture window handles audio recording while 360x480 popover UI runs independently.
+- [ ] Hidden capture window handles audio recording while the settings popover and status HUD run independently with role-scoped preload APIs.
 - [ ] Closing or blurring popover window does not stop recording.
 - [ ] State transitions emit `STATE_CHANGED` with incrementing `sequenceId`.
 

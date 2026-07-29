@@ -1,4 +1,10 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, clipboard, Notification, type IpcMainInvokeEvent } from "electron";
+import {
+  validateIpcSenderPolicy,
+  getSanitizedSettingsConfig,
+  getCaptureConfigPayload,
+  applyWindowSecurityGuards,
+} from "./services/ipc-policy.js";
 import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -7,7 +13,7 @@ import { loadConfig, updateConfig, parseKeyBinding, formatKeyBinding, defaultCon
 import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
-import { IPC, type AppState, type StatePayload } from "./shared/types.js";
+import { IPC, type AppState, type StatePayload, type RendererRole } from "./shared/types.js";
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
 import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonResponse } from "./services/daemon-ipc.js";
 import { HotkeyService } from "./services/hotkey-service.js";
@@ -380,11 +386,13 @@ function createCaptureWindow() {
     focusable: false,
     skipTaskbar: true,
     webPreferences: {
-      preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
+      preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  applyWindowSecurityGuards(captureWindow);
 
   captureWindow.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url)));
 
@@ -413,11 +421,13 @@ function createPopoverWindow() {
     vibrancy: "popover",
     visualEffectState: "active",
     webPreferences: {
-      preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
+      preload: fileURLToPath(new URL("../preload/settings.cjs", import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  applyWindowSecurityGuards(popoverWindow);
 
   popoverWindow.loadFile(fileURLToPath(new URL("../renderer/index.html", import.meta.url)));
 
@@ -455,11 +465,13 @@ function createHudWindow() {
     hasShadow: false,
     movable: true,
     webPreferences: {
-      preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
+      preload: fileURLToPath(new URL("../preload/hud.cjs", import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  applyWindowSecurityGuards(hudWindow);
 
   hudWindow.loadFile(fileURLToPath(new URL("../renderer/hud.html", import.meta.url)));
 
@@ -603,17 +615,21 @@ function createTray() {
   });
 }
 
-function validateIpcSender(event: IpcMainInvokeEvent | Electron.IpcMainEvent, allowHud = false): boolean {
-  const senderId = event.sender.id;
-  const isCapture = captureWindow && senderId === captureWindow.webContents.id;
-  const isPopover = popoverWindow && senderId === popoverWindow.webContents.id;
-  const isHud = allowHud && hudWindow && senderId === hudWindow.webContents.id;
-  return Boolean(isCapture || isPopover || isHud);
+function validateIpcSender(
+  event: IpcMainInvokeEvent | Electron.IpcMainEvent,
+  channel: string
+): { role: RendererRole; window: BrowserWindow } | null {
+  try {
+    return validateIpcSenderPolicy(event, channel, popoverWindow, captureWindow, hudWindow);
+  } catch (err: any) {
+    logger.warn({ channel, err: err?.message }, "Denied unauthorized IPC sender");
+    return null;
+  }
 }
 
 function setupIpcHandlers() {
   ipcMain.on(IPC.RECORDING_DATA, async (event, data: ArrayBuffer) => {
-    if (!validateIpcSender(event)) return;
+    if (!validateIpcSender(event, IPC.RECORDING_DATA)) return;
     if (currentState !== "recording" && currentState !== "stopping") return;
 
     if (data.byteLength < 1000) {
@@ -734,12 +750,12 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on(IPC.CANCEL_DICTATION, (event) => {
-    if (!validateIpcSender(event, true)) return;
+    if (!validateIpcSender(event, IPC.CANCEL_DICTATION)) return;
     cancelDictation("Cancelled via user interface");
   });
 
   ipcMain.on(IPC.RECORDING_ERROR, (event, error: string) => {
-    if (!validateIpcSender(event)) return;
+    if (!validateIpcSender(event, IPC.RECORDING_ERROR)) return;
     logger.warn({ error }, "Recording warning");
     pasteCoordinator.invalidate();
     recordingLifecycle.reset();
@@ -748,18 +764,21 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
-    if (!validateIpcSender(event)) return;
+    if (!validateIpcSender(event, IPC.AUDIO_LEVEL_UPDATE)) return;
     popoverWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
     hudWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
   });
 
   ipcMain.handle(IPC.GET_CONFIG, (event) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
-    return currentConfig;
+    const sender = validateIpcSenderPolicy(event, IPC.GET_CONFIG, popoverWindow, captureWindow, hudWindow);
+    if (sender.role === "capture") {
+      return getCaptureConfigPayload(currentConfig);
+    }
+    return getSanitizedSettingsConfig(currentConfig);
   });
 
   ipcMain.handle(IPC.SAVE_CONFIG, (event, patch) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.SAVE_CONFIG, popoverWindow, captureWindow, hudWindow);
     currentConfig = updateConfig(workingCwd, patch);
     if (patch.geminiApiKey !== undefined) {
       process.env.GEMINI_API_KEY = patch.geminiApiKey.trim();
@@ -768,34 +787,34 @@ function setupIpcHandlers() {
     if (patch.inputGain !== undefined) {
       captureWindow?.webContents.send(IPC.GAIN_UPDATE, currentConfig.inputGain);
     }
-    return currentConfig;
+    return getSanitizedSettingsConfig(currentConfig);
   });
 
   ipcMain.handle(IPC.GET_HISTORY, (event) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.GET_HISTORY, popoverWindow, captureWindow, hudWindow);
     return getHistoryEntries();
   });
 
   ipcMain.handle(IPC.CLEAR_HISTORY, (event) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.CLEAR_HISTORY, popoverWindow, captureWindow, hudWindow);
     clearHistory();
     return [];
   });
 
   ipcMain.handle(IPC.TOGGLE_DICTATION, (event) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.TOGGLE_DICTATION, popoverWindow, captureWindow, hudWindow);
     handleHotkeyDown();
     return { success: true };
   });
 
   ipcMain.handle(IPC.PREVIEW_CHIME, (event, soundName: string) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.PREVIEW_CHIME, popoverWindow, captureWindow, hudWindow);
     playSound(soundName);
     return { success: true };
   });
 
   ipcMain.handle(IPC.TEST_API_KEY, async (event, keyToTest?: string) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.TEST_API_KEY, popoverWindow, captureWindow, hudWindow);
     const targetKey = keyToTest || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!targetKey) {
       return { success: false, error: "No API Key provided" };
@@ -824,7 +843,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.REGISTER_HOTKEY, async (event, newKeyStr: string) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.REGISTER_HOTKEY, popoverWindow, captureWindow, hudWindow);
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
     const res = await hotkeyService.replace(
@@ -847,7 +866,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.REGISTER_EDIT_HOTKEY, async (event, newKeyStr: string) => {
-    if (!validateIpcSender(event)) throw new Error("Unauthorized sender");
+    validateIpcSenderPolicy(event, IPC.REGISTER_EDIT_HOTKEY, popoverWindow, captureWindow, hudWindow);
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
     try {
@@ -1115,6 +1134,25 @@ app.whenReady().then(async () => {
 
   app.name = "vo";
   app.setName("vo");
+
+  app.on("web-contents-created", (_event, contents) => {
+    contents.on("will-navigate", (ev, url) => {
+      ev.preventDefault();
+      logger.warn({ url }, "Blocked unexpected webContents navigation");
+    });
+
+    contents.setWindowOpenHandler(({ url }) => {
+      logger.warn({ url }, "Blocked unexpected webContents window creation");
+      return { action: "deny" };
+    });
+
+    if (typeof (contents as any).on === "function") {
+      (contents as any).on("will-attach-webview", (ev: any) => {
+        ev.preventDefault();
+        logger.warn("Blocked unexpected webContents webview attachment");
+      });
+    }
+  });
 
   if (app.dock) {
     app.dock.hide();

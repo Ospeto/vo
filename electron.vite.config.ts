@@ -20,9 +20,13 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
+          settings: resolve(__dirname, "src/preload/settings.ts"),
+          capture: resolve(__dirname, "src/preload/capture.ts"),
+          hud: resolve(__dirname, "src/preload/hud.ts"),
           index: resolve(__dirname, "src/preload.ts"),
         },
         output: {
+          entryFileNames: "[name].cjs",
           format: "cjs",
         },
       },

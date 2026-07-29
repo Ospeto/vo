@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type SettingsElectronAPI, type StatePayload } from "./shared/types.js";
-import { subscribe } from "./preload/shared.js";
-import type { PiVoiceConfigPatch } from "./services/config.js";
+import { IPC, type SettingsElectronAPI, type StatePayload } from "../shared/types.js";
+import { subscribe } from "./shared.js";
+import type { PiVoiceConfigPatch } from "../services/config.js";
 
 const api: SettingsElectronAPI = {
   getConfig: () => ipcRenderer.invoke(IPC.GET_CONFIG),
@@ -21,5 +21,3 @@ const api: SettingsElectronAPI = {
 };
 
 contextBridge.exposeInMainWorld("piVoice", api);
-
-export type PiVoiceElectronAPI = typeof api;

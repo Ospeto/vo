@@ -375,7 +375,7 @@ function updateModelPills(selectedModel: string) {
 }
 
 async function initUI() {
-  const config = await window.electronIPC?.getConfig();
+  const config = await window.piVoice?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "careful");
     updateModelPills(config.geminiModel || "gemini-3.6-flash");
@@ -411,14 +411,20 @@ async function initUI() {
     if (config.appPresetMappings) {
       currentAppMappings = { ...config.appPresetMappings };
     }
-    if (config.geminiApiKey) {
-      const keys = String(config.geminiApiKey).split(/[,\n]+/).map((k) => k.trim());
-      if (geminiApiKey1Input && keys[0]) geminiApiKey1Input.value = keys[0];
-      if (geminiApiKey2Input && keys[1]) geminiApiKey2Input.value = keys[1];
-      if (geminiApiKey3Input && keys[2]) geminiApiKey3Input.value = keys[2];
+    if (geminiApiKey1Input) {
+      geminiApiKey1Input.value = "";
+      geminiApiKey1Input.placeholder = config?.hasGeminiKey
+        ? "Primary Key 1 (Configured - write to replace)"
+        : "Primary Key 1 (AIzaSy...)";
     }
+    if (geminiApiKey2Input) geminiApiKey2Input.value = "";
+    if (geminiApiKey3Input) geminiApiKey3Input.value = "";
+
     if (geminiFallbackApiKeyInput) {
-      geminiFallbackApiKeyInput.value = config.geminiFallbackApiKey || "";
+      geminiFallbackApiKeyInput.value = "";
+      geminiFallbackApiKeyInput.placeholder = config?.hasGeminiFallbackKey
+        ? "Paid Gemini API Key (Configured - write to replace)"
+        : "Paste Paid Gemini API Key (Emergency Failover Backup)";
     }
     if (chimeStartSelect && config.chimeSoundStart) {
       chimeStartSelect.value = config.chimeSoundStart;
@@ -448,7 +454,7 @@ async function initUI() {
 
   if (micDeviceSelect) {
     micDeviceSelect.addEventListener("change", async () => {
-      await window.electronIPC?.saveConfig({ audioDeviceId: micDeviceSelect.value });
+      await window.piVoice?.saveConfig({ audioDeviceId: micDeviceSelect.value });
     });
   }
 
@@ -460,12 +466,12 @@ async function initUI() {
         currentAppMappings[name] = preset as DictationPreset;
         if (newAppNameInput) newAppNameInput.value = "";
         renderAppRules();
-        await window.electronIPC?.saveConfig({ appPresetMappings: currentAppMappings });
+        await window.piVoice?.saveConfig({ appPresetMappings: currentAppMappings });
       }
     });
   }
 
-  const snapshot = await window.electronIPC?.getStateSnapshot();
+  const snapshot = await window.piVoice?.getStateSnapshot();
   if (snapshot) {
     updateStatusBadge(snapshot.state, snapshot.message);
   }
@@ -567,7 +573,7 @@ async function saveDictionaryEntries(nextEntries: DictionaryEntry[], highlightId
     return false;
   }
   try {
-    const config = await window.electronIPC?.saveConfig({ dictionaryEntries: nextEntries });
+    const config = await window.piVoice?.saveConfig({ dictionaryEntries: nextEntries });
     dictionaryEntries = (config?.dictionaryEntries || nextEntries) as DictionaryEntry[];
     renderDictionaryEntries(highlightId);
     return true;
@@ -718,7 +724,7 @@ export async function addPersonName(name: string) {
 
   if (!currentCustomVocab.includes(cleanName)) {
     currentCustomVocab.push(cleanName);
-    await window.electronIPC?.saveConfig({ customVocabulary: currentCustomVocab });
+    await window.piVoice?.saveConfig({ customVocabulary: currentCustomVocab });
     renderPersonNames();
   }
   if (personNameInput) personNameInput.value = "";
@@ -727,7 +733,7 @@ export async function addPersonName(name: string) {
 export async function removePersonName(index: number) {
   if (index >= 0 && index < currentCustomVocab.length) {
     currentCustomVocab.splice(index, 1);
-    await window.electronIPC?.saveConfig({ customVocabulary: currentCustomVocab });
+    await window.piVoice?.saveConfig({ customVocabulary: currentCustomVocab });
     renderPersonNames();
   }
 }
@@ -776,7 +782,7 @@ export async function addVocabTerm(preset: string, term: string) {
   if (!list.includes(cleanTerm)) {
     list.push(cleanTerm);
     currentPresetVocabMap[preset] = list;
-    await window.electronIPC?.saveConfig({ presetVocabulary: currentPresetVocabMap });
+    await window.piVoice?.saveConfig({ presetVocabulary: currentPresetVocabMap });
     renderVocabTags();
   }
   if (vocabInput) vocabInput.value = "";
@@ -787,7 +793,7 @@ export async function removeVocabTerm(preset: string, index: number) {
   if (index >= 0 && index < list.length) {
     list.splice(index, 1);
     currentPresetVocabMap[preset] = list;
-    await window.electronIPC?.saveConfig({ presetVocabulary: currentPresetVocabMap });
+    await window.piVoice?.saveConfig({ presetVocabulary: currentPresetVocabMap });
     renderVocabTags();
   }
 }
@@ -796,7 +802,7 @@ export async function renderHistory() {
   const historyContainer = document.getElementById("historyContainer");
   if (!historyContainer) return;
 
-  const history: HistoryEntry[] = (await window.electronIPC?.getHistory()) || [];
+  const history: HistoryEntry[] = (await window.piVoice?.getHistory()) || [];
 
   if (history.length === 0) {
     const emptyDiv = document.createElement("div");
@@ -861,7 +867,7 @@ export async function renderHistory() {
   historyContainer.appendChild(fragment);
 }
 
-window.electronIPC?.onStateChanged((payload: StatePayload) => {
+window.piVoice?.onStateChanged((payload: StatePayload) => {
   if (payload.state === "recording") {
     playStartChime();
   } else if (payload.state === "stopping" || payload.state === "transcribing" || payload.state === "idle") {
@@ -876,7 +882,7 @@ window.electronIPC?.onStateChanged((payload: StatePayload) => {
   updateStatusBadge(payload.state, payload.message);
 });
 
-window.electronIPC?.onAudioLevelUpdate((payload: number | { level: number; spectrum?: number[] }) => {
+window.piVoice?.onAudioLevelUpdate((payload: number | { level: number; spectrum?: number[] }) => {
   const level = typeof payload === "number" ? payload : payload.level;
 
   if (meterFill) {
@@ -949,7 +955,7 @@ document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
     if (!selectedPreset) return;
     updatePresetPills(selectedPreset);
     if (presetSelect) presetSelect.value = selectedPreset;
-    await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
+    await window.piVoice?.saveConfig({ dictationPreset: selectedPreset });
   });
 });
 
@@ -961,19 +967,19 @@ document.querySelectorAll(".model-pill-btn").forEach((btn) => {
     updateModelPills(selectedModel);
     if (modelSelect) modelSelect.value = selectedModel;
     if (settingModelSelect) settingModelSelect.value = selectedModel;
-    await window.electronIPC?.saveConfig({ geminiModel: selectedModel as GeminiModelChoice });
+    await window.piVoice?.saveConfig({ geminiModel: selectedModel as GeminiModelChoice });
   });
 });
 
 presetSelect?.addEventListener("change", async () => {
   const selectedPreset = presetSelect.value as DictationPreset;
   updatePresetPills(selectedPreset);
-  await window.electronIPC?.saveConfig({ dictationPreset: selectedPreset });
+  await window.piVoice?.saveConfig({ dictationPreset: selectedPreset });
 });
 
 modeSelect?.addEventListener("change", async () => {
   const selectedMode = modeSelect.value as DictationMode;
-  await window.electronIPC?.saveConfig({ dictationMode: selectedMode });
+  await window.piVoice?.saveConfig({ dictationMode: selectedMode });
 });
 
 gainSlider?.addEventListener("input", () => {
@@ -984,19 +990,19 @@ gainSlider?.addEventListener("input", () => {
 
 gainSlider?.addEventListener("change", async () => {
   const val = parseFloat(gainSlider.value);
-  await window.electronIPC?.saveConfig({ inputGain: val });
+  await window.piVoice?.saveConfig({ inputGain: val });
 });
 
 modelSelect?.addEventListener("change", async () => {
   const selectedModel = modelSelect.value as GeminiModelChoice;
   if (settingModelSelect) settingModelSelect.value = selectedModel;
-  await window.electronIPC?.saveConfig({ geminiModel: selectedModel });
+  await window.piVoice?.saveConfig({ geminiModel: selectedModel });
 });
 
 settingModelSelect?.addEventListener("change", async () => {
   const selectedModel = settingModelSelect.value as GeminiModelChoice;
   if (modelSelect) modelSelect.value = selectedModel;
-  await window.electronIPC?.saveConfig({ geminiModel: selectedModel });
+  await window.piVoice?.saveConfig({ geminiModel: selectedModel });
 });
 
 chimeBtn?.addEventListener("click", async () => {
@@ -1005,7 +1011,7 @@ chimeBtn?.addEventListener("click", async () => {
   if (audioChimesEnabled) {
     playBassyEndChime();
   }
-  await window.electronIPC?.saveConfig({ audioChimesEnabled });
+  await window.piVoice?.saveConfig({ audioChimesEnabled });
 });
 
 translateToggleBtn?.addEventListener("click", async () => {
@@ -1014,7 +1020,7 @@ translateToggleBtn?.addEventListener("click", async () => {
   if (translateEnabled) {
     playMechanicalClickSound();
   }
-  const updatedConfig = await window.electronIPC?.saveConfig({ translateEnabled });
+  const updatedConfig = await window.piVoice?.saveConfig({ translateEnabled });
   if (updatedConfig && updatedConfig.translateEnabled !== undefined) {
     translateEnabled = updatedConfig.translateEnabled;
     updateTranslateBtnUI();
@@ -1023,14 +1029,14 @@ translateToggleBtn?.addEventListener("click", async () => {
 
 targetLanguageSelect?.addEventListener("change", async () => {
   const selectedLang = targetLanguageSelect.value;
-  const updatedConfig = await window.electronIPC?.saveConfig({ targetLanguage: selectedLang });
+  const updatedConfig = await window.piVoice?.saveConfig({ targetLanguage: selectedLang });
   if (updatedConfig && updatedConfig.targetLanguage && targetLanguageSelect) {
     targetLanguageSelect.value = updatedConfig.targetLanguage;
   }
 });
 
 clearHistoryBtn?.addEventListener("click", async () => {
-  await window.electronIPC?.clearHistory();
+  await window.piVoice?.clearHistory();
   await renderHistory();
 });
 
@@ -1138,7 +1144,7 @@ testApiKeyBtn?.addEventListener("click", async () => {
     apiKeyFeedback.style.color = "#3b82f6";
     apiKeyFeedback.style.display = "block";
   }
-  const res = await (window.electronIPC as any)?.testApiKey(keyVal);
+  const res = await (window.piVoice as any)?.testApiKey(keyVal);
   if (apiKeyFeedback) {
     if (res?.success) {
       apiKeyFeedback.textContent = `✓ ${res.message || "API Key is valid!"}`;
@@ -1157,11 +1163,20 @@ saveApiKeyBtn?.addEventListener("click", async () => {
   const k3 = geminiApiKey3Input?.value.trim() || "";
   const combinedKeys = [k1, k2, k3].filter(Boolean).join(",");
 
-  await window.electronIPC?.saveConfig({ geminiApiKey: combinedKeys });
+  const updatedConfig = await window.piVoice?.saveConfig({ geminiApiKey: combinedKeys });
+  if (geminiApiKey1Input) {
+    geminiApiKey1Input.value = "";
+    geminiApiKey1Input.placeholder = updatedConfig?.hasGeminiKey
+      ? "Primary Key 1 (Configured - write to replace)"
+      : "Primary Key 1 (AIzaSy...)";
+  }
+  if (geminiApiKey2Input) geminiApiKey2Input.value = "";
+  if (geminiApiKey3Input) geminiApiKey3Input.value = "";
+
   if (apiKeyFeedback) {
     const keyCount = [k1, k2, k3].filter(Boolean).length;
-    apiKeyFeedback.textContent = keyCount > 0 ? `✓ Saved ${keyCount} Primary Gemini Key(s)!` : "Primary API Keys cleared.";
-    apiKeyFeedback.style.color = keyCount > 0 ? "#10b981" : "#ef4444";
+    apiKeyFeedback.textContent = updatedConfig?.hasGeminiKey ? `✓ Saved ${keyCount || 1} Primary Gemini Key(s)!` : "Primary API Keys cleared.";
+    apiKeyFeedback.style.color = updatedConfig?.hasGeminiKey ? "#10b981" : "#ef4444";
     apiKeyFeedback.style.display = "block";
     setTimeout(() => {
       apiKeyFeedback.style.display = "none";
@@ -1171,10 +1186,16 @@ saveApiKeyBtn?.addEventListener("click", async () => {
 
 saveFallbackApiKeyBtn?.addEventListener("click", async () => {
   const fallbackKeyVal = geminiFallbackApiKeyInput?.value ? geminiFallbackApiKeyInput.value.trim() : "";
-  await window.electronIPC?.saveConfig({ geminiFallbackApiKey: fallbackKeyVal });
+  const updatedConfig = await window.piVoice?.saveConfig({ geminiFallbackApiKey: fallbackKeyVal });
+  if (geminiFallbackApiKeyInput) {
+    geminiFallbackApiKeyInput.value = "";
+    geminiFallbackApiKeyInput.placeholder = updatedConfig?.hasGeminiFallbackKey
+      ? "Paid Gemini API Key (Configured - write to replace)"
+      : "Paste Paid Gemini API Key (Emergency Failover Backup)";
+  }
   if (fallbackApiKeyFeedback) {
-    fallbackApiKeyFeedback.textContent = fallbackKeyVal ? "✓ Paid Fallback API Key saved!" : "Fallback API Key cleared.";
-    fallbackApiKeyFeedback.style.color = fallbackKeyVal ? "#10b981" : "#a1a1aa";
+    fallbackApiKeyFeedback.textContent = updatedConfig?.hasGeminiFallbackKey ? "✓ Paid Fallback API Key saved!" : "Fallback API Key cleared.";
+    fallbackApiKeyFeedback.style.color = updatedConfig?.hasGeminiFallbackKey ? "#10b981" : "#a1a1aa";
     fallbackApiKeyFeedback.style.display = "block";
     setTimeout(() => {
       if (fallbackApiKeyFeedback) fallbackApiKeyFeedback.style.display = "none";
@@ -1183,19 +1204,19 @@ saveFallbackApiKeyBtn?.addEventListener("click", async () => {
 });
 
 chimeStartSelect?.addEventListener("change", async () => {
-  await window.electronIPC?.saveConfig({ chimeSoundStart: chimeStartSelect.value as ChimeSoundChoice });
+  await window.piVoice?.saveConfig({ chimeSoundStart: chimeStartSelect.value as ChimeSoundChoice });
 });
 
 chimeEndSelect?.addEventListener("change", async () => {
-  await window.electronIPC?.saveConfig({ chimeSoundEnd: chimeEndSelect.value as ChimeSoundChoice });
+  await window.piVoice?.saveConfig({ chimeSoundEnd: chimeEndSelect.value as ChimeSoundChoice });
 });
 
 symbolScannerToggle?.addEventListener("change", async () => {
-  await window.electronIPC?.saveConfig({ symbolScannerEnabled: symbolScannerToggle.checked });
+  await window.piVoice?.saveConfig({ symbolScannerEnabled: symbolScannerToggle.checked });
 });
 
 autoEndpointToggle?.addEventListener("change", async () => {
-  await window.electronIPC?.saveConfig({ autoEndpointEnabled: autoEndpointToggle.checked });
+  await window.piVoice?.saveConfig({ autoEndpointEnabled: autoEndpointToggle.checked });
 });
 
 transcriptionDelayInput?.addEventListener("change", async () => {
@@ -1203,20 +1224,20 @@ transcriptionDelayInput?.addEventListener("change", async () => {
   if (!isNaN(val)) {
     const clamped = Math.max(0.0, Math.min(10.0, val));
     transcriptionDelayInput.value = clamped.toString();
-    await window.electronIPC?.saveConfig({ transcriptionDelaySec: clamped });
+    await window.piVoice?.saveConfig({ transcriptionDelaySec: clamped });
   }
 });
 
 previewStartChimeBtn?.addEventListener("click", async () => {
-  await window.electronIPC?.previewChime(chimeStartSelect.value);
+  await window.piVoice?.previewChime(chimeStartSelect.value);
 });
 
 previewEndChimeBtn?.addEventListener("click", async () => {
-  await window.electronIPC?.previewChime(chimeEndSelect.value);
+  await window.piVoice?.previewChime(chimeEndSelect.value);
 });
 
 resetShortcutBtn?.addEventListener("click", async () => {
-  const res = await window.electronIPC?.registerHotkey("ctrl+cmd+option+v");
+  const res = await window.piVoice?.registerHotkey("ctrl+cmd+option+v");
   if (res?.success) {
     keycapDisplay.textContent = res.keyDisplay || "⌃⌥⌘V";
     hideHotkeyError();
@@ -1261,7 +1282,7 @@ function startHotkeyRecording() {
       }
 
       const keyStr = [...modifiers, mainKey].join("+");
-      const res = await window.electronIPC?.registerHotkey(keyStr);
+      const res = await window.piVoice?.registerHotkey(keyStr);
       if (res?.success) {
         keycapDisplay.textContent = res.keyDisplay || keyStr;
         hideHotkeyError();
@@ -1297,7 +1318,7 @@ function hideHotkeyError() {
 let isRecordingEditHotkey = false;
 
 resetEditShortcutBtn?.addEventListener("click", async () => {
-  const res = await window.electronIPC?.registerEditHotkey("ctrl+cmd+option+e");
+  const res = await window.piVoice?.registerEditHotkey("ctrl+cmd+option+e");
   if (res?.success) {
     editKeycapDisplay.textContent = res.keyDisplay || "⌃⌥⌘E";
     hideEditHotkeyError();
@@ -1342,7 +1363,7 @@ function startEditHotkeyRecording() {
       }
 
       const keyStr = [...modifiers, mainKey].join("+");
-      const res = await window.electronIPC?.registerEditHotkey(keyStr);
+      const res = await window.piVoice?.registerEditHotkey(keyStr);
       if (res?.success) {
         editKeycapDisplay.textContent = res.keyDisplay || keyStr;
         hideEditHotkeyError();
@@ -1377,7 +1398,7 @@ function hideEditHotkeyError() {
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !isRecordingHotkey && !isRecordingEditHotkey) {
-    window.electronIPC?.cancelDictation?.();
+    window.piVoice?.cancelDictation?.();
   }
 });
 

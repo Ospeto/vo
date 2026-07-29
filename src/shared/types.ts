@@ -36,6 +36,18 @@ export interface AudioLevelPayload {
 export type GeminiModelChoice = "gemini-3.6-flash" | "gemini-3.5-flash-lite" | "gemini-3.1-flash-lite" | "gemini-3.1-pro" | "gemini-2.5-flash" | "gemini-2.5-pro";
 export type ChimeSoundChoice = "glass" | "submarine" | "hero" | "ping" | "pop" | "tink";
 
+export interface KeyBinding {
+  keycode: number;
+  ctrl: boolean;
+  shift: boolean;
+  alt: boolean;
+  meta: boolean;
+}
+
+export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
+export type DictationPreset = "auto" | "careful" | "code_comment" | "fast" | "email_polish" | "burmese_written" | "translate";
+export type DictationMode = "toggle" | "hold";
+
 /**
  * Recording format sent from main to renderer.
  * - "webm": MediaRecorder with audio/webm;codecs=opus (for cloud providers)
@@ -97,6 +109,77 @@ export interface PiVoiceAPI {
   sendPlaybackDone: () => void;
 }
 
+export type RendererRole = "settings" | "capture" | "hud";
+
+export interface CaptureConfigPayload {
+  audioDeviceId?: string;
+  autoEndpointEnabled?: boolean;
+  transcriptionDelaySec?: number;
+  inputGain?: number;
+}
+
+export interface SettingsConfigPayload {
+  key: KeyBinding;
+  keyDisplay: string;
+  editKey: KeyBinding;
+  editKeyDisplay: string;
+  provider: SpeechProvider;
+  geminiModel: GeminiModelChoice;
+  inputGain: number;
+  dictationPreset: DictationPreset;
+  dictationMode: DictationMode;
+  translateEnabled: boolean;
+  targetLanguage: string;
+  audioChimesEnabled: boolean;
+  chimeSoundStart: ChimeSoundChoice;
+  chimeSoundEnd: ChimeSoundChoice;
+  symbolScannerEnabled: boolean;
+  transcriptionDelaySec: number;
+  autoEndpointEnabled: boolean;
+  customVocabulary: string[];
+  presetVocabulary: Partial<Record<DictationPreset, string[]>>;
+  dictionaryEntries: DictionaryEntry[];
+  appPresetMappings?: Record<string, DictationPreset>;
+  audioDeviceId?: string;
+  hasGeminiKey: boolean;
+  hasGeminiFallbackKey: boolean;
+  hasOpenAIKey?: boolean;
+  geminiKeyError?: string;
+  geminiFallbackKeyError?: string;
+}
+
+export interface SettingsElectronAPI {
+  getConfig: () => Promise<SettingsConfigPayload>;
+  saveConfig: (patch: any) => Promise<SettingsConfigPayload>;
+  registerHotkey: (newKeyStr: string) => Promise<any>;
+  registerEditHotkey: (newKeyStr: string) => Promise<any>;
+  getHistory: () => Promise<any[]>;
+  clearHistory: () => Promise<any[]>;
+  toggleDictation: () => Promise<any>;
+  testApiKey: (keyToTest?: string) => Promise<any>;
+  previewChime: (soundName: string) => Promise<any>;
+  cancelDictation: () => void;
+  onStateChanged: (callback: (payload: StatePayload) => void) => () => void;
+  onAudioLevelUpdate: (callback: (payload: any) => void) => () => void;
+}
+
+export interface CaptureElectronAPI {
+  getConfig: () => Promise<CaptureConfigPayload>;
+  sendRecordingData: (data: ArrayBuffer) => void;
+  sendRecordingError: (error: string) => void;
+  sendAudioLevelUpdate: (payload: any) => void;
+  onStartRecording: (callback: (format: RecordingFormat, inputGain: number) => void) => () => void;
+  onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => () => void;
+  onCancelRecording: (callback: () => void) => () => void;
+  onGainUpdate: (callback: (inputGain: number) => void) => () => void;
+}
+
+export interface HudElectronAPI {
+  cancelDictation: () => void;
+  onStateChanged: (callback: (payload: StatePayload) => void) => () => void;
+  onAudioLevelUpdate: (callback: (payload: any) => void) => () => void;
+}
+
 export type RecordingLifecycleState = "idle" | "starting" | "recording" | "stopping" | "transcribing" | "error";
 
 export interface RecordingLifecycleSnapshot {
@@ -110,8 +193,6 @@ export type RecordingLifecycleResult =
 
 declare global {
   interface Window {
-    piVoice: PiVoiceAPI;
-    electronIPC?: any;
-    piVoiceAPI?: any;
+    piVoice: SettingsElectronAPI | CaptureElectronAPI | HudElectronAPI | any;
   }
 }

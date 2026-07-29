@@ -49,7 +49,7 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
     currentGainValue = inputGain;
     
-    const config = await window.electronIPC?.getConfig();
+    const config = await window.piVoice?.getConfig();
     const targetDeviceId = config?.audioDeviceId;
 
     const baseAudioConstraints: MediaTrackConstraints = {
@@ -83,13 +83,13 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
           sessionTrackEnded = true;
           mediaStream = null;
           if (mediaRecorder && mediaRecorder.state !== "inactive") {
-            window.electronIPC?.sendRecordingError("Microphone disconnected");
+            window.piVoice?.sendRecordingError("Microphone disconnected");
           }
         };
       });
     }
     if (!mediaStream || mediaStream.getAudioTracks().length === 0) {
-      window.electronIPC?.sendRecordingError("Microphone input unavailable");
+      window.piVoice?.sendRecordingError("Microphone input unavailable");
       return false;
     }
     audioCtx = new AudioContext({ sampleRate: 16000 });
@@ -128,7 +128,7 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
     startMetering();
     return true;
   } catch (err: any) {
-    window.electronIPC?.sendRecordingError(`Microphone access error: ${err.message}`);
+    window.piVoice?.sendRecordingError(`Microphone access error: ${err.message}`);
     return false;
   }
 }
@@ -219,7 +219,7 @@ function startMetering() {
       spectrum.push(freqData[i * step] || 0);
     }
 
-    window.electronIPC?.sendAudioLevelUpdate({ level: Math.round(smoothedLevel), spectrum });
+    window.piVoice?.sendAudioLevelUpdate({ level: Math.round(smoothedLevel), spectrum });
   }, 50);
 }
 
@@ -247,20 +247,20 @@ async function finalizeRecording(generation: number) {
   finalizedRecordingGeneration = generation;
 
   if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
-    window.electronIPC?.sendRecordingError("Microphone disconnected");
+    window.piVoice?.sendRecordingError("Microphone disconnected");
     audioChunks = [];
     return;
   }
 
   const clipRatio = sessionTotalSamples > 0 ? sessionClippedSamples / sessionTotalSamples : 0;
   if (sessionMaxAbs >= 0.99 && (clipRatio > 0.05 || sessionClippedSamples > 50)) {
-    window.electronIPC?.sendRecordingError("Microphone input clipped");
+    window.piVoice?.sendRecordingError("Microphone input clipped");
     audioChunks = [];
     return;
   }
 
   if (sessionMaxAbs < 0.002 && sessionMaxRms < 0.001) {
-    window.electronIPC?.sendRecordingError("Microphone input extremely quiet");
+    window.piVoice?.sendRecordingError("Microphone input extremely quiet");
     audioChunks = [];
     return;
   }
@@ -278,17 +278,17 @@ async function finalizeRecording(generation: number) {
 
   const diag = diagnoseAudioStats(stats);
   if (diag.status === "clipped") {
-    window.electronIPC?.sendRecordingError("Microphone input clipped or distorted");
+    window.piVoice?.sendRecordingError("Microphone input clipped or distorted");
     audioChunks = [];
     return;
   }
   if (diag.status === "near_silence") {
-    window.electronIPC?.sendRecordingError("No speech detected (silent audio)");
+    window.piVoice?.sendRecordingError("No speech detected (silent audio)");
     audioChunks = [];
     return;
   }
   if (diag.status === "too_short") {
-    window.electronIPC?.sendRecordingError("Recording too short");
+    window.piVoice?.sendRecordingError("Recording too short");
     audioChunks = [];
     return;
   }
@@ -296,27 +296,27 @@ async function finalizeRecording(generation: number) {
   const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
   const arrayBuffer = await audioBlob.arrayBuffer();
   if (generation !== recordingGeneration) return;
-  window.electronIPC?.sendRecordingData(arrayBuffer);
+  window.piVoice?.sendRecordingData(arrayBuffer);
   audioChunks = [];
 }
 
 (window as any).getAnalyserNode = () => analyserNode;
 
-(window.electronIPC as any)?.onGainUpdate((newGain: number) => {
+window.piVoice?.onGainUpdate((newGain: number) => {
   currentGainValue = newGain;
   if (gainNode && audioCtx) {
     gainNode.gain.setValueAtTime(newGain, audioCtx.currentTime);
   }
 });
 
-window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
+window.piVoice?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
   const generation = ++recordingGeneration;
   stopRequestedDuringStartup = false;
   finalizedRecordingGeneration = -1;
   audioChunks = [];
   currentGainValue = inputGain;
 
-  const config = await window.electronIPC?.getConfig();
+  const config = await window.piVoice?.getConfig();
   const dictationMode = config?.dictationMode ?? "hold";
   autoEndpointEnabled = isAutoEndpointEnabled(dictationMode, config?.autoEndpointEnabled ?? true);
   transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
@@ -383,11 +383,11 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
     }
   } catch (err: any) {
     stopRequestedDuringStartup = false;
-    window.electronIPC?.sendRecordingError(`MediaRecorder start failed: ${err.message}`);
+    window.piVoice?.sendRecordingError(`MediaRecorder start failed: ${err.message}`);
   }
 });
 
-(window.electronIPC as any)?.onCancelRecording(() => {
+window.piVoice?.onCancelRecording(() => {
   recordingGeneration++;
   stopRequestedDuringStartup = false;
   if (postRollTimer) {
@@ -435,8 +435,8 @@ function stopRecording(ensureMinimumDuration = false) {
       doStop();
     }
   } catch (err: any) {
-    window.electronIPC?.sendRecordingError(`MediaRecorder stop failed: ${err.message}`);
+    window.piVoice?.sendRecordingError(`MediaRecorder stop failed: ${err.message}`);
   }
 }
 
-window.electronIPC?.onStopRecording(stopRecording);
+window.piVoice?.onStopRecording(stopRecording);
