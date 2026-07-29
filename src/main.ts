@@ -3,7 +3,7 @@ import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, updateConfig, parseKeyBinding, formatKeyBinding, ConfigError, type PiVoiceConfig } from "./services/config.js";
+import { loadConfig, updateConfig, parseKeyBinding, formatKeyBinding, defaultConfig, ConfigError, type PiVoiceConfig } from "./services/config.js";
 import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName } from "./services/stt.js";
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
@@ -1042,9 +1042,8 @@ app.whenReady().then(async () => {
   try {
     currentConfig = loadConfig(workingCwd);
   } catch (err: any) {
-    logger.error({ err: err.message }, "Config error");
-    app.quit();
-    return;
+    logger.warn({ err: err?.message || String(err) }, "Config error during startup, using defaultConfig");
+    currentConfig = defaultConfig();
   }
 
   createCaptureWindow();
