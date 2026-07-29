@@ -30,7 +30,11 @@ it captures the target at recording start, performs the immediate pre-injection
 authorization/match, snapshots the clipboard, writes the transcript, requests
 Command-V through the addon, and restores the exact clipboard snapshot on both
 success and failure. It retains existing mutex, duplicate, generation,
-stale-result, pending-paste, and transcript-retention behavior.
+stale-result, pending-paste, and transcript-retention behavior. The main
+orchestration passes the recording sequence and its current-transcription
+predicate through `PasteCoordinator`; validity is checked before clipboard
+mutation and again before native injection. Dedupe text and timestamp state is
+committed only after successful submission.
 
 The service also retains privacy-preserving structured diagnostics with
 correlation/operation IDs, monotonic stage durations, outcomes, and stable
