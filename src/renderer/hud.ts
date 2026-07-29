@@ -56,8 +56,18 @@ hudCancelBtn.addEventListener("click", (event) => {
   window.piVoice.cancelDictation();
 });
 
+function resetMeterBars(): void {
+  const bars = document.querySelectorAll<HTMLElement>(".hud-bar");
+  bars.forEach((bar) => {
+    bar.style.height = "";
+  });
+}
+
 function updateHud(payload: StatePayload): void {
   const state = payload.state ?? "idle";
+  if (state !== "recording") {
+    resetMeterBars();
+  }
   const hasSelection = Boolean(payload.hasSelection);
   const msg = payload.message ?? "";
 

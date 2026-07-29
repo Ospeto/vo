@@ -45,6 +45,38 @@ let sessionClippedSamples = 0;
 let sessionTotalSamples = 0;
 let sessionTrackEnded = false;
 
+let isStartingUp = false;
+
+function sendRecordingErrorOnce(generation: number, error: string): void {
+  if (generation !== recordingGeneration || finalizedRecordingGeneration === generation) return;
+  finalizedRecordingGeneration = generation;
+  if (postRollTimer) {
+    clearTimeout(postRollTimer);
+    postRollTimer = null;
+  }
+  audioChunks = [];
+  window.piVoice?.sendRecordingError(error);
+}
+
+function cleanupPartialPipeline() {
+  try {
+    gainNode?.disconnect();
+    analyserNode?.disconnect();
+    compressorNode?.disconnect();
+  } catch {}
+  gainNode = null;
+  analyserNode = null;
+  compressorNode = null;
+  if (audioCtx) {
+    try {
+      if (audioCtx.state !== "closed") {
+        void audioCtx.close();
+      }
+    } catch {}
+    audioCtx = null;
+  }
+}
+
 async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
   try {
     currentGainValue = inputGain;
@@ -89,6 +121,7 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
       });
     }
     if (!mediaStream || mediaStream.getAudioTracks().length === 0) {
+      cleanupPartialPipeline();
       window.piVoice?.sendRecordingError("Microphone input unavailable");
       return false;
     }
@@ -128,6 +161,7 @@ async function setupAudioPipeline(inputGain: number = 1.0): Promise<boolean> {
     startMetering();
     return true;
   } catch (err: any) {
+    cleanupPartialPipeline();
     window.piVoice?.sendRecordingError(`Microphone access error: ${err.message}`);
     return false;
   }
@@ -245,6 +279,10 @@ function triggerAutoStop() {
 async function finalizeRecording(generation: number) {
   if (generation !== recordingGeneration || finalizedRecordingGeneration === generation) return;
   finalizedRecordingGeneration = generation;
+  if (postRollTimer) {
+    clearTimeout(postRollTimer);
+    postRollTimer = null;
+  }
 
   if (sessionTrackEnded || !mediaStream || !mediaStream.active || mediaStream.getAudioTracks().every((t) => t.readyState === "ended")) {
     window.piVoice?.sendRecordingError("Microphone disconnected");
@@ -312,61 +350,74 @@ window.piVoice?.onGainUpdate((newGain: number) => {
 window.piVoice?.onStartRecording(async (format: RecordingFormat, inputGain: number) => {
   const generation = ++recordingGeneration;
   stopRequestedDuringStartup = false;
+  isStartingUp = true;
   finalizedRecordingGeneration = -1;
   audioChunks = [];
   currentGainValue = inputGain;
 
-  const config = await window.piVoice?.getConfig();
-  const dictationMode = config?.dictationMode ?? "hold";
-  autoEndpointEnabled = isAutoEndpointEnabled(dictationMode, config?.autoEndpointEnabled ?? true);
-  transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
-
-  const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
-  endpointDetector = new SpeechEndpointDetector({
-    speechThresholdRms: 0.005,
-    silenceThresholdRms: 0.003,
-    confirmSilenceMs: confirmSilenceMs > 0 ? confirmSilenceMs : 500,
-    minSpeechDurationMs: 150,
-    frameIntervalMs: 50,
-  });
-  endpointDetector.reset();
-
-  sessionMaxRms = 0;
-  sessionPeakAmplitude = 0;
-  sessionTotalFrames = 0;
-  sessionSpeechFrames = 0;
-  sessionClippingFrames = 0;
-  autoEndpointTriggered = false;
-  if (postRollTimer) {
-    clearTimeout(postRollTimer);
-    postRollTimer = null;
-  }
-
-  sessionMaxAbs = 0;
-  sessionMaxRms = 0;
-  sessionClippedSamples = 0;
-  sessionTotalSamples = 0;
-  sessionTrackEnded = false;
-
-  const isStreamValid = mediaStream && mediaStream.active && mediaStream.getAudioTracks().some((t) => t.readyState === "live");
-
-  if (!isStreamValid) {
-    mediaStream = null;
-  }
-  if (!mediaStream || mediaStream.getAudioTracks().some((t) => t.readyState === "ended")) {
-    const ok = await setupAudioPipeline(inputGain);
-    if (!ok || generation !== recordingGeneration) return;
-  } else if (gainNode && audioCtx) {
-    gainNode.gain.setValueAtTime(inputGain, audioCtx.currentTime);
-  }
-
-  if (audioCtx?.state === "suspended") {
-    await audioCtx.resume();
-  }
-
-  if (generation !== recordingGeneration) return;
-
   try {
+    const config = await window.piVoice?.getConfig();
+    if (generation !== recordingGeneration) {
+      isStartingUp = false;
+      return;
+    }
+    const dictationMode = config?.dictationMode ?? "hold";
+    autoEndpointEnabled = isAutoEndpointEnabled(dictationMode, config?.autoEndpointEnabled ?? true);
+    transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
+
+    const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
+    endpointDetector = new SpeechEndpointDetector({
+      speechThresholdRms: 0.005,
+      silenceThresholdRms: 0.003,
+      confirmSilenceMs: confirmSilenceMs > 0 ? confirmSilenceMs : 500,
+      minSpeechDurationMs: 150,
+      frameIntervalMs: 50,
+    });
+    endpointDetector.reset();
+
+    sessionMaxRms = 0;
+    sessionPeakAmplitude = 0;
+    sessionTotalFrames = 0;
+    sessionSpeechFrames = 0;
+    sessionClippingFrames = 0;
+    autoEndpointTriggered = false;
+    if (postRollTimer) {
+      clearTimeout(postRollTimer);
+      postRollTimer = null;
+    }
+
+    sessionMaxAbs = 0;
+    sessionClippedSamples = 0;
+    sessionTotalSamples = 0;
+    sessionTrackEnded = false;
+
+    const isStreamValid = mediaStream && mediaStream.active && mediaStream.getAudioTracks().some((t) => t.readyState === "live");
+
+    if (!isStreamValid) {
+      mediaStream = null;
+    }
+    if (!mediaStream || mediaStream.getAudioTracks().some((t) => t.readyState === "ended")) {
+      const ok = await setupAudioPipeline(inputGain);
+      if (!ok || generation !== recordingGeneration) {
+        isStartingUp = false;
+        if (generation === recordingGeneration && finalizedRecordingGeneration !== generation) {
+          sendRecordingErrorOnce(generation, "Microphone setup failed");
+        }
+        return;
+      }
+    } else if (gainNode && audioCtx) {
+      gainNode.gain.setValueAtTime(inputGain, audioCtx.currentTime);
+    }
+
+    if (audioCtx?.state === "suspended") {
+      await audioCtx.resume();
+    }
+
+    if (generation !== recordingGeneration) {
+      isStartingUp = false;
+      return;
+    }
+
     if (mediaRecorder && mediaRecorder.state === "inactive") {
       mediaRecorder.ondataavailable = (event) => {
         if (generation === recordingGeneration && event.data.size > 0) {
@@ -376,20 +427,26 @@ window.piVoice?.onStartRecording(async (format: RecordingFormat, inputGain: numb
       mediaRecorder.onstop = () => { void finalizeRecording(generation); };
       mediaRecorder.start(100);
       recordingStartTime = Date.now();
+      isStartingUp = false;
       if (stopRequestedDuringStartup && generation === recordingGeneration) {
         stopRequestedDuringStartup = false;
         stopRecording(true);
       }
+    } else {
+      isStartingUp = false;
+      sendRecordingErrorOnce(generation, "MediaRecorder not ready");
     }
   } catch (err: any) {
+    isStartingUp = false;
     stopRequestedDuringStartup = false;
-    window.piVoice?.sendRecordingError(`MediaRecorder start failed: ${err.message}`);
+    sendRecordingErrorOnce(generation, `MediaRecorder start failed: ${err?.message || err}`);
   }
 });
 
 window.piVoice?.onCancelRecording(() => {
   recordingGeneration++;
   stopRequestedDuringStartup = false;
+  isStartingUp = false;
   if (postRollTimer) {
     clearTimeout(postRollTimer);
     postRollTimer = null;
@@ -405,19 +462,29 @@ window.piVoice?.onCancelRecording(() => {
 
 function stopRecording(ensureMinimumDuration = false) {
   try {
+    const generation = recordingGeneration;
+    if (finalizedRecordingGeneration === generation) return;
+
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
-      stopRequestedDuringStartup = true;
+      if (isStartingUp) {
+        stopRequestedDuringStartup = true;
+        return;
+      }
+      sendRecordingErrorOnce(generation, "Recorder inactive");
       return;
     }
-    const generation = recordingGeneration;
 
     const doStop = () => {
-      // 300ms post-roll to allow final WebAudio speech tail chunk to flush into MediaRecorder
       if (postRollTimer) clearTimeout(postRollTimer);
       postRollTimer = setTimeout(() => {
-        if (generation !== recordingGeneration) return;
+        postRollTimer = null;
+        if (generation !== recordingGeneration || finalizedRecordingGeneration === generation) return;
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
-          mediaRecorder.stop();
+          try {
+            mediaRecorder.stop();
+          } catch (err: any) {
+            sendRecordingErrorOnce(generation, `MediaRecorder stop failed: ${err.message}`);
+          }
         } else {
           void finalizeRecording(generation);
         }
@@ -429,14 +496,35 @@ function stopRecording(ensureMinimumDuration = false) {
     if (elapsed < minimumDuration) {
       if (postRollTimer) clearTimeout(postRollTimer);
       postRollTimer = setTimeout(() => {
-        if (generation === recordingGeneration) doStop();
+        postRollTimer = null;
+        if (generation === recordingGeneration && finalizedRecordingGeneration !== generation) {
+          doStop();
+        }
       }, minimumDuration - elapsed);
     } else {
       doStop();
     }
   } catch (err: any) {
-    window.piVoice?.sendRecordingError(`MediaRecorder stop failed: ${err.message}`);
+    sendRecordingErrorOnce(recordingGeneration, `MediaRecorder stop failed: ${err.message}`);
   }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    if (postRollTimer) clearTimeout(postRollTimer);
+    stopMetering();
+    try {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    } catch {}
+    try {
+      if (mediaStream) {
+        mediaStream.getAudioTracks().forEach((t) => t.stop());
+      }
+    } catch {}
+    cleanupPartialPipeline();
+  });
 }
 
 window.piVoice?.onStopRecording(stopRecording);
