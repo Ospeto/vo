@@ -57,6 +57,14 @@ let previousClipboardContent: ClipboardSnapshot | string = "";
 let selectionCaptured = false;
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+let shortTapStopTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearShortTapStopTimer() {
+  if (shortTapStopTimer) {
+    clearTimeout(shortTapStopTimer);
+    shortTapStopTimer = null;
+  }
+}
 
 function restoreCapturedSelection() {
   if (selectionCaptured) restoreClipboard(previousClipboardContent, selectionClipboardPort);
@@ -111,6 +119,7 @@ let activeUsedPaidKey = false;
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
   sequenceId++;
+  clearShortTapStopTimer();
 
   const isPaidConfigured = Boolean(
     currentConfig?.geminiFallbackApiKey && currentConfig.geminiFallbackApiKey.trim()
@@ -1002,9 +1011,11 @@ function handleHotkeyUp() {
 
     if (pressDuration < SHORT_TAP_THRESHOLD_MS && !liveFnDown && remainingDelay > 0) {
       logger.info({ pressDuration, elapsed, remainingDelay }, "Short tap (<250ms) in Hold Mode: extending recording duration");
-      setTimeout(() => {
+      const recordingSequenceId = recordingLifecycle.snapshot().sequenceId;
+      shortTapStopTimer = setTimeout(() => {
+        shortTapStopTimer = null;
         const snapshot = recordingLifecycle.snapshot();
-        if (snapshot.state === "recording") {
+        if (snapshot.sequenceId === recordingSequenceId && snapshot.state === "recording") {
           const stopRes = recordingLifecycle.requestStop();
           if (stopRes.accepted) {
             setState("stopping", "Stopping...");
