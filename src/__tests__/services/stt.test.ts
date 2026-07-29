@@ -263,7 +263,8 @@ describe("transcribe", () => {
     expect(resolveEffectivePreset("auto", "UnknownApp", customMappings)).toBe("careful");
   });
 
-  test("uses fallback client when primary gemini key rejects fast", async () => {
+  test("uses fallback client when primary gemini key rejects fast and sets usedPaidKey to true", async () => {
+    const { transcribeDetailed } = await import("../../services/stt.js");
     mockGenerateContent.mockImplementationOnce(async () => {
       throw new Error("429 Rate Limit");
     });
@@ -272,11 +273,23 @@ describe("transcribe", () => {
     }));
 
     const data = new ArrayBuffer(10);
-    const result = await transcribe(data, "gemini");
-    expect(result).toBe("Paid fallback transcription");
+    const result = await transcribeDetailed(data, "gemini");
+    expect(result.text).toBe("Paid fallback transcription");
+    expect(result.usedPaidKey).toBe(true);
     expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
 
     mockFallbackGenerateContent = null;
+  });
+
+  test("returns usedPaidKey true for openai and elevenlabs providers", async () => {
+    const { transcribeDetailed } = await import("../../services/stt.js");
+    const data = new ArrayBuffer(10);
+
+    const openaiRes = await transcribeDetailed(data, "openai");
+    expect(openaiRes.usedPaidKey).toBe(true);
+
+    const elevenRes = await transcribeDetailed(data, "elevenlabs");
+    expect(elevenRes.usedPaidKey).toBe(true);
   });
 
   test("does not invoke fallback client when primary gemini key succeeds fast", async () => {
