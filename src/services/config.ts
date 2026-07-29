@@ -794,16 +794,19 @@ function preparePatchSave(existingJson: Record<string, unknown>, patch: PiVoiceC
 
 export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
   const userConfigPath = getUserConfigPath();
-  const existingUserConfigPath = existsSync(userConfigPath) ? userConfigPath : getLegacyUserConfigPath();
+  const legacyUserConfigPath = getLegacyUserConfigPath();
   const projConfigPath = getProjConfigPath(cwd);
   const hasProjConfig = projConfigPath ? existsSync(projConfigPath) : false;
 
   let existingUserJson: Record<string, unknown> = {};
-  if (existsSync(existingUserConfigPath)) {
-    try {
-      const content = readFileSync(existingUserConfigPath, "utf-8");
-      existingUserJson = JSON.parse(content);
-    } catch {}
+  try {
+    existingUserJson = readConfigJson(userConfigPath);
+  } catch {
+    if (userConfigPath !== legacyUserConfigPath && existsSync(legacyUserConfigPath)) {
+      try {
+        existingUserJson = readConfigJson(legacyUserConfigPath);
+      } catch {}
+    }
   }
   const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath);
   let toSaveProj: Record<string, unknown> | undefined;

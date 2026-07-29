@@ -479,6 +479,21 @@ describe("Global User Config Persistence & Overlay Suite", () => {
     expect(projContent.dictationPreset).toBe("code_comment");
   });
 
+  test("preserves valid legacy settings when updating over corrupt XDG config", () => {
+    const legacyPath = join(testRoot, "home", ".config", "pi-voice", "config.json");
+    const xdgPath = join(testRoot, "xdg", "pi-voice", "config.json");
+    mkdirSync(join(testRoot, "home", ".config", "pi-voice"), { recursive: true });
+    mkdirSync(join(testRoot, "xdg", "pi-voice"), { recursive: true });
+    process.env.XDG_CONFIG_HOME = join(testRoot, "xdg");
+    writeFileSync(legacyPath, JSON.stringify({ provider: "openai", inputGain: 1.7 }));
+    writeFileSync(xdgPath, "broken");
+
+    const updated = updateConfig(dirA, { targetLanguage: "French" });
+    expect(updated.provider).toBe("openai");
+    expect(updated.inputGain).toBe(1.7);
+    expect(updated.targetLanguage).toBe("French");
+  });
+
   test("loadConfig uses global user config as baseline and overlays project-local overrides", () => {
     // Write global config baseline
     updateConfig(dirA, {
