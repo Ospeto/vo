@@ -1041,7 +1041,35 @@ function gracefulShutdown() {
   removeRuntimeState();
 }
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
+  logger.info("Another instance of vo is already running, quitting second instance");
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    logger.info("Second instance launched, focusing popover window");
+    if (popoverWindow) {
+      if (popoverWindow.isVisible()) {
+        popoverWindow.focus();
+      } else {
+        togglePopover();
+      }
+    }
+  });
+}
+
 app.whenReady().then(async () => {
+  if (process.argv.includes("--headless")) {
+    const isOk = addon !== null && typeof addon.selfCheck === "function" && addon.selfCheck() === true;
+    if (isOk) {
+      console.log("native paste addon self-check ok");
+      process.exit(0);
+    } else {
+      console.error("native paste addon self-check failed");
+      process.exit(1);
+    }
+  }
+
   app.name = "vo";
   app.setName("vo");
 
