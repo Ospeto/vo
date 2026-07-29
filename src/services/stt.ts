@@ -1073,7 +1073,7 @@ export async function transcribeDetailed(
     isTranslationActive = true;
   }
 
-  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true);
+  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true && !abortSignal?.aborted);
   logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawText, sanitized, usedPaidKey }, "Transcribed detailed and sanitized");
   return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
 }
