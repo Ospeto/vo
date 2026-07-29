@@ -27,7 +27,7 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
       expect(detector.getStatus().hasDetectedSpeech).toBe(true);
     });
 
-    test("accumulates silence frames once speech frames occur (speechFrameCount > 0)", () => {
+    test("accumulates silence frames once speech is detected (hasDetectedSpeech = true)", () => {
       const detector = new SpeechEndpointDetector({
         speechThresholdRms: 0.005,
         silenceThresholdRms: 0.003,
@@ -36,12 +36,18 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
         frameIntervalMs: 50,
       });
 
-      // Send 1 speech frame (speechFrameCount = 1, but hasDetectedSpeech = false because minSpeechFrames = 3)
-      const res1 = detector.processFrame(0.008);
-      expect(res1.hasDetectedSpeech).toBe(false);
-      expect(detector.getStatus().speechFrameCount).toBe(1);
+      // Send 1 noise frame: should NOT enable silence endpointing before minSpeechDurationMs
+      detector.processFrame(0.008);
+      detector.processFrame(0.001);
+      expect(detector.getStatus().consecutiveSilenceFrames).toBe(0);
+      expect(detector.getStatus().hasDetectedSpeech).toBe(false);
 
-      // Send silence frame: silence frames should accumulate because speechFrameCount > 0
+      // Complete minSpeechDurationMs (3 frames total)
+      detector.processFrame(0.008);
+      detector.processFrame(0.008);
+      expect(detector.getStatus().hasDetectedSpeech).toBe(true);
+
+      // Send silence frames: silence frames should accumulate after speech is detected
       detector.processFrame(0.001);
       expect(detector.getStatus().consecutiveSilenceFrames).toBe(1);
 
@@ -108,6 +114,7 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
       const detector = new SpeechEndpointDetector({
         speechThresholdRms: 0.005,
         silenceThresholdRms: 0.003,
+        minSpeechDurationMs: 50,
         confirmSilenceMs: 100,
         frameIntervalMs: 50,
       });
@@ -131,6 +138,7 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
       const detector = new SpeechEndpointDetector({
         speechThresholdRms: 0.005,
         silenceThresholdRms: 0.003,
+        minSpeechDurationMs: 50,
         confirmSilenceMs: 500,
         frameIntervalMs: 50,
       });
@@ -154,6 +162,7 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
       const detector = new SpeechEndpointDetector({
         speechThresholdRms: 0.005,
         silenceThresholdRms: 0.003,
+        minSpeechDurationMs: 50,
         confirmSilenceMs,
         frameIntervalMs: 50, // 60 frames = 3000ms
       });

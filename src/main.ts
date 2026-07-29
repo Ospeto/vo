@@ -474,7 +474,7 @@ function createHudWindow() {
   });
 }
 
-function togglePopover() {
+function togglePopover(focus = false) {
   if (!popoverWindow) return;
 
   if (popoverWindow.isVisible()) {
@@ -506,7 +506,12 @@ function togglePopover() {
     );
 
     popoverWindow.setPosition(pos.x, pos.y);
-    popoverWindow.showInactive();
+    if (focus) {
+      popoverWindow.show();
+      popoverWindow.focus();
+    } else {
+      popoverWindow.showInactive();
+    }
   }
 }
 
@@ -1041,7 +1046,37 @@ function gracefulShutdown() {
   removeRuntimeState();
 }
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
+  logger.info("Another instance of vo is already running, quitting second instance");
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    logger.info("Second instance launched, focusing popover window");
+    if (popoverWindow) {
+      if (popoverWindow.isVisible()) {
+        popoverWindow.focus();
+      } else {
+        togglePopover(true);
+      }
+    }
+  });
+}
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock && !process.argv.includes("--headless")) return;
+
+  if (process.argv.includes("--headless")) {
+    const isOk = addon !== null && typeof addon.selfCheck === "function" && addon.selfCheck() === true;
+    if (isOk) {
+      console.log("native paste addon self-check ok");
+      process.exit(0);
+    } else {
+      console.error("native paste addon self-check failed");
+      process.exit(1);
+    }
+  }
+
   app.name = "vo";
   app.setName("vo");
 
@@ -1086,4 +1121,6 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {});
-app.on("before-quit", () => gracefulShutdown());
+app.on("before-quit", () => {
+  if (gotSingleInstanceLock) gracefulShutdown();
+});

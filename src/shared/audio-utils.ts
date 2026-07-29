@@ -129,7 +129,7 @@ export class SpeechEndpointDetector {
         this.hasDetectedSpeech = true;
       }
     } else if (rms < this.silenceThresholdRms) {
-      if (this.hasDetectedSpeech || this.speechFrameCount > 0) {
+      if (this.hasDetectedSpeech) {
         this.consecutiveSilenceFrames++;
         if (this.consecutiveSilenceFrames >= this.confirmSilenceFrames) {
           this.isEndpointed = true;
