@@ -143,6 +143,11 @@ export class SafePasteService {
       return result;
     }
     let result: SafePasteResult | undefined;
+    if (!isCurrent()) {
+      result = { ok: false, reason: "target_mismatch" };
+      this.emitTotal(operationId, started, result);
+      return result;
+    }
     const writeStarted = this.clock();
     try {
       this.clipboard.writeText(text);

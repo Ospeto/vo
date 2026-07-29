@@ -278,4 +278,100 @@ describe("SafePasteService", () => {
     expect(await service.paste("secret")).toEqual({ ok: false, reason: "clipboard_restore_failed" });
     expect(injected).toBe(false);
   });
+
+  describe("Controllable lifecycle barriers in SafePasteService.paste", () => {
+    test("invalidation at authorization barrier prevents snapshot, write, and injection", async () => {
+      let isCurrent = true;
+      const events: string[] = [];
+      const clipboard = {
+        readText: () => "old",
+        writeText: (t: string) => { events.push("write"); },
+        snapshot: () => { events.push("snapshot"); return { text: "old", formats: [] }; },
+        restore: () => { events.push("restore"); },
+      };
+      const service = new SafePasteService(
+        () => target(),
+        async () => { events.push("inject"); },
+        clipboard,
+        async () => { events.push("authorize"); isCurrent = false; }
+      );
+      service.captureTarget();
+
+      const res = await service.paste("text", () => isCurrent);
+      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+      expect(events).toEqual(["authorize"]);
+    });
+
+    test("invalidation at snapshot barrier prevents write and injection", async () => {
+      let isCurrent = true;
+      const events: string[] = [];
+      const clipboard = {
+        readText: () => "old",
+        writeText: (t: string) => { events.push("write"); },
+        snapshot: () => { events.push("snapshot"); isCurrent = false; return { text: "old", formats: [] }; },
+        restore: () => { events.push("restore"); },
+      };
+      const service = new SafePasteService(
+        () => target(),
+        async () => { events.push("inject"); },
+        clipboard,
+        async () => { events.push("authorize"); }
+      );
+      service.captureTarget();
+
+      const res = await service.paste("text", () => isCurrent);
+      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+      expect(events).toEqual(["authorize", "snapshot"]);
+    });
+
+    test("invalidation at clipboard write barrier prevents write and injection", async () => {
+      let isCurrent = true;
+      const events: string[] = [];
+      const clipboard = {
+        readText: () => "old",
+        writeText: (t: string) => { events.push("write"); },
+        snapshot: () => {
+          events.push("snapshot");
+          isCurrent = false; // Invalidate right after snapshot, before write
+          return { text: "old", formats: [] };
+        },
+        restore: () => { events.push("restore"); },
+      };
+      const service = new SafePasteService(
+        () => target(),
+        async () => { events.push("inject"); },
+        clipboard,
+        async () => { events.push("authorize"); }
+      );
+      service.captureTarget();
+
+      const res = await service.paste("text", () => isCurrent);
+      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+      expect(events).toEqual(["authorize", "snapshot"]);
+    });
+
+    test("invalidation at native injection barrier prevents injection and restores clipboard", async () => {
+      let isCurrent = true;
+      const events: string[] = [];
+      let clipboardValue = "old";
+      const clipboard = {
+        readText: () => clipboardValue,
+        writeText: (t: string) => { events.push("write"); clipboardValue = t; isCurrent = false; },
+        snapshot: () => { events.push("snapshot"); return { text: clipboardValue, formats: [] }; },
+        restore: (s: ClipboardSnapshot) => { events.push("restore"); clipboardValue = s.text ?? ""; },
+      };
+      const service = new SafePasteService(
+        () => target(),
+        async () => { events.push("inject"); },
+        clipboard,
+        async () => { events.push("authorize"); }
+      );
+      service.captureTarget();
+
+      const res = await service.paste("text", () => isCurrent);
+      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+      expect(events).toEqual(["authorize", "snapshot", "write", "restore"]);
+      expect(clipboardValue).toBe("old");
+    });
+  });
 });
