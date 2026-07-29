@@ -1,6 +1,6 @@
-import type { AppState, StatePayload, GeminiModelChoice, DictionaryEntry, VocabularyCategory } from "../shared/types.js";
+import type { AppState, ChimeSoundChoice, StatePayload, GeminiModelChoice, DictionaryEntry, VocabularyCategory } from "../shared/types.js";
 import { validateDictionaryEntries } from "../services/dictionary-engine.js";
-import type { DictationPreset, DictationMode, ChimeSoundChoice } from "../services/config.js";
+import type { DictationPreset, DictationMode } from "../services/config.js";
 import type { HistoryEntry } from "../services/history-service.js";
 
 const statusDot = document.getElementById("statusDot") as HTMLElement;

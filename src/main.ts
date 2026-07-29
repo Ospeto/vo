@@ -288,9 +288,9 @@ function isTerminalApp(appName: string): boolean {
   );
 }
 
-function executeUndoCommand(textLengthToUndo: number = 0) {
+async function executeUndoCommand(textLengthToUndo: number = 0) {
   try {
-    const activeApp = getActiveAppName();
+    const activeApp = await getActiveAppName();
     const isTerminal = isTerminalApp(activeApp);
 
     let script = "";
@@ -682,7 +682,7 @@ function setupIpcHandlers() {
         return;
       }
 
-      const activeApp = getActiveAppName();
+      const activeApp = await getActiveAppName();
       const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
       const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
       const isEnglish = !isBurmeseText;

@@ -1,16 +1,19 @@
 import OpenAI, { toFile } from "openai";
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { execSync, exec } from "node:child_process";
-import type { SpeechProvider, GeminiModelChoice, DictationPreset } from "./config.js";
-import type { DictionaryEntry } from "../shared/types.js";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+import type { SpeechProvider, DictationPreset } from "./config.js";
+import type { DictionaryEntry, GeminiModelChoice } from "../shared/types.js";
 import { applyDictionary } from "./dictionary-engine.js";
 import { loadPersistedVocabulary, dictionaryEntryFromTerm, migrateVocabulary } from "./vocabulary-service.js";
 import { getGeminiClient } from "./gemini-client.js";
 import { scanWorkspaceSymbols } from "./symbol-scanner.js";
 import logger from "./logger.js";
+import { elevenLabsFetch } from "./elevenlabs.js";
+
+const execAsync = promisify(exec);
 
 const DICTIONARY_DIR = join(homedir(), ".pi");
 const DICTIONARY_FILE = join(DICTIONARY_DIR, "dictionary.txt");
@@ -66,7 +69,7 @@ export function prewarmGeminiClient(): void {
       logger.info("Pre-warmed Gemini client connection successfully");
     }
     loadUserDictionary();
-    getActiveAppName();
+    void getActiveAppName();
   } catch (err) {
     logger.warn({ err: String(err) }, "Failed to pre-warm Gemini client connection");
   }
@@ -77,7 +80,7 @@ import { loadNativePasteAddon, resolveNativePastePath } from "./native-paste-add
 let cachedActiveAppName = "Unknown";
 let lastActiveAppTime = 0;
 
-export function getActiveAppName(): string {
+export async function getActiveAppName(): Promise<string> {
   const now = Date.now();
   if (cachedActiveAppName !== "Unknown" && now - lastActiveAppTime < 3000) {
     return cachedActiveAppName;
@@ -98,16 +101,14 @@ export function getActiveAppName(): string {
   } catch {}
 
   try {
-    const appName = execSync(
+    const { stdout } = await execAsync(
       `osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'`,
-      { encoding: "utf-8", timeout: 800 }
-    ).trim();
-    cachedActiveAppName = appName || "Unknown";
+      { timeout: 800 },
+    );
+    cachedActiveAppName = stdout.trim() || "Unknown";
     lastActiveAppTime = now;
-    return cachedActiveAppName;
-  } catch {
-    return cachedActiveAppName || "Unknown";
-  }
+  } catch {}
+  return cachedActiveAppName || "Unknown";
 }
 
 /** Vector 3: Context-Aware Dynamic Dictionary Injection */
@@ -682,7 +683,7 @@ async function transcribeGemini(
   const client = getGeminiClient();
   const base64Audio = audioBuffer.toString("base64");
 
-  const activeApp = getActiveAppName();
+  const activeApp = await getActiveAppName();
   const appContextHint = getAppContextPromptHint(activeApp);
 
   let appMappings: Record<string, DictationPreset> | undefined;
@@ -944,38 +945,20 @@ async function transcribeOpenAI(audioBuffer: Buffer, promptText?: string, abortS
   return transcription.text?.trim() ?? "";
 }
 
-let elevenlabsClient: ElevenLabsClient | null = null;
-
-function getElevenLabsClient(): ElevenLabsClient {
-  if (elevenlabsClient) return elevenlabsClient;
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    throw new Error("ELEVENLABS_API_KEY environment variable is required");
-  }
-  elevenlabsClient = new ElevenLabsClient({ apiKey });
-  return elevenlabsClient;
-}
-
 async function transcribeElevenLabs(audioBuffer: Buffer, abortSignal?: AbortSignal): Promise<string> {
   if (abortSignal?.aborted) throw new Error("Transcription aborted");
-  const client = getElevenLabsClient();
 
-  const result = await client.speechToText.convert({
-    file: {
-      data: audioBuffer,
-      filename: "recording.webm",
-      contentType: "audio/webm",
-    },
-    modelId: "scribe_v2",
-  }, { abortSignal });
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(audioBuffer)], { type: "audio/webm" }), "recording.webm");
+  form.append("model_id", "scribe_v2");
 
-  if ("text" in result) {
-    return (result.text ?? "").trim();
-  }
-  if ("transcripts" in result && result.transcripts?.[0]) {
-    return (result.transcripts[0].text ?? "").trim();
-  }
-  return "";
+  const response = await elevenLabsFetch("/v1/speech-to-text", {
+    method: "POST",
+    body: form,
+    signal: abortSignal,
+  });
+  const result = await response.json() as { text?: string; transcripts?: Array<{ text?: string }> };
+  return (result.text ?? result.transcripts?.[0]?.text ?? "").trim();
 }
 
 async function transcribeLocal(audioData: ArrayBuffer, abortSignal?: AbortSignal): Promise<string> {
@@ -1010,7 +993,7 @@ export async function transcribeDetailed(
 ): Promise<TranscriptionResult> {
   let rawText = "";
   let usedPaidKey = false;
-  const activeApp = getActiveAppName();
+  const activeApp = await getActiveAppName();
 
   const provider = typeof providerOrOptions === "string" ? providerOrOptions : (providerOrOptions.provider ?? "gemini");
   const geminiModel = typeof providerOrOptions === "object" ? (providerOrOptions.geminiModel ?? "gemini-3.1-flash-lite") : "gemini-3.1-flash-lite";

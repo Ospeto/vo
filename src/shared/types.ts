@@ -25,6 +25,7 @@ export interface StatePayload {
   message?: string;
   sequenceId?: number;
   usedPaidKey?: boolean;
+  hasSelection?: boolean;
 }
 
 export interface AudioLevelPayload {
@@ -85,6 +86,8 @@ export interface PiVoiceAPI {
   onStartRecording: (callback: (format: RecordingFormat, inputGain?: number) => void) => void;
   onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => void;
   onCancelRecording: (callback: () => void) => void;
+  onStateChanged: (callback: (payload: StatePayload) => void) => void;
+  onAudioLevelUpdate: (callback: (payload: number | AudioLevelPayload) => void) => void;
   cancelDictation: () => void;
   onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => void;
   onPlayAudioStreamChunk: (callback: (pcmData: ArrayBuffer) => void) => void;

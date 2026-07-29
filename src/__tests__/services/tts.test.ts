@@ -52,31 +52,10 @@ mock.module("openai", () => ({
   },
 }));
 
-// Mock ElevenLabs
-const mockElevenLabsTTS = mock(async () => ({
-  getReader: () => {
-    let done = false;
-    return {
-      read: async () => {
-        if (!done) {
-          done = true;
-          return {
-            done: false,
-            value: new Uint8Array(new Int16Array([500, 600]).buffer),
-          };
-        }
-        return { done: true, value: undefined };
-      },
-    };
-  },
-}));
-mock.module("@elevenlabs/elevenlabs-js", () => ({
-  ElevenLabsClient: class {
-    textToSpeech = {
-      convert: mockElevenLabsTTS,
-    };
-  },
-}));
+const originalFetch = globalThis.fetch;
+const mockElevenLabsTTS = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+  new Response(new Uint8Array(new Int16Array([500, 600]).buffer), { status: 200 }),
+);
 
 // Mock child_process for speakLocal
 let mockSpawnCallbacks: Record<string, Function> = {};
@@ -121,6 +100,7 @@ describe("synthesizeStream", () => {
     mockGenerateContentStream.mockClear();
     mockOpenAISpeech.mockClear();
     mockElevenLabsTTS.mockClear();
+    globalThis.fetch = mockElevenLabsTTS as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -128,6 +108,7 @@ describe("synthesizeStream", () => {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;
     }
+    globalThis.fetch = originalFetch;
   });
 
   test("throws for local provider (use speakLocal instead)", async () => {
@@ -158,6 +139,10 @@ describe("synthesizeStream", () => {
       chunks.push(chunk);
     }
     expect(chunks.length).toBeGreaterThan(0);
+    expect(mockElevenLabsTTS).toHaveBeenCalledTimes(1);
+    const [url, init] = mockElevenLabsTTS.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=pcm_24000");
+    expect(JSON.parse(String(init.body))).toMatchObject({ text: "hello", model_id: "eleven_flash_v2_5" });
   });
 
   test("defaults to gemini when no provider specified", async () => {

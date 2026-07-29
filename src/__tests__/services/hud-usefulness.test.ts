@@ -7,7 +7,7 @@ describe("VO HUD Usefulness & Aesthetic Pass Contract Suite", () => {
   const mainTsPath = resolve(process.cwd(), "src/main.ts");
   const preloadTsPath = resolve(process.cwd(), "src/preload.ts");
 
-  const hudHtmlContent = readFileSync(hudHtmlPath, "utf-8");
+  const hudHtmlContent = `${readFileSync(hudHtmlPath, "utf-8")}\n${readFileSync(resolve(process.cwd(), "src/renderer/hud.ts"), "utf-8")}`;
   const mainTsContent = readFileSync(mainTsPath, "utf-8");
   const preloadTsContent = readFileSync(preloadTsPath, "utf-8");
 
@@ -80,9 +80,9 @@ describe("VO HUD Usefulness & Aesthetic Pass Contract Suite", () => {
   describe("4. Non-Focus-Stealing Cancellation & Escape Path Preservation", () => {
     test("cancel button has no-drag region and prevents default mousedown to stop focus theft", () => {
       expect(hudHtmlContent).toContain("-webkit-app-region: no-drag");
-      expect(hudHtmlContent).toContain("hudCancelBtn.addEventListener(\"mousedown\", (e) => {");
-      expect(hudHtmlContent).toContain("e.preventDefault()");
-      expect(hudHtmlContent).toContain("api.cancelDictation()");
+      expect(hudHtmlContent).toContain("hudCancelBtn.addEventListener(\"mousedown\", (event) => {");
+      expect(hudHtmlContent).toContain("event.preventDefault()");
+      expect(hudHtmlContent).toContain("window.piVoice.cancelDictation()");
     });
 
     test("main window configures HUD as focusable: false with 280x36 bounds", () => {
@@ -105,8 +105,8 @@ describe("VO HUD Usefulness & Aesthetic Pass Contract Suite", () => {
     });
 
     test("shows error icon, detail payload message, and dismiss button in HUD", () => {
-      expect(hudHtmlContent).toContain("hudCancelBtn.setAttribute(\"aria-label\", \"Dismiss error\")");
-      expect(hudHtmlContent).toContain("hudCancelBtn.setAttribute(\"title\", \"Dismiss\")");
+      expect(hudHtmlContent).toContain("state === \"error\" ? \"Dismiss error\" : \"Cancel dictation\"");
+      expect(hudHtmlContent).toContain("state === \"error\" ? \"Dismiss\" : \"Cancel (Esc)\"");
       expect(hudHtmlContent).toContain("defaultDetails");
       expect(hudHtmlContent).toContain("An error occurred");
     });
@@ -145,8 +145,7 @@ describe("VO HUD Usefulness & Aesthetic Pass Contract Suite", () => {
       expect(hudHtmlContent).toContain("border-radius: 9999px");
       expect(hudHtmlContent).toContain("payload.usedPaidKey === true");
       expect(hudHtmlContent).toContain("state === \"transcribing\" || state === \"idle\"");
-      expect(hudHtmlContent).toContain("hudPaidBadge.style.display = \"inline-flex\"");
-      expect(hudHtmlContent).toContain("hudPaidBadge.style.display = \"none\"");
+      expect(hudHtmlContent).toContain("? \"inline-flex\" : \"none\"");
     });
   });
 });
