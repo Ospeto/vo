@@ -1054,18 +1054,23 @@ export async function transcribeDetailed(
     }
   }
 
-  const rawPreset = resolveEffectivePreset(dictationPreset, activeApp);
-  const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
   let isTranslationActive = translateEnabled;
+  let appPresetMappings: Record<string, DictationPreset> | undefined;
+  try {
+    const { loadConfig } = await import("./config.js");
+    const cfg = loadConfig();
+    appPresetMappings = cfg.appPresetMappings;
+    if (isTranslationActive === undefined) {
+      isTranslationActive = cfg.translateEnabled ?? false;
+    }
+  } catch {
+    isTranslationActive = isTranslationActive ?? false;
+  }
+
+  const rawPreset = resolveEffectivePreset(dictationPreset, activeApp, appPresetMappings);
+  const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
   if (rawPreset === "translate") {
     isTranslationActive = true;
-  } else if (isTranslationActive === undefined) {
-    try {
-      const { loadConfig } = await import("./config.js");
-      isTranslationActive = loadConfig().translateEnabled ?? false;
-    } catch {
-      isTranslationActive = false;
-    }
   }
 
   const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true);
