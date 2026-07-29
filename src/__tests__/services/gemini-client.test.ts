@@ -44,6 +44,9 @@ describe("gemini-client", () => {
     delete process.env.GOOGLE_API_KEY;
     delete process.env.GOOGLE_GENAI_USE_VERTEXAI;
     process.env.XDG_CONFIG_HOME = join(tmpdir(), `pi-voice-gemini-test-${Date.now()}`);
+    const { mkdirSync, writeFileSync } = require("node:fs");
+    mkdirSync(join(process.env.XDG_CONFIG_HOME, "pi-voice"), { recursive: true });
+    writeFileSync(join(process.env.XDG_CONFIG_HOME, "pi-voice", "config.json"), "{}");
     _resetGeminiClient();
   });
 

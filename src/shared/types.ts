@@ -83,7 +83,7 @@ export interface AudioStreamMeta {
 /** Exposed API in renderer via contextBridge */
 export interface PiVoiceAPI {
   onStartRecording: (callback: (format: RecordingFormat, inputGain?: number) => void) => void;
-  onStopRecording: (callback: () => void) => void;
+  onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => void;
   onCancelRecording: (callback: () => void) => void;
   cancelDictation: () => void;
   onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => void;
