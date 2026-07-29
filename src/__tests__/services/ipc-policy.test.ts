@@ -32,7 +32,7 @@ const ALL_CHANNELS = [
 function createMockWindow(role: RendererRole, urlPath?: string, isDestroyed = false) {
   const page = urlPath || (role === "settings" ? "index.html" : role === "capture" ? "capture.html" : "hud.html");
   const url = `file:///app/out/renderer/${page}`;
-  
+
   const webContents = {
     id: Math.floor(Math.random() * 10000) + 1,
     getURL: () => url,
@@ -58,7 +58,7 @@ function createMockEvent(win: any, frameUrl?: string, parentFrame: any = null) {
   const url = frameUrl || win.webContents.getURL();
   const mainFrame = win.webContents.mainFrame;
   const frame = parentFrame ? { url, parent: parentFrame } : { url, parent: null };
-  
+
   return {
     sender: win.webContents,
     frame: parentFrame ? frame : mainFrame,
