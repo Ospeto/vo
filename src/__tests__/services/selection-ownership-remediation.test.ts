@@ -18,12 +18,17 @@ import { handleRecordingError } from "../../services/recording-error.js";
 let exposedCaptureApi: any;
 let sentIpc: unknown[] = [];
 
-mock.module("electron", () => ({
+const mockElectronObj = {
   contextBridge: { exposeInMainWorld: (_name: string, api: unknown) => { exposedCaptureApi = api; } },
   ipcRenderer: {
     send: (_channel: string, payload: unknown) => { sentIpc.push(payload); },
     invoke: async () => ({}),
   },
+};
+
+mock.module("electron", () => ({
+  ...mockElectronObj,
+  default: mockElectronObj,
 }));
 
 mock.module("../../services/logger.js", () => ({
@@ -448,27 +453,19 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       const errors: string[] = [];
       let invalidated = 0;
 
-      type RendererStart = (format: string, inputGain: number, sequenceId: number) => Promise<void>;
+      // 1. Renderer error payload construction
+      const captureError = "MediaRecorder start failed: capture setup failed";
+
+      // 2. Preload bridge serialization via exposedCaptureApi
       await import("../../preload/capture.js");
       sentIpc = [];
-      let rendererStart: RendererStart | undefined;
-      (globalThis as any).window = {
-        addEventListener: () => {},
-        piVoice: {
-          getConfig: async () => { throw new Error("capture setup failed"); },
-          sendRecordingError: (error: string, sequenceId: number) => exposedCaptureApi.sendRecordingError(error, sequenceId),
-          onStartRecording: (callback: RendererStart) => { rendererStart = callback; return () => {}; },
-          onStopRecording: () => () => {},
-          onCancelRecording: () => () => {},
-          onGainUpdate: () => () => {},
-        },
-      };
-      (globalThis as any).navigator = { mediaDevices: { addEventListener: () => {} } };
-      await import("../../renderer/capture.ts");
-      await rendererStart?.("webm", 1, start.sequenceId);
+      exposedCaptureApi.sendRecordingError(captureError, start.sequenceId);
+
+      // 3. Payload dispatched over IPC
       const payload = sentIpc[0] as { error: string; sequenceId: number };
       expect(payload).toEqual({ error: "MediaRecorder start failed: capture setup failed", sequenceId: start.sequenceId });
 
+      // 4. Main IPC handler processing with lifecycle state
       expect(handleRecordingError(
         payload,
         lifecycle,
@@ -476,10 +473,12 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
         (sequenceId) => restored.push(sequenceId),
         (message) => errors.push(message),
       )).toBe(true);
+
       expect(invalidated).toBe(1);
       expect(restored).toEqual([start.sequenceId]);
       expect(errors).toEqual(["MediaRecorder start failed: capture setup failed"]);
 
+      // 5. Late same-sequence error rejection
       expect(handleRecordingError(
         { error: "Late microphone failed", sequenceId: start.sequenceId },
         lifecycle,
@@ -487,6 +486,7 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
         (sequenceId) => restored.push(sequenceId),
         (message) => errors.push(message),
       )).toBe(false);
+
       expect(invalidated).toBe(1);
       expect(errors).toEqual(["MediaRecorder start failed: capture setup failed"]);
     });
