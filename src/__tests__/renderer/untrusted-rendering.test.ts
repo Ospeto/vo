@@ -384,6 +384,7 @@ describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
     const pages = ["index.html", "capture.html", "hud.html"];
     const baseSrcDir = path.resolve(__dirname, "../../../src/renderer");
     const baseOutDir = path.resolve(__dirname, "../../../out/renderer");
+    const expectedCsp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; object-src 'none'; frame-src 'none';";
 
     pages.forEach((pageFile) => {
       const srcPath = path.join(baseSrcDir, pageFile);
@@ -397,28 +398,20 @@ describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
       expect(cspMatch).not.toBeNull();
 
       const csp = cspMatch && cspMatch[1] ? cspMatch[1] : "";
-      expect(csp).not.toBe("");
-      expect(csp).toContain("default-src 'self'");
-      expect(csp).toContain("script-src 'self'");
-      expect(csp).toContain("object-src 'none'");
-      expect(csp).toContain("frame-src 'none'");
-      expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+      expect(csp).toBe(expectedCsp);
 
       // Negative assertions: script-src must not allow unsafe-inline or unsafe-eval
       const scriptDirective = csp.match(/script-src\s+([^;]+)/i)?.[1] || "";
       expect(scriptDirective).not.toContain("'unsafe-inline'");
       expect(scriptDirective).not.toContain("'unsafe-eval'");
-    });
 
-    // Check built output if present
-    if (fs.existsSync(baseOutDir)) {
-      pages.forEach((pageFile) => {
-        const outPath = path.join(baseOutDir, pageFile);
-        if (fs.existsSync(outPath)) {
-          const htmlContent = fs.readFileSync(outPath, "utf8");
-          expect(htmlContent).toContain(`http-equiv="Content-Security-Policy"`);
-        }
-      });
-    }
+      const outPath = path.join(baseOutDir, pageFile);
+      expect(fs.existsSync(outPath)).toBe(true);
+      const packagedHtml = fs.readFileSync(outPath, "utf8");
+      expect(packagedHtml).toContain(`http-equiv="Content-Security-Policy"`);
+      const packagedCspMatch = packagedHtml.match(/content="([^"]+)"/i);
+      expect(packagedCspMatch).not.toBeNull();
+      expect(packagedCspMatch?.[1]).toBe(expectedCsp);
+    });
   });
 });
