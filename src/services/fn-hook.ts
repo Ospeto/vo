@@ -57,6 +57,10 @@ export class FnHook {
     this.displayName = displayName;
   }
 
+  public isStarted(): boolean {
+    return this.started;
+  }
+
   start(): void {
     if (this.started) return;
 

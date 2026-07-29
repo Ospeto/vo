@@ -110,6 +110,12 @@ bun --hot ./index.ts
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
+## macOS Permission & Hotkey Manual Testing Protocol
+
+Automated unit tests mock the macOS permission gate. The captain must perform live manual testing on macOS:
+- **Granted Input Monitoring**: Verify Hold Mode press/release, very short hold tap (<250ms), rapid double toggle in Toggle Mode, and Tray/Popover controls in both modes.
+- **Revoked Input Monitoring**: Verify Toggle Mode down-only fallback works, and Hold Mode refuses activation before start with actionable error HUD status.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.
