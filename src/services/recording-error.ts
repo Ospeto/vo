@@ -2,6 +2,10 @@ import type { RecordingLifecycle } from "./recording-lifecycle.js";
 
 export type RecordingErrorPayload = { error?: unknown; sequenceId?: unknown };
 
+export function createRecordingErrorPayload(error: string, sequenceId: number): RecordingErrorPayload {
+  return { error, sequenceId };
+}
+
 export function handleRecordingError(
   payload: RecordingErrorPayload,
   lifecycle: RecordingLifecycle,

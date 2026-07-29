@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "bun:test";
+import { describe, test, expect, beforeEach, mock } from "bun:test";
 import {
   areClipboardSnapshotsEqual,
   SelectionOwnershipManager,
@@ -14,6 +14,21 @@ import {
 import { PasteCoordinator } from "../../services/paste-flow.js";
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
 import { handleRecordingError } from "../../services/recording-error.js";
+
+let exposedCaptureApi: any;
+let sentIpc: unknown[] = [];
+
+mock.module("electron", () => ({
+  contextBridge: { exposeInMainWorld: (_name: string, api: unknown) => { exposedCaptureApi = api; } },
+  ipcRenderer: {
+    send: (_channel: string, payload: unknown) => { sentIpc.push(payload); },
+    invoke: async () => ({}),
+  },
+}));
+
+mock.module("../../services/logger.js", () => ({
+  default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+}));
 
 function createMockRichClipboardAdapter(initialText = "Original Clipboard Text") {
   let text = initialText;
@@ -426,15 +441,21 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       expect(adapter.readText()).toBe("Second sequence selection");
     });
 
-    test("main recording-error handler accepts active payloads and rejects late same-sequence payloads", () => {
+    test("renderer-to-preload payload reaches the main handler and rejects late same-sequence errors", async () => {
       const lifecycle = new RecordingLifecycle();
       const start = lifecycle.requestStart();
       const restored: number[] = [];
       const errors: string[] = [];
       let invalidated = 0;
 
+      await import("../../preload/capture.js");
+      sentIpc = [];
+      exposedCaptureApi.sendRecordingError("Microphone failed", start.sequenceId);
+      const payload = sentIpc[0] as { error: string; sequenceId: number };
+      expect(payload).toEqual({ error: "Microphone failed", sequenceId: start.sequenceId });
+
       expect(handleRecordingError(
-        { error: "Microphone failed", sequenceId: start.sequenceId },
+        payload,
         lifecycle,
         () => invalidated++,
         (sequenceId) => restored.push(sequenceId),
