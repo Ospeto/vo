@@ -282,8 +282,8 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       expect(pasteResult.status).toBe("denied");
 
       const restored = ownershipManager.restoreCapturedSelection(204, port);
-      expect(restored).toBe(true);
-      expect(adapter.readText()).toBe("Original Clipboard Text");
+      expect(restored).toBe(false);
+      expect(adapter.readText()).toBe("New user copy before paste");
     });
   });
 
@@ -467,7 +467,7 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       await import("../../renderer/capture.ts");
       await rendererStart?.("webm", 1, start.sequenceId);
       const payload = sentIpc[0] as { error: string; sequenceId: number };
-      expect(payload).toEqual({ error: "capture setup failed", sequenceId: start.sequenceId });
+      expect(payload).toEqual({ error: "MediaRecorder start failed: capture setup failed", sequenceId: start.sequenceId });
 
       expect(handleRecordingError(
         payload,
@@ -478,7 +478,7 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       )).toBe(true);
       expect(invalidated).toBe(1);
       expect(restored).toEqual([start.sequenceId]);
-      expect(errors).toEqual(["capture setup failed"]);
+      expect(errors).toEqual(["MediaRecorder start failed: capture setup failed"]);
 
       expect(handleRecordingError(
         { error: "Late microphone failed", sequenceId: start.sequenceId },
@@ -488,7 +488,7 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
         (message) => errors.push(message),
       )).toBe(false);
       expect(invalidated).toBe(1);
-      expect(errors).toEqual(["capture setup failed"]);
+      expect(errors).toEqual(["MediaRecorder start failed: capture setup failed"]);
     });
   });
 });
