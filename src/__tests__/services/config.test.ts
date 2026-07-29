@@ -317,6 +317,19 @@ describe("loadConfig", () => {
     expect(loadConfig(tmpDir).provider).toBe("openai");
   });
 
+  test("falls back to a valid legacy config after backing up corrupt XDG config", () => {
+    const legacyPath = join(tmpDir, "home", ".config", "pi-voice", "config.json");
+    const xdgPath = join(tmpDir, "xdg", "pi-voice", "config.json");
+    mkdirSync(join(tmpDir, "home", ".config", "pi-voice"), { recursive: true });
+    mkdirSync(join(tmpDir, "xdg", "pi-voice"), { recursive: true });
+    process.env.XDG_CONFIG_HOME = join(tmpDir, "xdg");
+    writeFileSync(legacyPath, JSON.stringify({ provider: "openai" }));
+    writeFileSync(xdgPath, "broken");
+
+    expect(loadConfig(tmpDir).provider).toBe("openai");
+    expect(existsSync(xdgPath)).toBe(false);
+  });
+
   test("keeps prior corrupt backups", () => {
     const piDir = join(tmpDir, ".pi");
     mkdirSync(piDir, { recursive: true });

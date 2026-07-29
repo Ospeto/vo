@@ -498,11 +498,19 @@ function repairConfigJson(raw: Record<string, unknown>): { json: Record<string, 
   return { json, changed };
 }
 
+function readConfigJson(filePath: string): Record<string, unknown> {
+  const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new SyntaxError("Config must be a JSON object");
+  }
+  return parsed;
+}
+
 export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const defaults = defaultConfig();
   const canonicalUserConfigPath = getUserConfigPath();
   const legacyUserConfigPath = getLegacyUserConfigPath();
-  const userConfigPath = existsSync(canonicalUserConfigPath) || canonicalUserConfigPath === legacyUserConfigPath
+  let userConfigPath = existsSync(canonicalUserConfigPath) || canonicalUserConfigPath === legacyUserConfigPath
     ? canonicalUserConfigPath
     : legacyUserConfigPath;
   const projConfigPath = getProjConfigPath(cwd);
@@ -511,12 +519,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   let globalExists = false;
   if (existsSync(userConfigPath)) {
     try {
-      const rawContent = readFileSync(userConfigPath, "utf-8");
-      const parsed = JSON.parse(rawContent);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new SyntaxError("Config must be a JSON object");
-      }
-      globalJson = parsed;
+      globalJson = readConfigJson(userConfigPath);
       globalExists = true;
     } catch (err: any) {
       if (err instanceof ConfigError) throw err;
@@ -529,6 +532,19 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
       } catch (backupErr: any) {
         logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt user config file");
       }
+      if (userConfigPath === canonicalUserConfigPath && canonicalUserConfigPath !== legacyUserConfigPath && existsSync(legacyUserConfigPath)) {
+        try {
+          globalJson = readConfigJson(legacyUserConfigPath);
+          globalExists = true;
+          userConfigPath = legacyUserConfigPath;
+        } catch {
+          try {
+            backupCorruptConfig(legacyUserConfigPath);
+          } catch (backupErr: any) {
+            logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt legacy user config file");
+          }
+        }
+      }
     }
   }
 
@@ -536,12 +552,7 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   let projExists = false;
   if (projConfigPath && existsSync(projConfigPath)) {
     try {
-      const rawContent = readFileSync(projConfigPath, "utf-8");
-      const parsed = JSON.parse(rawContent);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new SyntaxError("Config must be a JSON object");
-      }
-      projJson = parsed;
+      projJson = readConfigJson(projConfigPath);
       projExists = true;
     } catch (err: any) {
       if (err instanceof ConfigError) throw err;
