@@ -448,6 +448,25 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       const errors: string[] = [];
       let invalidated = 0;
 
+      type RendererStart = (format: string, inputGain: number, sequenceId: number) => Promise<void>;
+      let rendererStart: RendererStart | undefined;
+      const rendererErrors: Array<{ error: string; sequenceId: number }> = [];
+      (globalThis as any).window = {
+        addEventListener: () => {},
+        piVoice: {
+          getConfig: async () => { throw new Error("capture setup failed"); },
+          sendRecordingError: (error: string, sequenceId: number) => rendererErrors.push({ error, sequenceId }),
+          onStartRecording: (callback: RendererStart) => { rendererStart = callback; return () => {}; },
+          onStopRecording: () => () => {},
+          onCancelRecording: () => () => {},
+          onGainUpdate: () => () => {},
+        },
+      };
+      (globalThis as any).navigator = { mediaDevices: { addEventListener: () => {} } };
+      await import("../../renderer/capture.ts");
+      await rendererStart?.("webm", 1, start.sequenceId);
+      expect(rendererErrors).toEqual([{ error: "capture setup failed", sequenceId: start.sequenceId }]);
+
       await import("../../preload/capture.js");
       sentIpc = [];
       exposedCaptureApi.sendRecordingError("Microphone failed", start.sequenceId);
