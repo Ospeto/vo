@@ -213,7 +213,7 @@ let lastCopiedText = "";
 
 (globalThis as any).window = {
   addEventListener: () => {},
-  electronIPC: {
+  piVoice: {
     getHistory: async () => historyData,
     saveConfig: async (config: any) => {
       savedConfigCalls.push(config);
