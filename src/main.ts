@@ -17,6 +17,7 @@ import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-
 import { createMacSafePasteService, type ClipboardAdapter, type ClipboardSnapshot } from "./services/safe-paste.js";
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
+import { MINIMUM_HOLD_RECORDING_MS, shouldEnsureMinimumDuration } from "./services/hold-mode-protections.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -934,7 +935,7 @@ async function startRecordingFlow() {
   if (pendingStopOnStart && currentConfig.dictationMode === "hold") {
     logger.info("Queued stop executing upon entering recording state with minimum capture window");
     const elapsed = Date.now() - recordingStartTime;
-    const delay = Math.max(0, 800 - elapsed);
+    const delay = Math.max(0, MINIMUM_HOLD_RECORDING_MS - elapsed);
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -985,12 +986,14 @@ function handleHotkeyUp() {
     logger.info({ pressDuration }, "Key Up during starting state: queuing stop");
     pendingStopOnStart = true;
   } else if (currentState === "recording") {
-    logger.info({ pressDuration }, "Key Up: STOPPING recording (Hold Mode)");
+    const elapsed = recordingStartTime > 0 ? Date.now() - recordingStartTime : pressDuration;
+    const ensureMinimumDuration = shouldEnsureMinimumDuration(pressDuration, elapsed);
+    logger.info({ pressDuration, elapsed, ensureMinimumDuration }, "Key Up: STOPPING recording (Hold Mode)");
     const stopRes = recordingLifecycle.requestStop();
     if (stopRes.accepted) {
       setState("stopping", "Stopping...");
       playToggleStopChime();
-      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+      captureWindow?.webContents.send(IPC.STOP_RECORDING, ensureMinimumDuration);
     }
   }
 }
