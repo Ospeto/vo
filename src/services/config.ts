@@ -695,7 +695,7 @@ export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPa
       const content = readFileSync(projConfigPath, "utf-8");
       existingProjJson = JSON.parse(content);
     } catch {}
-    toSaveProj = preparePatchSave(existingProjJson, patch, projConfigPath);
+    toSaveProj = preparePatchSave(existingProjJson!, patch, projConfigPath);
   }
 
   if (toSaveProj && projConfigPath && existingProjJson) {

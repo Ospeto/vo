@@ -13,6 +13,14 @@ mock.module("../../services/logger.js", () => ({
   },
 }));
 
+// Keep config tests from writing the real user's module-load-time vocabulary path.
+mock.module("../../services/vocabulary-service.js", () => ({
+  loadPersistedVocabulary: () => ({ customVocabulary: [], presetVocabulary: {}, entries: [] }),
+  savePersistedVocabulary: () => {},
+  migrateVocabulary: (customVocabulary: string[], presetVocabulary: Record<string, string[]>, entries: unknown[] = []) => entries,
+  backfillLegacyWhitespace: (entries: unknown[]) => entries,
+}));
+
 import {
   parseKeyBinding,
   formatKeyDisplay,
