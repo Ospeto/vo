@@ -424,5 +424,16 @@ describe("PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite"
       expect(ownershipManager.getOwnership()?.sequenceId).toBe(second.sequenceId);
       expect(adapter.readText()).toBe("Second sequence selection");
     });
+
+    test("renderer and main IPC contract carries the originating sequence", async () => {
+      const renderer = await Bun.file(new URL("../../renderer/capture.ts", import.meta.url)).text();
+      const preload = await Bun.file(new URL("../../preload/capture.ts", import.meta.url)).text();
+      const main = await Bun.file(new URL("../../main.ts", import.meta.url)).text();
+
+      expect(renderer).toContain("sendRecordingError(error, sequenceId)");
+      expect(renderer).toContain("finalizeRecording(generation, sequenceId)");
+      expect(preload).toContain("{ error, sequenceId }");
+      expect(main).toContain("payload.sequenceId !== currentSeq");
+    });
   });
 });
