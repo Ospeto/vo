@@ -114,8 +114,11 @@ when `XDG_CONFIG_HOME` is set, or at the default path
 read as a legacy fallback when an XDG-specific file is absent. These settings
 survive app updates and launches from `/Applications/vo.app`. When a project
 already contains `.pi/pi-voice.json`, that file is loaded as a project-local
-override and setting changes update both files; the project file is never
-created solely by saving settings. Malformed config files are backed up as
+override and non-secret setting changes update both files; API keys are stored
+only in the user config with strong OS-backed encryption. Legacy project-local
+API keys are migrated when possible, or reported for manual removal when safe
+migration is unavailable. The project file is never created solely by saving
+settings. Malformed config files are backed up as
 `config.json.corrupt*.bak` and replaced with safe defaults so they cannot
 prevent vo from starting.
 
