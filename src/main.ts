@@ -939,7 +939,7 @@ async function startRecordingFlow() {
       if (stopRes.accepted) {
         setState("stopping", "Stopping...");
         playToggleStopChime();
-        captureWindow?.webContents.send(IPC.STOP_RECORDING);
+        captureWindow?.webContents.send(IPC.STOP_RECORDING, true);
       }
     }
   }

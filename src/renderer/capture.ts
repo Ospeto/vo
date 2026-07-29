@@ -310,7 +310,6 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   finalizedRecordingGeneration = -1;
   audioChunks = [];
   currentGainValue = inputGain;
-  recordingStartTime = Date.now();
 
   const config = await window.electronIPC?.getConfig();
   autoEndpointEnabled = config?.autoEndpointEnabled ?? true;
@@ -370,9 +369,10 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
       };
       mediaRecorder.onstop = () => { void finalizeRecording(generation); };
       mediaRecorder.start(100);
+      recordingStartTime = Date.now();
       if (stopRequestedDuringStartup && generation === recordingGeneration) {
         stopRequestedDuringStartup = false;
-        stopRecording();
+        stopRecording(true);
       }
     }
   } catch (err: any) {
@@ -397,7 +397,7 @@ window.electronIPC?.onStartRecording(async (format: RecordingFormat, inputGain: 
   audioChunks = [];
 });
 
-function stopRecording() {
+function stopRecording(ensureMinimumDuration = false) {
   try {
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
       stopRequestedDuringStartup = true;
@@ -419,11 +419,12 @@ function stopRecording() {
     };
 
     const elapsed = Date.now() - recordingStartTime;
-    if (elapsed < 300) {
+    const minimumDuration = ensureMinimumDuration ? 800 : 300;
+    if (elapsed < minimumDuration) {
       if (postRollTimer) clearTimeout(postRollTimer);
       postRollTimer = setTimeout(() => {
         if (generation === recordingGeneration) doStop();
-      }, 300 - elapsed);
+      }, minimumDuration - elapsed);
     } else {
       doStop();
     }

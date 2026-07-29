@@ -6,8 +6,8 @@ const api = {
   onStartRecording: (callback: (format: RecordingFormat, inputGain: number) => void) => {
     ipcRenderer.on(IPC.START_RECORDING, (_event, format: RecordingFormat, inputGain: number) => callback(format ?? "webm", inputGain ?? 1.0));
   },
-  onStopRecording: (callback: () => void) => {
-    ipcRenderer.on(IPC.STOP_RECORDING, () => callback());
+  onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => {
+    ipcRenderer.on(IPC.STOP_RECORDING, (_event, ensureMinimumDuration: boolean) => callback(ensureMinimumDuration));
   },
   onCancelRecording: (callback: () => void) => {
     ipcRenderer.on(IPC.CANCEL_RECORDING, () => callback());
