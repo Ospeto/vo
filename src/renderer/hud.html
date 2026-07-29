@@ -138,6 +138,22 @@
       display: inline-flex;
     }
 
+    /* Paid Key Badge */
+    .hud-paid-badge {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.2);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      font-weight: 700;
+      font-size: 10px;
+      line-height: 1;
+      padding: 0 4px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
     /* --- STATES --- */
 
     /* 1. STARTING (Soft Cyan Pulse) */
@@ -307,6 +323,8 @@
       <span id="hudDetail" class="hud-detail"></span>
     </div>
 
+    <span id="hudPaidBadge" class="hud-paid-badge">$</span>
+
     <button id="hudCancelBtn" class="hud-action-btn" aria-label="Cancel dictation" title="Cancel (Esc)">✕</button>
   </div>
 
@@ -315,6 +333,7 @@
     const hudIcon = document.getElementById("hudIcon");
     const hudTitle = document.getElementById("hudTitle");
     const hudDetail = document.getElementById("hudDetail");
+    const hudPaidBadge = document.getElementById("hudPaidBadge");
     const hudCancelBtn = document.getElementById("hudCancelBtn");
 
     const stateIcons = {
@@ -413,6 +432,15 @@
         hudCancelBtn.textContent = "✕";
         hudCancelBtn.setAttribute("aria-label", "Cancel dictation");
         hudCancelBtn.setAttribute("title", "Cancel (Esc)");
+      }
+
+      // Paid Key Badge Display
+      if (hudPaidBadge) {
+        if (payload && payload.usedPaidKey === true) {
+          hudPaidBadge.style.display = "inline-flex";
+        } else {
+          hudPaidBadge.style.display = "none";
+        }
       }
     }
 

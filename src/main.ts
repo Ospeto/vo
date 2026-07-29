@@ -106,16 +106,18 @@ function cancelDictation(reason: string = "Cancelled") {
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 
-function setState(state: AppState, message?: string) {
+function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
   sequenceId++;
+  const usedPaidKey = typeof options === "boolean" ? options : Boolean(options?.usedPaidKey);
   const payload: StatePayload & { hasSelection?: boolean } = {
     state,
     message,
     sequenceId,
     hasSelection: Boolean(activeSelectionText && activeSelectionText.trim().length > 0),
+    usedPaidKey,
   };
-  logger.info({ state, message, sequenceId, hasSelection: payload.hasSelection }, "State changed");
+  logger.info({ state, message, sequenceId, hasSelection: payload.hasSelection, usedPaidKey: payload.usedPaidKey }, "State changed");
 
   if (stoppingSafetyTimer) {
     clearTimeout(stoppingSafetyTimer);
@@ -630,7 +632,7 @@ function setupIpcHandlers() {
       if (!text || text.trim().length === 0) {
         recordingLifecycle.finishTranscription(currentSeq, true);
         restoreCapturedSelection();
-        setState("idle", "No speech detected");
+        setState("idle", "No speech detected", { usedPaidKey });
         return;
       }
 
@@ -652,7 +654,7 @@ function setupIpcHandlers() {
       if (isUndo) {
         recordingLifecycle.finishTranscription(currentSeq, true);
         restoreCapturedSelection();
-        setState("idle", "Voice undo executed");
+        setState("idle", "Voice undo executed", { usedPaidKey });
         return;
       }
 
@@ -676,14 +678,14 @@ function setupIpcHandlers() {
         lastPastedText = text;
         lastPasteTime = Date.now();
         playSuccessChime();
-        setState("idle", `Dictated: "${text}"`);
+        setState("idle", `Dictated: "${text}"`, { usedPaidKey });
       } else {
         recordingLifecycle.finishTranscription(currentSeq, false);
         recordingLifecycle.settle();
         restoreCapturedSelection();
         addHistoryEntry(text, activeApp, cost, audioDurationSec, modelUsed || currentConfig.geminiModel, usedPaidKey);
         logger.warn({ pasteResult }, "Target window changed or paste denied - transcript saved to history");
-        setState("idle", "Target changed - transcript saved to history");
+        setState("idle", "Target changed - transcript saved to history", { usedPaidKey });
       }
     } catch (err: any) {
       if (!isCurrentTranscription(currentSeq)) return;
