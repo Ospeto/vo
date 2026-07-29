@@ -65,7 +65,7 @@ describe("Transcription Latency Gap & Toggle Silence Endpointing Suite", () => {
 
       // Simulated handleHotkeyUp logic for dictationMode: "toggle"
       // In toggle mode, handleHotkeyUp returns early and does NOT stop recording
-      const dictationMode: "toggle" | "hold" = "toggle";
+      const dictationMode = "toggle" as "toggle" | "hold";
       const pressDuration = 500; // >250ms press
 
       if (dictationMode === "hold") {
