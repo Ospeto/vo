@@ -32,6 +32,11 @@ const mockUIOhook = {
     if (event === "keydown") keydownCallbacks.push(cb);
     if (event === "keyup") keyupCallbacks.push(cb);
   }),
+  off: mock((event: string, cb: KeyCallback) => {
+    const callbacks = event === "keydown" ? keydownCallbacks : keyupCallbacks;
+    const index = callbacks.indexOf(cb);
+    if (index >= 0) callbacks.splice(index, 1);
+  }),
   start: mock(() => {
     uiohookStarted = true;
   }),
@@ -88,6 +93,7 @@ describe("FnHook", () => {
     keyupCallbacks.length = 0;
     uiohookStarted = false;
     mockUIOhook.on.mockClear();
+    mockUIOhook.off.mockClear();
     mockUIOhook.start.mockClear();
     mockUIOhook.stop.mockClear();
   });
@@ -217,14 +223,19 @@ describe("FnHook", () => {
     expect(onFnUp).not.toHaveBeenCalled();
   });
 
-  test("stop() stops uiohook", () => {
-    const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
+  test("stop() stops uiohook and detaches retired listeners", () => {
+    const onFnDown = mock(() => {});
+    const callbacks = { onFnDown, onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
     const hook = new FnHook(callbacks, binding, "t");
 
     hook.start();
     hook.stop();
+    simulateKeyDown(20);
+
     expect(mockUIOhook.stop).toHaveBeenCalled();
+    expect(mockUIOhook.off).toHaveBeenCalledTimes(2);
+    expect(onFnDown).not.toHaveBeenCalled();
   });
 
   test("stop() is no-op when not started", () => {

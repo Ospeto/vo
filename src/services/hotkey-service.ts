@@ -1,5 +1,5 @@
 import { globalShortcut } from "electron";
-import { parseKeyBinding, formatKeyDisplay, type KeyBinding } from "./config.js";
+import { parseKeyBinding, formatKeyDisplay, formatKeyBinding, type KeyBinding, type DictationMode } from "./config.js";
 import { FnHook } from "./fn-hook.js";
 import logger from "./logger.js";
 
@@ -9,11 +9,72 @@ export interface HotkeyCallbacks {
   onCancel?: () => void;
 }
 
+export interface HotkeyRegisterResult {
+  success: boolean;
+  nativeKeyUpAvailable: boolean;
+  fallbackRegistered: boolean;
+  binding?: KeyBinding;
+  keyDisplay?: string;
+  error?: string;
+}
+
 export interface IHotkeyService {
-  start(binding: KeyBinding, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBinding?: KeyBinding): Promise<void>;
-  replace(newBindingStr: string, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBindingStr?: string): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }>;
+  start(
+    binding: KeyBinding,
+    callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void),
+    editBinding?: KeyBinding,
+    mode?: DictationMode
+  ): Promise<HotkeyRegisterResult>;
+  replace(
+    newBindingStr: string,
+    callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void),
+    editBindingStr?: string,
+    mode?: DictationMode
+  ): Promise<HotkeyRegisterResult>;
   stop(): Promise<void>;
   isFnDown(): boolean;
+  isNativeKeyUpAvailable(): boolean;
+}
+
+export function bindingToElectronAccelerator(binding: KeyBinding): string {
+  const parts: string[] = [];
+  if (binding.ctrl) parts.push("Control");
+  if (binding.meta) parts.push("Command");
+  if (binding.alt) parts.push("Option");
+  if (binding.shift) parts.push("Shift");
+
+  const formatted = formatKeyBinding(binding);
+  const keyName = formatted.split("+").pop() ?? "v";
+  const keyPart = ({
+    space: "Space",
+    enter: "Enter",
+    escape: "Escape",
+    tab: "Tab",
+    backspace: "Backspace",
+    delete: "Delete",
+    insert: "Insert",
+    home: "Home",
+    end: "End",
+    pageup: "PageUp",
+    pagedown: "PageDown",
+    up: "Up",
+    down: "Down",
+    left: "Left",
+    right: "Right",
+    semicolon: ";",
+    equal: "=",
+    comma: ",",
+    minus: "-",
+    period: ".",
+    slash: "/",
+    backquote: "`",
+    bracketleft: "[",
+    backslash: "\\",
+    bracketright: "]",
+    quote: '"',
+  } as Record<string, string>)[keyName] ?? keyName.toUpperCase();
+  parts.push(keyPart);
+  return parts.join("+");
 }
 
 export class HotkeyService implements IHotkeyService {
@@ -24,7 +85,23 @@ export class HotkeyService implements IHotkeyService {
   private onDownCallback: ((mode: "dictate" | "edit") => void) | null = null;
   private onUpCallback: ((mode: "dictate" | "edit") => void) | null = null;
 
-  async start(binding: KeyBinding, callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void), editBinding?: KeyBinding): Promise<void> {
+  async start(
+    binding: KeyBinding,
+    callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void),
+    editBinding?: KeyBinding,
+    mode: DictationMode = "toggle"
+  ): Promise<HotkeyRegisterResult> {
+    if (this.fnHook?.isFnDown) {
+      return {
+        success: false,
+        nativeKeyUpAvailable: this.fnHook.isStarted(),
+        fallbackRegistered: false,
+        error: "Cannot change hotkeys while the current shortcut is held",
+      };
+    }
+
+    this.fnHook?.stop();
+    this.fnHook = null;
     this.currentBinding = binding;
     this.currentEditBinding = editBinding ?? null;
     this.currentDisplay = formatKeyDisplay(binding);
@@ -54,36 +131,115 @@ export class HotkeyService implements IHotkeyService {
       this.fnHook.start();
       fnHookStarted = true;
     } catch (err) {
-      logger.warn({ err: String(err) }, "Failed to start FnHook listener, using globalShortcut fallback");
+      logger.warn({ err: String(err) }, "Failed to start FnHook listener, evaluating fallback options");
     }
 
-    // 2. Register globalShortcut fallback ONLY if FnHook failed to start
-    if (!fnHookStarted) {
-      try {
-        globalShortcut.register("Control+Command+Option+V", () => this.onDownCallback?.("dictate"));
-        globalShortcut.register("Control+Command+Option+E", () => this.onDownCallback?.("edit"));
-        globalShortcut.register("Escape", () => onCancel?.());
-      } catch (err) {
-        logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
-      }
+    if (fnHookStarted) {
+      return {
+        success: true,
+        nativeKeyUpAvailable: true,
+        fallbackRegistered: false,
+        binding,
+        keyDisplay: this.currentDisplay,
+      };
     }
+
+    // 2. If native key-up listener failed:
+    // In HOLD mode, down-only fallback is INVALID because native key-up is required!
+    if (mode === "hold") {
+      logger.warn("Native key-up unavailable for Hold Mode; rejecting down-only fallback in hold mode");
+      return {
+        success: false,
+        nativeKeyUpAvailable: false,
+        fallbackRegistered: false,
+        binding,
+        keyDisplay: this.currentDisplay,
+        error: "Accessibility/Input Monitoring permissions required for Hold Mode. Please grant access in System Preferences > Privacy & Security > Accessibility or switch to Toggle Mode.",
+      };
+    }
+
+    // In TOGGLE mode, register globalShortcut fallback and check EVERY boolean returned!
+    const dictateAcc = bindingToElectronAccelerator(binding);
+    const editAcc = editBinding ? bindingToElectronAccelerator(editBinding) : null;
+
+    let regV = false;
+    let regE = true;
+    let regEsc = true;
+
+    try {
+      regV = globalShortcut.register(dictateAcc, () => this.onDownCallback?.("dictate"));
+      if (editAcc) {
+        regE = globalShortcut.register(editAcc, () => this.onDownCallback?.("edit"));
+      }
+      if (onCancel) {
+        regEsc = globalShortcut.register("Escape", () => onCancel());
+      }
+    } catch (err) {
+      logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
+      try {
+        globalShortcut.unregisterAll();
+      } catch {}
+      return {
+        success: false,
+        nativeKeyUpAvailable: false,
+        fallbackRegistered: false,
+        binding,
+        keyDisplay: this.currentDisplay,
+        error: `Failed to register globalShortcut fallback: ${err}`,
+      };
+    }
+
+    if (!regV || !regE || !regEsc) {
+      logger.warn({ regV, regE, regEsc }, "Failed globalShortcut registration boolean check");
+      try {
+        globalShortcut.unregisterAll();
+      } catch {}
+      return {
+        success: false,
+        nativeKeyUpAvailable: false,
+        fallbackRegistered: false,
+        binding,
+        keyDisplay: this.currentDisplay,
+        error: "Global shortcut fallback registration failed (shortcut already in use or unavailable)",
+      };
+    }
+
+    return {
+      success: true,
+      nativeKeyUpAvailable: false,
+      fallbackRegistered: true,
+      binding,
+      keyDisplay: this.currentDisplay,
+    };
   }
 
   async replace(
     newBindingStr: string,
     callbacks: HotkeyCallbacks | ((mode: "dictate" | "edit") => void),
     editBindingStr?: string,
-  ): Promise<{ success: boolean; binding?: KeyBinding; keyDisplay?: string; error?: string }> {
+    mode: DictationMode = "toggle"
+  ): Promise<HotkeyRegisterResult> {
+    if (this.fnHook?.isFnDown) {
+      return {
+        success: false,
+        nativeKeyUpAvailable: this.fnHook.isStarted(),
+        fallbackRegistered: false,
+        error: "Cannot change hotkeys while the current shortcut is held",
+      };
+    }
+
     let candidateBinding: KeyBinding;
     try {
       candidateBinding = parseKeyBinding(newBindingStr);
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, nativeKeyUpAvailable: false, fallbackRegistered: false, error: err.message };
     }
 
+    let candidateEditBinding: KeyBinding | undefined;
     if (editBindingStr) {
       try {
-        this.currentEditBinding = parseKeyBinding(editBindingStr);
+        candidateEditBinding = parseKeyBinding(editBindingStr);
+        this.currentEditBinding = candidateEditBinding;
       } catch (err: any) {
         logger.warn({ err: String(err) }, "Failed to parse edit hotkey binding in replace");
       }
@@ -93,61 +249,23 @@ export class HotkeyService implements IHotkeyService {
     const previousDisplay = this.currentDisplay;
 
     try {
-      // 1. Stop current registration
       this.fnHook?.stop();
       globalShortcut.unregisterAll();
+    } catch {}
 
-      // 2. Attempt registration of candidate
-      const display = formatKeyDisplay(candidateBinding);
-      const onDown = typeof callbacks === "function" ? callbacks : callbacks.onDown;
-      const onUp = typeof callbacks === "function" ? undefined : callbacks.onUp;
-
-      const onCancel = typeof callbacks === "function" ? undefined : callbacks.onCancel;
-
-      this.fnHook = new FnHook(
-        {
-          onFnDown: (mode) => onDown(mode),
-          onFnUp: (mode) => onUp?.(mode),
-          onCancel: () => onCancel?.(),
-        },
-        candidateBinding,
-        display,
-        this.currentEditBinding ?? undefined
-      );
-
-      let fnHookStarted = false;
-      try {
-        this.fnHook.start();
-        fnHookStarted = true;
-      } catch (err) {
-        logger.warn({ err: String(err) }, "Failed to start FnHook listener on replace");
+    const res = await this.start(candidateBinding, callbacks, candidateEditBinding ?? this.currentEditBinding ?? undefined, mode);
+    if (!res.success) {
+      logger.error({ candidate: newBindingStr, error: res.error }, "Failed hotkey replacement, rolling back");
+      if (previousBinding) {
+        await this.start(previousBinding, callbacks, this.currentEditBinding ?? undefined, mode);
       }
-
-      if (!fnHookStarted) {
-        try {
-          globalShortcut.register("Control+Command+Option+V", () => onDown("dictate"));
-          globalShortcut.register("Control+Command+Option+E", () => onDown("edit"));
-          globalShortcut.register("Escape", () => onCancel?.());
-        } catch (err) {
-          logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
-        }
-      }
-
-      this.currentBinding = candidateBinding;
-      this.currentDisplay = display;
-      this.onDownCallback = onDown;
-      this.onUpCallback = onUp ?? null;
-
-      logger.info({ binding: newBindingStr, display }, "Successfully replaced hotkey binding");
-      return { success: true, binding: candidateBinding, keyDisplay: display };
-    } catch (err: any) {
-      logger.error({ err: String(err), candidate: newBindingStr }, "Failed hotkey replacement, rolling back");
-      // 3. Rollback on failure
-      if (previousBinding && previousDisplay) {
-        await this.start(previousBinding, callbacks);
-      }
-      return { success: false, error: `Hotkey registration failed: ${err.message}` };
+      return res;
     }
+
+    this.currentBinding = candidateBinding;
+    this.currentDisplay = res.keyDisplay || formatKeyDisplay(candidateBinding);
+    logger.info({ binding: newBindingStr, display: this.currentDisplay }, "Successfully replaced hotkey binding");
+    return res;
   }
 
   async stop(): Promise<void> {
@@ -164,5 +282,9 @@ export class HotkeyService implements IHotkeyService {
 
   isFnDown(): boolean {
     return this.fnHook?.isFnDown ?? false;
+  }
+
+  isNativeKeyUpAvailable(): boolean {
+    return this.fnHook?.isStarted() ?? false;
   }
 }

@@ -24,7 +24,7 @@ import { createMacSafePasteService, type ClipboardAdapter } from "./services/saf
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
-import { MINIMUM_HOLD_RECORDING_MS, SHORT_TAP_THRESHOLD_MS, getHoldModeMinimumDuration, shouldEnsureMinimumDuration } from "./services/hold-mode-protections.js";
+import { DictationControlCoordinator } from "./services/dictation-control-coordinator.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -42,6 +42,32 @@ const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const recordingLifecycle = new RecordingLifecycle();
+let dictationCoordinator: DictationControlCoordinator;
+
+dictationCoordinator = new DictationControlCoordinator(
+  {
+    dictationMode: "toggle",
+    isNativeKeyUpAvailable: () => hotkeyService?.isNativeKeyUpAvailable() ?? false,
+    isFnDown: () => hotkeyService?.isFnDown() ?? false,
+    onStartRecording: async (mode) => {
+      currentTriggerMode = mode;
+      await startRecordingFlow();
+      return true;
+    },
+    onStopRecording: async (ensureMinimumDuration) => {
+      setState("stopping", "Stopping...");
+      captureWindow?.webContents.send(IPC.STOP_RECORDING, ensureMinimumDuration);
+      return true;
+    },
+    onCancelDictation: (reason) => {
+      cancelDictation(reason);
+    },
+    playStopChime: () => {
+      playToggleStopChime();
+    },
+  },
+  recordingLifecycle
+);
 const addonPath = resolveNativePastePath(projectRoot);
 const addon = loadNativePasteAddon(addonPath);
 const safePasteService = createMacSafePasteService(addon, clipboard as unknown as ClipboardAdapter<any>);
@@ -62,14 +88,6 @@ let lastPasteTime = 0;
 let activeSelectionText = "";
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
-let shortTapStopTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearShortTapStopTimer() {
-  if (shortTapStopTimer) {
-    clearTimeout(shortTapStopTimer);
-    shortTapStopTimer = null;
-  }
-}
 
 function restoreCapturedSelection(sequenceId?: number) {
   const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, selectionClipboardPort);
@@ -124,7 +142,6 @@ let activeUsedPaidKey = false;
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
   sequenceId++;
-  clearShortTapStopTimer();
 
   if (state === "starting" || state === "recording") {
     activeUsedPaidKey = false;
@@ -556,8 +573,12 @@ function buildTrayContextMenu(): Menu {
     },
     {
       label: currentState === "recording" ? "Stop Recording" : "Start Dictation",
-      click: () => {
-        handleHotkeyDown();
+      click: async () => {
+        const cmd = currentState === "recording" || currentState === "starting" ? "stop" : "start";
+        const res = await dictationCoordinator.handleUiCommand(cmd);
+        if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
+          setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
+        }
       },
     },
     { type: "separator" },
@@ -626,6 +647,13 @@ function validateIpcSender(
     logger.warn({ channel, err: err?.message }, "Denied unauthorized IPC sender");
     return null;
   }
+}
+
+function hotkeyRegistrationError(): string | null {
+  const state = recordingLifecycle.snapshot().state;
+  return state === "idle" || state === "error"
+    ? null
+    : "Hotkeys can only be changed while dictation is idle or in a recoverable error state";
 }
 
 function setupIpcHandlers() {
@@ -799,10 +827,56 @@ function setupIpcHandlers() {
     return getSanitizedSettingsConfig(currentConfig);
   });
 
-  ipcMain.handle(IPC.SAVE_CONFIG, (event, patch) => {
+  ipcMain.handle(IPC.SAVE_CONFIG, async (event, patch) => {
     validateIpcSenderPolicy(event, IPC.SAVE_CONFIG, popoverWindow, captureWindow, hudWindow);
     const validatedPatch = configPatchSchema.parse(patch);
+    const previousDictationMode = currentConfig.dictationMode;
+    const modeChanged = validatedPatch.dictationMode && validatedPatch.dictationMode !== previousDictationMode;
+    if (modeChanged && !["idle", "error"].includes(recordingLifecycle.snapshot().state)) {
+      throw new Error("Dictation mode can only be changed while recording is idle");
+    }
     currentConfig = updateConfig(workingCwd, validatedPatch);
+    dictationCoordinator.setDictationMode(currentConfig.dictationMode);
+    if (hotkeyService && modeChanged) {
+      await hotkeyService.stop();
+      const hotkeyRes = await hotkeyService.start(
+        currentConfig.key,
+        {
+          onDown: (mode) => handleHotkeyDown(mode),
+          onUp: () => handleHotkeyUp(),
+          onCancel: () => {
+            if (currentState !== "idle") {
+              cancelDictation("Cancelled via Escape key");
+            }
+          },
+        },
+        currentConfig.editKey,
+        currentConfig.dictationMode
+      );
+      if (!hotkeyRes.success) {
+        currentConfig = updateConfig(workingCwd, { dictationMode: previousDictationMode });
+        dictationCoordinator.setDictationMode(previousDictationMode);
+        await hotkeyService.stop();
+        const restoreRes = await hotkeyService.start(
+          currentConfig.key,
+          {
+            onDown: (mode) => handleHotkeyDown(mode),
+            onUp: () => handleHotkeyUp(),
+            onCancel: () => {
+              if (currentState !== "idle") {
+                cancelDictation("Cancelled via Escape key");
+              }
+            },
+          },
+          currentConfig.editKey,
+          previousDictationMode
+        );
+        if (!restoreRes.success) {
+          logger.error({ error: restoreRes.error }, "Failed to restore hotkeys after dictation mode change");
+        }
+        throw new Error(hotkeyRes.error || "Hotkey registration failed after dictation mode change");
+      }
+    }
     if (validatedPatch.geminiApiKey !== undefined) {
       process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
       _resetGeminiClient();
@@ -824,10 +898,13 @@ function setupIpcHandlers() {
     return [];
   });
 
-  ipcMain.handle(IPC.TOGGLE_DICTATION, (event) => {
+  ipcMain.handle(IPC.TOGGLE_DICTATION, async (event) => {
     validateIpcSenderPolicy(event, IPC.TOGGLE_DICTATION, popoverWindow, captureWindow, hudWindow);
-    handleHotkeyDown();
-    return { success: true };
+    const res = await dictationCoordinator.handleUiCommand("toggle");
+    if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
+      setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
+    }
+    return { success: res.accepted, error: res.reason };
   });
 
   ipcMain.handle(IPC.PREVIEW_CHIME, (event, soundName: string) => {
@@ -867,6 +944,8 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.REGISTER_HOTKEY, async (event, newKeyStr: string) => {
     validateIpcSenderPolicy(event, IPC.REGISTER_HOTKEY, popoverWindow, captureWindow, hudWindow);
+    const registrationError = hotkeyRegistrationError();
+    if (registrationError) return { success: false, error: registrationError };
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
     const res = await hotkeyService.replace(
@@ -880,7 +959,8 @@ function setupIpcHandlers() {
           }
         },
       },
-      formatKeyBinding(currentConfig.editKey)
+      formatKeyBinding(currentConfig.editKey),
+      currentConfig.dictationMode
     );
     if (res.success && res.binding) {
       currentConfig = updateConfig(workingCwd, { key: newKeyStr });
@@ -890,12 +970,13 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.REGISTER_EDIT_HOTKEY, async (event, newKeyStr: string) => {
     validateIpcSenderPolicy(event, IPC.REGISTER_EDIT_HOTKEY, popoverWindow, captureWindow, hudWindow);
+    const registrationError = hotkeyRegistrationError();
+    if (registrationError) return { success: false, error: registrationError };
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
     try {
       const binding = parseKeyBinding(newKeyStr);
-      currentConfig = updateConfig(workingCwd, { editKey: newKeyStr });
-      await hotkeyService.start(
+      const res = await hotkeyService.start(
         currentConfig.key,
         {
           onDown: (mode) => handleHotkeyDown(mode),
@@ -906,9 +987,12 @@ function setupIpcHandlers() {
             }
           },
         },
-        currentConfig.editKey
+        binding,
+        currentConfig.dictationMode
       );
-      return { success: true, binding, keyDisplay: currentConfig.editKeyDisplay };
+      if (!res.success) return res;
+      currentConfig = updateConfig(workingCwd, { editKey: newKeyStr });
+      return { ...res, binding, keyDisplay: currentConfig.editKeyDisplay };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -916,18 +1000,12 @@ function setupIpcHandlers() {
 }
 
 let lastHotkeyDownTime = 0;
-let keyHoldPressStartTime = 0;
-let lastHoldPressDuration = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
-let pendingStopOnStart = false;
-let recordingStartTime = 0;
 
 async function startRecordingFlow() {
-  pendingStopOnStart = false;
-  recordingStartTime = Date.now();
-  const reqRes = recordingLifecycle.requestStart();
-  if (!reqRes.accepted) {
-    logger.warn({ reason: reqRes.reason }, "Cannot start recording flow");
+  const reqRes = recordingLifecycle.snapshot();
+  if (reqRes.state !== "starting") {
+    logger.warn({ state: reqRes.state }, "Cannot start recording flow");
     return;
   }
 
@@ -1002,31 +1080,7 @@ async function startRecordingFlow() {
 
   logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
   setState("recording", "Recording...");
-  recordingLifecycle.acknowledgeStart(reqRes.sequenceId, true);
-
-  if (pendingStopOnStart && currentConfig.dictationMode === "hold") {
-    if (hotkeyService?.isFnDown()) {
-      logger.info("Live key state isFnDown is true upon entering recording state; clearing pendingStopOnStart");
-      pendingStopOnStart = false;
-    } else {
-      logger.info({ lastHoldPressDuration }, "Queued stop executing upon entering recording state with minimum capture window");
-      const elapsed = Date.now() - recordingStartTime;
-      const minDuration = getHoldModeMinimumDuration(lastHoldPressDuration, false);
-      const delay = Math.max(0, minDuration - elapsed);
-      if (delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-      const snapshot = recordingLifecycle.snapshot();
-      if (snapshot.sequenceId === reqRes.sequenceId && snapshot.state === "recording") {
-        const stopRes = recordingLifecycle.requestStop();
-        if (stopRes.accepted) {
-          setState("stopping", "Stopping...");
-          playToggleStopChime();
-          captureWindow?.webContents.send(IPC.STOP_RECORDING, true);
-        }
-      }
-    }
-  }
+  await dictationCoordinator.acknowledgeStart(reqRes.sequenceId, true);
 }
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
@@ -1036,85 +1090,26 @@ function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
     return;
   }
   lastHotkeyDownTime = now;
-  keyHoldPressStartTime = now;
-  currentTriggerMode = mode;
 
   prewarmConnection();
 
-  if (currentState === "transcribing" || currentState === "stopping" || currentState === "starting") {
-    logger.info({ state: currentState }, "Hotkey down during active processing - cancelling dictation");
-    cancelDictation("Cancelled via hotkey");
-    return;
-  }
-
-  if (currentConfig.dictationMode === "hold") {
-    if (currentState === "idle" || currentState === "error") {
-      startRecordingFlow();
+  dictationCoordinator.handlePhysicalDown(mode).then((res) => {
+    if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
+      setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
     }
-  } else {
-    toggleRecordingState();
-  }
+  });
 }
 
 function handleHotkeyUp() {
-  if (currentConfig.dictationMode !== "hold") return;
-
-  const pressDuration = Date.now() - keyHoldPressStartTime;
-  lastHoldPressDuration = pressDuration;
-
-  if (currentState === "starting") {
-    logger.info({ pressDuration }, "Key Up during starting state: queuing stop");
-    pendingStopOnStart = true;
-  } else if (currentState === "recording") {
-    const elapsed = recordingStartTime > 0 ? Date.now() - recordingStartTime : pressDuration;
-    const liveFnDown = hotkeyService?.isFnDown() ?? false;
-    const minDuration = getHoldModeMinimumDuration(pressDuration, liveFnDown);
-    const remainingDelay = minDuration - elapsed;
-
-    if (pressDuration < SHORT_TAP_THRESHOLD_MS && !liveFnDown && remainingDelay > 0) {
-      logger.info({ pressDuration, elapsed, remainingDelay }, "Short tap (<250ms) in Hold Mode: extending recording duration");
-      const recordingSequenceId = recordingLifecycle.snapshot().sequenceId;
-      shortTapStopTimer = setTimeout(() => {
-        shortTapStopTimer = null;
-        const snapshot = recordingLifecycle.snapshot();
-        if (snapshot.sequenceId === recordingSequenceId && snapshot.state === "recording") {
-          const stopRes = recordingLifecycle.requestStop();
-          if (stopRes.accepted) {
-            setState("stopping", "Stopping...");
-            playToggleStopChime();
-            captureWindow?.webContents.send(IPC.STOP_RECORDING, true);
-          }
-        }
-      }, remainingDelay);
-      return;
-    }
-
-    const ensureMinimumDuration = shouldEnsureMinimumDuration(pressDuration, elapsed);
-    logger.info({ pressDuration, elapsed, ensureMinimumDuration }, "Key Up: STOPPING recording (Hold Mode)");
-    const stopRes = recordingLifecycle.requestStop();
-    if (stopRes.accepted) {
-      setState("stopping", "Stopping...");
-      playToggleStopChime();
-      captureWindow?.webContents.send(IPC.STOP_RECORDING, ensureMinimumDuration);
-    }
-  }
+  dictationCoordinator.handlePhysicalUp();
 }
 
 function toggleRecordingState() {
-  if (currentState === "recording") {
-    logger.info("Tap 2: STOPPING recording");
-    const stopRes = recordingLifecycle.requestStop();
-    if (stopRes.accepted) {
-      setState("stopping", "Stopping...");
-      playToggleStopChime();
-      captureWindow?.webContents.send(IPC.STOP_RECORDING);
+  dictationCoordinator.handleUiCommand("toggle").then((res) => {
+    if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
+      setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
     }
-  } else if (currentState === "transcribing" || currentState === "stopping" || currentState === "starting") {
-    logger.info({ state: currentState }, "Hotkey re-triggered during active state - cancelling dictation");
-    cancelDictation("Cancelled via hotkey");
-  } else if (currentState === "idle" || currentState === "error") {
-    startRecordingFlow();
-  }
+  });
 }
 
 function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
@@ -1215,6 +1210,8 @@ app.whenReady().then(async () => {
     currentConfig = defaultConfig();
   }
 
+  dictationCoordinator.setDictationMode(currentConfig.dictationMode);
+
   createCaptureWindow();
   createPopoverWindow();
   createHudWindow();
@@ -1223,7 +1220,7 @@ app.whenReady().then(async () => {
   setupIpcHandlers();
 
   hotkeyService = new HotkeyService();
-  await hotkeyService.start(
+  const hotkeyRes = await hotkeyService.start(
     currentConfig.key,
     {
       onDown: (mode) => handleHotkeyDown(mode),
@@ -1234,8 +1231,12 @@ app.whenReady().then(async () => {
         }
       },
     },
-    currentConfig.editKey
+    currentConfig.editKey,
+    currentConfig.dictationMode
   );
+  if (!hotkeyRes.success) {
+    logger.warn({ error: hotkeyRes.error }, "Hotkey registration reported notice on startup");
+  }
 
   prewarmGeminiClient();
   startDaemonServer(handleDaemonCommand);

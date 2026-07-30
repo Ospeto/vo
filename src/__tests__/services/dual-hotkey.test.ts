@@ -30,12 +30,25 @@ mock.module("../../services/logger.js", () => ({
 mock.module("uiohook-napi", () => ({
   uIOhook: {
     on: mock(() => {}),
+    off: mock(() => {}),
     start: mock(() => {
       throw new Error("uIOhook unavailable in test environment");
     }),
     stop: mock(() => {}),
   },
-  UiohookKey: {},
+  UiohookKey: {
+    Semicolon: 39,
+    Equal: 13,
+    Comma: 51,
+    Minus: 12,
+    Period: 52,
+    Slash: 53,
+    Backquote: 41,
+    BracketLeft: 26,
+    Backslash: 43,
+    BracketRight: 27,
+    Quote: 40,
+  },
 }));
 
 describe("Dual Hotkey Configuration & Parsing Suite", () => {
@@ -44,6 +57,14 @@ describe("Dual Hotkey Configuration & Parsing Suite", () => {
     expect(binding.ctrl).toBe(true);
     expect(binding.meta).toBe(true);
     expect(binding.alt).toBe(true);
+  });
+
+  test("maps punctuation bindings to Electron accelerators", async () => {
+    const { bindingToElectronAccelerator } = await import("../../services/hotkey-service.js");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+semicolon"))).toBe("Control+;");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+bracketleft"))).toBe("Control+[");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+backslash"))).toBe("Control+\\");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+quote"))).toBe('Control+"');
   });
 
   test("parses edit key binding (Ctrl+Cmd+Opt+E) correctly", () => {

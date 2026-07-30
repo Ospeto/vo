@@ -47,6 +47,8 @@ export class FnHook {
   private releaseCodes: Set<number>;
   private editReleaseCodes: Set<number> | null;
   private displayName: string;
+  private keydownHandler: ((event: UiohookKeyboardEvent) => void) | null = null;
+  private keyupHandler: ((event: UiohookKeyboardEvent) => void) | null = null;
 
   constructor(callbacks: FnHookCallbacks, binding: KeyBinding, displayName: string, editBinding?: KeyBinding) {
     this.callbacks = callbacks;
@@ -55,6 +57,10 @@ export class FnHook {
     this.releaseCodes = new Set(getReleaseCodes(binding));
     this.editReleaseCodes = editBinding ? new Set(getReleaseCodes(editBinding)) : null;
     this.displayName = displayName;
+  }
+
+  public isStarted(): boolean {
+    return this.started;
   }
 
   start(): void {
@@ -70,7 +76,7 @@ export class FnHook {
       }
     }
 
-    uIOhook.on("keydown", (e: UiohookKeyboardEvent) => {
+    this.keydownHandler = (e: UiohookKeyboardEvent) => {
       if (e.keycode === UiohookKey.Escape) {
         this.callbacks.onCancel?.();
         return;
@@ -106,9 +112,9 @@ export class FnHook {
         this.callbacks.onFnDown("edit");
         return;
       }
-    });
+    };
 
-    uIOhook.on("keyup", (e: UiohookKeyboardEvent) => {
+    this.keyupHandler = (e: UiohookKeyboardEvent) => {
       if (this.activeMode === null) return;
 
       const currentMode = this.activeMode;
@@ -119,19 +125,34 @@ export class FnHook {
         this.isFnDown = false;
         this.callbacks.onFnUp(currentMode);
       }
-    });
+    };
 
-    uIOhook.start();
-    this.started = true;
+    uIOhook.on("keydown", this.keydownHandler);
+    uIOhook.on("keyup", this.keyupHandler);
+    try {
+      uIOhook.start();
+      this.started = true;
+    } catch (err) {
+      this.detachListeners();
+      throw err;
+    }
     logger.info({ key: this.displayName }, "Started monitoring key");
   }
 
   stop(): void {
-    if (!this.started) return;
-    uIOhook.stop();
+    if (!this.started && !this.keydownHandler && !this.keyupHandler) return;
+    if (this.started) uIOhook.stop();
+    this.detachListeners();
     this.started = false;
     this.activeMode = null;
     this.isFnDown = false;
     logger.info("Stopped monitoring key");
+  }
+
+  private detachListeners(): void {
+    if (this.keydownHandler) uIOhook.off("keydown", this.keydownHandler);
+    if (this.keyupHandler) uIOhook.off("keyup", this.keyupHandler);
+    this.keydownHandler = null;
+    this.keyupHandler = null;
   }
 }

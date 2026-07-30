@@ -21,7 +21,7 @@ export class RecordingLifecycle {
   }
 
   requestStart(): RecordingLifecycleResult {
-    if (this.state !== "idle") return this.reject("Recording can only start from idle.");
+    if (this.state !== "idle" && this.state !== "error") return this.reject("Recording can only start from idle or recoverable error.");
     this.sequenceId += 1;
     this.state = "starting";
     this.shutdownRequested = false;
