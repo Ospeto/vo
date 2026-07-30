@@ -134,6 +134,7 @@ describe("Packaged Preload Artifact Integrity & Sandboxed Self-Containment", () 
 
       expect(exposedApiKey as string | null).toBe("piVoice");
       expect(exposedApi).not.toBeNull();
+      expect(Object.keys(exposedApi!).sort()).toEqual([...expectedMethods].sort());
 
       for (const method of expectedMethods) {
         expect(typeof exposedApi![method]).toBe("function");
