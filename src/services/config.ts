@@ -583,7 +583,9 @@ const LEGACY_MODEL_MAP: Record<string, GeminiModelChoice> = {
   "gemini-2.0-flash": "gemini-2.5-flash",
 };
 
-const CONFIG_LOCK_TIMEOUT_MS = 10_000;
+const CONFIG_LOCK_TIMEOUT_MS = process.env.NODE_ENV === "test"
+  ? Number(process.env.VO_CONFIG_LOCK_TIMEOUT_MS ?? 10_000)
+  : 10_000;
 const CONFIG_LOCK_RETRY_MS = 10;
 
 function sleepSync(ms: number): void {

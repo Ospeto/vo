@@ -2,7 +2,6 @@ import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { spawn } from "node:child_process";
 
 // Mock logger to prevent file I/O during tests
 mock.module("../../services/logger.js", () => ({
@@ -34,7 +33,6 @@ import {
   SecretStoreError,
   setSafeStorageProvider,
   configPatchSchema,
-  terminateLockHelper,
 } from "../../services/config.js";
 import { getSanitizedSettingsConfig } from "../../services/ipc-policy.js";
 
@@ -1027,22 +1025,28 @@ describe("PR-05 Unified Corrupt-Config Remediation & Recovery Suite", () => {
   });
 
   test("timeout cleanup closes stdin and reaps the full lock helper", async () => {
-    const helper = spawn("/bin/sh", ["-c", "cat >/dev/null & wait"], {
-      detached: true,
-      stdio: ["pipe", "ignore", "ignore"],
+    const worker = join(import.meta.dir, "..", "fixtures", "config-recovery-worker.ts");
+    const process = Bun.spawn(["bun", worker, "timeout", testRoot], {
+      env: { ...globalThis.process.env, NODE_ENV: "test", VO_CONFIG_LOCK_TIMEOUT_MS: "500" },
+      stdout: "pipe",
+      stderr: "pipe",
     });
-    const pid = helper.pid!;
-    const exited = new Promise<void>((resolve, reject) => {
-      helper.once("exit", () => resolve());
-      helper.once("error", reject);
+    const pidPath = join(testRoot, "helper-pid");
+    for (let attempt = 0; attempt < 100 && !existsSync(pidPath); attempt++) await Bun.sleep(5);
+    const helperPid = Number(readFileSync(pidPath, "utf8"));
+    const processes = Bun.spawnSync(["ps", "-axo", "pid=,pgid=,comm="]).stdout.toString();
+    expect(processes.split("\n").some((line) => {
+      const [, pgid, command] = line.trim().split(/\s+/, 3);
+      return Number(pgid) === helperPid && command?.endsWith("cat");
+    })).toBe(true);
+
+    expect(await process.exited).toBe(0);
+    expect(JSON.parse(await new Response(process.stdout).text())).toEqual({
+      timedOut: true,
+      stdinDestroyed: true,
+      reaped: true,
+      groupGone: true,
     });
-
-    terminateLockHelper(helper);
-    await exited;
-
-    expect(helper.stdin?.destroyed).toBe(true);
-    expect(helper.exitCode ?? helper.signalCode).not.toBeNull();
-    expect(() => process.kill(-pid, 0)).toThrow();
   });
 
   test("10. Later project backup failure restores earlier user recovery", () => {
