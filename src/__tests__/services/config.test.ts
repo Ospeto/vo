@@ -1034,11 +1034,17 @@ describe("PR-05 Unified Corrupt-Config Remediation & Recovery Suite", () => {
     const pidPath = join(testRoot, "helper-pid");
     for (let attempt = 0; attempt < 100 && !existsSync(pidPath); attempt++) await Bun.sleep(5);
     const helperPid = Number(readFileSync(pidPath, "utf8"));
-    const processes = Bun.spawnSync(["ps", "-axo", "pid=,pgid=,comm="]).stdout.toString();
-    expect(processes.split("\n").some((line) => {
-      const [, pgid, command] = line.trim().split(/\s+/, 3);
-      return Number(pgid) === helperPid && command?.endsWith("cat");
-    })).toBe(true);
+    let descendantStarted = false;
+    for (let attempt = 0; attempt < 100 && !descendantStarted; attempt++) {
+      const processes = Bun.spawnSync(["ps", "-axo", "pid=,pgid=,comm="]).stdout.toString();
+      descendantStarted = processes.split("\n").some((line) => {
+        const [, pgid, command] = line.trim().split(/\s+/, 3);
+        return Number(pgid) === helperPid && command?.endsWith("cat");
+      });
+      if (!descendantStarted) await Bun.sleep(10);
+    }
+    writeFileSync(join(testRoot, "cat-confirmed"), "");
+    expect(descendantStarted).toBe(true);
 
     expect(await process.exited).toBe(0);
     expect(JSON.parse(await new Response(process.stdout).text())).toEqual({

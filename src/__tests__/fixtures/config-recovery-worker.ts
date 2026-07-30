@@ -34,6 +34,10 @@ if (id === "timeout") {
         resolveExit?.();
       });
       fs.writeFileSync(join(root, "helper-pid"), String(helper.pid));
+      const confirmedPath = join(root, "cat-confirmed");
+      for (let attempt = 0; attempt < 200 && !fs.existsSync(confirmedPath); attempt++) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+      }
       return helper;
     },
   }));
