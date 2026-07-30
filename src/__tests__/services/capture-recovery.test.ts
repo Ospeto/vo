@@ -73,7 +73,7 @@ describe("Capture Recovery Orchestration", () => {
       
       sender.once("did-finish-load", () => {
         if (win.isDestroyed()) return;
-        session.acknowledgeReady(sender, gen);
+        if (!session.acknowledgeReady(sender, gen)) return;
         captureWindow = win;
         pendingCaptureWindow = null;
       });
@@ -187,5 +187,37 @@ describe("Capture Recovery Orchestration", () => {
     
     // The new window should STILL be the capture window
     expect(captureWindow).toBe(newWin);
+  });
+
+  test("Stale ready event does not promote a superseded window", () => {
+    const session = new RendererSession<any>();
+    let captureWindow: any = null;
+    let pendingCaptureWindow: any = null;
+
+    function prepareWindow() {
+      const win = createMockWindow();
+      const sender = win.webContents;
+      const generation = session.attach(sender);
+      pendingCaptureWindow = win;
+
+      sender.once("did-finish-load", () => {
+        if (!session.acknowledgeReady(sender, generation)) return;
+        captureWindow = win;
+        pendingCaptureWindow = null;
+      });
+
+      return win;
+    }
+
+    const oldWin = prepareWindow();
+    const replacementWin = prepareWindow();
+
+    oldWin.webContents.emit("did-finish-load");
+    expect(captureWindow).toBeNull();
+    expect(pendingCaptureWindow).toBe(replacementWin);
+
+    replacementWin.webContents.emit("did-finish-load");
+    expect(captureWindow).toBe(replacementWin);
+    expect(pendingCaptureWindow).toBeNull();
   });
 });

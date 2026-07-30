@@ -435,7 +435,7 @@ function ensureCaptureWindow() {
 
   sender.once("did-finish-load", () => {
     if (win.isDestroyed()) return;
-    captureRendererSession.acknowledgeReady(sender, generation);
+    if (!captureRendererSession.acknowledgeReady(sender, generation)) return;
     captureWindow = win;
     pendingCaptureWindow = null;
   });
