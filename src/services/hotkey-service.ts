@@ -137,6 +137,9 @@ export class HotkeyService implements IHotkeyService {
       }
     } catch (err) {
       logger.warn({ err: String(err) }, "Failed to register globalShortcut fallback");
+      try {
+        globalShortcut.unregisterAll();
+      } catch {}
       return {
         success: false,
         nativeKeyUpAvailable: false,
@@ -149,6 +152,9 @@ export class HotkeyService implements IHotkeyService {
 
     if (!regV || !regE || !regEsc) {
       logger.warn({ regV, regE, regEsc }, "Failed globalShortcut registration boolean check");
+      try {
+        globalShortcut.unregisterAll();
+      } catch {}
       return {
         success: false,
         nativeKeyUpAvailable: false,
