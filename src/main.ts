@@ -830,11 +830,32 @@ function setupIpcHandlers() {
     return getSanitizedSettingsConfig(currentConfig);
   });
 
-  ipcMain.handle(IPC.SAVE_CONFIG, (event, patch) => {
+  ipcMain.handle(IPC.SAVE_CONFIG, async (event, patch) => {
     validateIpcSenderPolicy(event, IPC.SAVE_CONFIG, popoverWindow, captureWindow, hudWindow);
     const validatedPatch = configPatchSchema.parse(patch);
+    const previousDictationMode = currentConfig.dictationMode;
     currentConfig = updateConfig(workingCwd, validatedPatch);
     dictationCoordinator.setDictationMode(currentConfig.dictationMode);
+    if (hotkeyService && validatedPatch.dictationMode && validatedPatch.dictationMode !== previousDictationMode) {
+      await hotkeyService.stop();
+      const hotkeyRes = await hotkeyService.start(
+        currentConfig.key,
+        {
+          onDown: (mode) => handleHotkeyDown(mode),
+          onUp: () => handleHotkeyUp(),
+          onCancel: () => {
+            if (currentState !== "idle") {
+              cancelDictation("Cancelled via Escape key");
+            }
+          },
+        },
+        currentConfig.editKey,
+        currentConfig.dictationMode
+      );
+      if (!hotkeyRes.success) {
+        logger.warn({ error: hotkeyRes.error, dictationMode: currentConfig.dictationMode }, "Hotkey registration failed after dictation mode change");
+      }
+    }
     if (validatedPatch.geminiApiKey !== undefined) {
       process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
       _resetGeminiClient();
