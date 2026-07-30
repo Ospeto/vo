@@ -17,6 +17,7 @@ const [id, root] = process.argv.slice(2);
 if (!id || !root) throw new Error("usage: config-recovery-worker <A|B|timeout> <root>");
 
 if (id === "timeout") {
+  const realSpawn = childProcess.spawn;
   let helper: childProcess.ChildProcess | undefined;
   let exited = false;
   let resolveExit: (() => void) | undefined;
@@ -28,7 +29,7 @@ if (id === "timeout") {
       const testArgs = [...args];
       const commandIndex = testArgs.indexOf("-c");
       if (commandIndex !== -1) testArgs[commandIndex + 1] = "cat";
-      helper = childProcess.spawn(command, testArgs, options);
+      helper = realSpawn(command, testArgs, options);
       helper.once("exit", () => {
         exited = true;
         resolveExit?.();
