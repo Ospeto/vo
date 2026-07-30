@@ -857,7 +857,27 @@ function setupIpcHandlers() {
         currentConfig.dictationMode
       );
       if (!hotkeyRes.success) {
-        logger.warn({ error: hotkeyRes.error, dictationMode: currentConfig.dictationMode }, "Hotkey registration failed after dictation mode change");
+        currentConfig = updateConfig(workingCwd, { dictationMode: previousDictationMode });
+        dictationCoordinator.setDictationMode(previousDictationMode);
+        await hotkeyService.stop();
+        const restoreRes = await hotkeyService.start(
+          currentConfig.key,
+          {
+            onDown: (mode) => handleHotkeyDown(mode),
+            onUp: () => handleHotkeyUp(),
+            onCancel: () => {
+              if (currentState !== "idle") {
+                cancelDictation("Cancelled via Escape key");
+              }
+            },
+          },
+          currentConfig.editKey,
+          previousDictationMode
+        );
+        if (!restoreRes.success) {
+          logger.error({ error: restoreRes.error }, "Failed to restore hotkeys after dictation mode change");
+        }
+        throw new Error(hotkeyRes.error || "Hotkey registration failed after dictation mode change");
       }
     }
     if (validatedPatch.geminiApiKey !== undefined) {
