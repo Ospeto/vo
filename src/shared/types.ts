@@ -168,9 +168,9 @@ export interface SettingsElectronAPI {
 export interface CaptureElectronAPI {
   getConfig: () => Promise<CaptureConfigPayload>;
   sendRecordingData: (data: ArrayBuffer) => void;
-  sendRecordingError: (error: string) => void;
+  sendRecordingError: (error: string, sequenceId: number) => void;
   sendAudioLevelUpdate: (payload: any) => void;
-  onStartRecording: (callback: (format: RecordingFormat, inputGain: number) => void) => () => void;
+  onStartRecording: (callback: (format: RecordingFormat, inputGain: number, sequenceId: number) => void) => () => void;
   onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => () => void;
   onCancelRecording: (callback: () => void) => () => void;
   onGainUpdate: (callback: (inputGain: number) => void) => () => void;

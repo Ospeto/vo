@@ -64,8 +64,14 @@ const mockSpawnInstance = {
     mockSpawnCallbacks[event] = cb;
   },
 };
-const mockSpawn = mock((..._args: any[]) => mockSpawnInstance);
+import * as cp from "node:child_process";
+const realSpawn = cp.spawn;
+const mockSpawn = mock((command: string, ...args: any[]) => {
+  if (command === "play" || command === "aplay" || command === "say") return mockSpawnInstance;
+  return realSpawn(command, ...args);
+});
 mock.module("node:child_process", () => ({
+  ...cp,
   spawn: mockSpawn,
 }));
 

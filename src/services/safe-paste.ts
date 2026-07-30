@@ -61,6 +61,19 @@ const failureReason = (error: unknown, fallback: SafePasteFailureReason): SafePa
   const reason = error && typeof error === "object" && "reason" in error ? (error as { reason?: unknown }).reason : undefined;
   return safeReason(reason, fallback);
 };
+const sameClipboardSnapshot = (a: ClipboardSnapshot, b: ClipboardSnapshot): boolean => {
+  if (a.text !== b.text || a.html !== b.html || a.rtf !== b.rtf || a.formats.length !== b.formats.length) return false;
+  if (Boolean(a.image) !== Boolean(b.image)) return false;
+  if (a.image && b.image && a.image !== b.image) {
+    const dataA = typeof (a.image as any).toDataURL === "function" ? (a.image as any).toDataURL() : null;
+    const dataB = typeof (b.image as any).toDataURL === "function" ? (b.image as any).toDataURL() : null;
+    if (dataA !== dataB) return false;
+  }
+  return a.formats.every((item) => {
+    const other = b.formats.find((candidate) => candidate.format.toLowerCase() === item.format.toLowerCase());
+    return Boolean(other && Buffer.compare(item.data, other.data) === 0);
+  });
+};
 
 export class SafePasteService {
   private capturedTarget: TargetIdentity | null = null;
@@ -97,7 +110,7 @@ export class SafePasteService {
     this.capturedTarget = captured.target && isValidTarget(captured.target) ? captured.target : null;
     this.captureFailure = captured.target && !isValidTarget(captured.target) ? "target_malformed" : (captured.reason ? safeReason(captured.reason, "target_unavailable") as TargetFailureReason : null);
   }
-  async paste(text: string, isCurrent: () => boolean = () => true): Promise<SafePasteResult> {
+  async paste(text: string, isCurrent: () => boolean = () => true, beforeWrite?: () => void): Promise<SafePasteResult> {
     if (this.capturePromise) { await this.capturePromise; this.capturePromise = null; }
     const expectedTarget = this.capturedTarget;
     const operationId = `paste-${SafePasteService.nextOperationId++}`;
@@ -128,6 +141,13 @@ export class SafePasteService {
     if (!isCurrent()) return { ok: false, reason: "target_mismatch" };
     const snapshotStarted = this.clock();
     try {
+      // Release selection ownership before taking the snapshot that SafePaste will restore.
+      beforeWrite?.();
+      if (!isCurrent()) {
+        const result = { ok: false as const, reason: "target_mismatch" as const };
+        this.emitTotal(operationId, started, result);
+        return result;
+      }
       previous = this.clipboard.snapshot();
       this.emit({ operationId, stage: "clipboard_snapshot", durationMs: this.elapsed(snapshotStarted), outcome: "success" });
       if (previous.formats.length > 0 && !this.clipboard.preservesCustomFormats) {
@@ -143,6 +163,7 @@ export class SafePasteService {
       return result;
     }
     let result: SafePasteResult | undefined;
+    let writtenSnapshot: ClipboardSnapshot | null = null;
     if (!isCurrent()) {
       result = { ok: false, reason: "target_mismatch" };
       this.emitTotal(operationId, started, result);
@@ -151,6 +172,7 @@ export class SafePasteService {
     const writeStarted = this.clock();
     try {
       this.clipboard.writeText(text);
+      writtenSnapshot = this.clipboard.snapshot();
       this.emit({ operationId, stage: "clipboard_write", durationMs: this.elapsed(writeStarted), outcome: "success" });
     }
     catch (error) {
@@ -185,8 +207,14 @@ export class SafePasteService {
     }
     const restoreStarted = this.clock();
     try {
-      this.clipboard.restore(previous!);
-      this.emit({ operationId, stage: "clipboard_restore", durationMs: this.elapsed(restoreStarted), outcome: "success" });
+      const current = this.clipboard.snapshot();
+      if (writtenSnapshot && sameClipboardSnapshot(current, writtenSnapshot)) {
+        this.clipboard.restore(previous!);
+        this.emit({ operationId, stage: "clipboard_restore", durationMs: this.elapsed(restoreStarted), outcome: "success" });
+      } else {
+        // A cancellation or external clipboard write owns the clipboard now.
+        this.emit({ operationId, stage: "clipboard_restore", durationMs: this.elapsed(restoreStarted), outcome: "not_run" });
+      }
     } catch {
       result = { ok: false, reason: "clipboard_restore_failed" };
       this.emit({ operationId, stage: "clipboard_restore", durationMs: this.elapsed(restoreStarted), outcome: "failure", reason: result.reason });
