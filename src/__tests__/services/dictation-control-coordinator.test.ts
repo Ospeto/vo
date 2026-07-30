@@ -221,7 +221,32 @@ describe("PR-07 Dictation Control Coordinator & Hotkey Remediation Suite", () =>
     expect(coordinator.snapshot().state).toBe("stopping");
   });
 
-  test("5. False fallback registration reports failure in HotkeyService", async () => {
+  test("5. Explicit startup stop overrides a still-held physical key", async () => {
+    let stopCalled = false;
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => true,
+        isFnDown: () => true,
+        onStartRecording: () => true,
+        onStopRecording: () => {
+          stopCalled = true;
+          return true;
+        },
+        onCancelDictation: () => {},
+      },
+      lifecycle
+    );
+
+    await coordinator.handlePhysicalDown();
+    await coordinator.handleUiCommand("stop");
+    const result = await coordinator.acknowledgeStart(coordinator.snapshot().sequenceId, true);
+
+    expect(result.action).toBe("stopped");
+    expect(stopCalled).toBe(true);
+  });
+
+  test("6. False fallback registration reports failure in HotkeyService", async () => {
     const hotkeyService = new HotkeyService();
     registerMockReturn = false; // Simulate globalShortcut.register returning false
 
@@ -240,7 +265,7 @@ describe("PR-07 Dictation Control Coordinator & Hotkey Remediation Suite", () =>
     expect(result.error).toBeDefined();
   });
 
-  test("6. Hold mode rejects down-only fallback when native key-up fails to start in HotkeyService", async () => {
+  test("7. Hold mode rejects down-only fallback when native key-up fails to start in HotkeyService", async () => {
     isTrustedAccessibilityMock = false; // Simulate revoked Input Monitoring / Accessibility permission
     const hotkeyService = new HotkeyService();
 

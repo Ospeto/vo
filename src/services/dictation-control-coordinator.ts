@@ -35,7 +35,7 @@ export class DictationControlCoordinator {
   private onCancelDictationFn: (reason: string) => void;
   private playStopChimeFn?: () => void;
 
-  private pendingStop = false;
+  private pendingStopOrigin: "physical" | "explicit" | null = null;
   private keyHoldPressStartTime = 0;
   private lastHoldPressDuration = 0;
   private recordingStartTime = 0;
@@ -70,11 +70,11 @@ export class DictationControlCoordinator {
   }
 
   public isPendingStop(): boolean {
-    return this.pendingStop;
+    return this.pendingStopOrigin !== null;
   }
 
   public clearPendingStop(): void {
-    this.pendingStop = false;
+    this.pendingStopOrigin = null;
   }
 
   /** Physical key-down handler from FnHook */
@@ -102,7 +102,7 @@ export class DictationControlCoordinator {
       }
       return { accepted: false, action: "ignored", reason: "Already recording" };
     } else {
-      return this.handleToggleCommand("toggle", triggerMode);
+      return this.handleToggleCommand("physical", triggerMode);
     }
   }
 
@@ -117,7 +117,7 @@ export class DictationControlCoordinator {
     const state = this.lifecycle.snapshot().state;
 
     if (state === "starting") {
-      this.pendingStop = true;
+      this.pendingStopOrigin = "physical";
       return { accepted: true, action: "queued_stop", reason: "Key Up during starting state: queued pending stop" };
     } else if (state === "recording") {
       const elapsed = this.recordingStartTime > 0 ? Date.now() - this.recordingStartTime : pressDuration;
@@ -169,7 +169,7 @@ export class DictationControlCoordinator {
 
     if (command === "stop") {
       if (state === "starting") {
-        this.pendingStop = true;
+        this.pendingStopOrigin = "explicit";
         return { accepted: true, action: "queued_stop", reason: "Explicit stop during starting state: queued pending stop" };
       } else if (state === "recording") {
         return this.executeStop(false);
@@ -178,11 +178,11 @@ export class DictationControlCoordinator {
     }
 
     // command === "toggle"
-    return this.handleToggleCommand("toggle", triggerMode);
+    return this.handleToggleCommand("explicit", triggerMode);
   }
 
   private async handleToggleCommand(
-    origin: string,
+    origin: "physical" | "explicit",
     triggerMode: DictationTriggerMode = "dictate"
   ): Promise<CoordinatorActionResult> {
     const state = this.lifecycle.snapshot().state;
@@ -191,10 +191,10 @@ export class DictationControlCoordinator {
       return this.executeStop(false);
     } else if (state === "starting") {
       // Toggle re-triggered during starting: record exactly one pending stop rather than cancelling!
-      if (this.pendingStop) {
+      if (this.pendingStopOrigin === "explicit") {
         return { accepted: true, action: "queued_stop", reason: "Toggle during starting state: stop already pending" };
       }
-      this.pendingStop = true;
+      this.pendingStopOrigin = origin;
       return { accepted: true, action: "queued_stop", reason: "Toggle during starting state: queued pending stop" };
     } else if (state === "transcribing" || state === "stopping") {
       this.onCancelDictationFn("Cancelled via hotkey");
@@ -215,7 +215,7 @@ export class DictationControlCoordinator {
   }
 
   private async startRecording(triggerMode: DictationTriggerMode): Promise<CoordinatorActionResult> {
-    this.pendingStop = false;
+    this.pendingStopOrigin = null;
     this.recordingStartTime = Date.now();
     this.currentTriggerMode = triggerMode;
     const reqRes = this.lifecycle.requestStart();
@@ -238,9 +238,10 @@ export class DictationControlCoordinator {
       return { accepted: false, action: "rejected", reason: ackRes.reason };
     }
 
-    if (success && this.pendingStop) {
-      this.pendingStop = false;
-      if (this.mode === "hold") {
+    if (success && this.pendingStopOrigin) {
+      const pendingStopOrigin = this.pendingStopOrigin;
+      this.pendingStopOrigin = null;
+      if (pendingStopOrigin === "physical" && this.mode === "hold") {
         if (this.isFnDownFn()) {
           // Live key is still down, clear pending stop
           return { accepted: true, action: "started", reason: "Live Fn key still down upon recording start" };
