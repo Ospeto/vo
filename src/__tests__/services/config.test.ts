@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 // Mock logger to prevent file I/O during tests
@@ -245,7 +245,7 @@ describe("loadConfig", () => {
     }
   });
 
-  test("auto-recovers corrupt JSON syntax to defaultConfig and renames broken file to config.json.corrupt.bak", () => {
+  test("auto-recovers corrupt JSON syntax to defaultConfig and preserves a unique backup", () => {
     const piDir = join(tmpDir, ".pi");
     mkdirSync(piDir, { recursive: true });
     const brokenPath = join(piDir, "pi-voice.json");
@@ -255,8 +255,9 @@ describe("loadConfig", () => {
     expect(config.provider).toBe("gemini");
     expect(config.dictationPreset).toBe("careful");
 
-    const backupPath = join(piDir, "config.json.corrupt.bak");
-    expect(existsSync(backupPath)).toBe(true);
+    const backup = readdirSync(piDir).find((name) => name.startsWith("pi-voice.json.corrupt."));
+    expect(backup).toBeDefined();
+    expect(readFileSync(join(piDir, backup!), "utf8")).toBe("not json {{{");
     expect(existsSync(brokenPath)).toBe(false);
   });
 
@@ -268,7 +269,7 @@ describe("loadConfig", () => {
 
     const config = loadConfig(tmpDir);
     expect(config.provider).toBe("gemini");
-    expect(existsSync(join(piDir, "config.json.corrupt.bak"))).toBe(true);
+    expect(readdirSync(piDir).some((name) => name.startsWith("pi-voice.json.corrupt."))).toBe(true);
   });
 
   test("auto-heals legacy model names like gemini-1.5-flash to valid models without throwing", () => {
@@ -343,7 +344,7 @@ describe("loadConfig", () => {
     writeFileSync(brokenPath, "second");
     loadConfig(tmpDir);
 
-    expect(readdirSync(piDir).filter((name) => name.startsWith("config.json.corrupt")).length).toBe(2);
+    expect(readdirSync(piDir).filter((name) => name.startsWith("pi-voice.json.corrupt.")).length).toBe(2);
   });
 
   test("auto-heals invalid provider and invalid key binding without throwing", () => {
@@ -812,5 +813,243 @@ describe("PR-04 Secret Persistence, Type Safety & Hardening Suite", () => {
     updateConfig(dirProj, { inputGain: 1.4 });
     const rewrittenMode = statSync(userPath).mode & 0o777;
     expect(rewrittenMode).toBe(0o600);
+  });
+});
+
+describe("PR-05 Unified Corrupt-Config Remediation & Recovery Suite", () => {
+  let testRoot: string;
+  let userDir: string;
+  let projDir: string;
+  let originalHome: string | undefined;
+  let originalXdg: string | undefined;
+
+  beforeEach(() => {
+    testRoot = join(tmpdir(), `pi-voice-pr05-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    userDir = join(testRoot, "home", ".config", "pi-voice");
+    projDir = join(testRoot, "project");
+
+    mkdirSync(userDir, { recursive: true });
+    mkdirSync(join(projDir, ".pi"), { recursive: true });
+
+    originalHome = process.env.HOME;
+    originalXdg = process.env.XDG_CONFIG_HOME;
+
+    process.env.HOME = join(testRoot, "home");
+    process.env.XDG_CONFIG_HOME = join(testRoot, "home", ".config");
+  });
+
+  afterEach(() => {
+    if (originalHome !== undefined) process.env.HOME = originalHome;
+    else delete process.env.HOME;
+
+    if (originalXdg !== undefined) process.env.XDG_CONFIG_HOME = originalXdg;
+    else delete process.env.XDG_CONFIG_HOME;
+
+    rmSync(testRoot, { recursive: true, force: true });
+  });
+
+  test("1. Truncated user and project files are backed up and updateConfig completes successfully", () => {
+    const userPath = join(userDir, "config.json");
+    const projPath = join(projDir, ".pi", "pi-voice.json");
+
+    writeFileSync(userPath, '{"provider": "openai", "dictation');
+    writeFileSync(projPath, '{"inputGain": ');
+
+    const updated = updateConfig(projDir, { dictationPreset: "code_comment" });
+    expect(updated.dictationPreset).toBe("code_comment");
+
+    const userBackups = readdirSync(userDir).filter((name) => name.includes(".corrupt"));
+    const projBackups = readdirSync(join(projDir, ".pi")).filter((name) => name.includes(".corrupt"));
+
+    expect(userBackups.length).toBeGreaterThanOrEqual(1);
+    expect(projBackups.length).toBeGreaterThanOrEqual(1);
+
+    expect(readFileSync(join(userDir, userBackups[0]!), "utf-8")).toBe('{"provider": "openai", "dictation');
+    expect(readFileSync(join(projDir, ".pi", projBackups[0]!), "utf-8")).toBe('{"inputGain": ');
+  });
+
+  test("2. Unrelated patches preserve clean options when updating over corrupt config", () => {
+    const userPath = join(userDir, "config.json");
+    writeFileSync(userPath, "corrupt json syntax {{{");
+
+    const updated = updateConfig(projDir, { editKey: "option+k", inputGain: 1.8 });
+    expect(updated.editKey.keycode).toBe(loadConfig(projDir).editKey.keycode);
+    expect(updated.inputGain).toBe(1.8);
+
+    const userBackups = readdirSync(userDir).filter((name) => name.includes(".corrupt"));
+    expect(userBackups.length).toBe(1);
+    expect(readFileSync(join(userDir, userBackups[0]!), "utf-8")).toBe("corrupt json syntax {{{");
+  });
+
+  test("3. Byte-identical backup preservation", () => {
+    const userPath = join(userDir, "config.json");
+    const binaryCorruptData = Buffer.from([0x7b, 0x22, 0x62, 0x61, 0x64, 0x22, 0x3a, 0xff, 0xfe, 0x7d]);
+    writeFileSync(userPath, binaryCorruptData);
+
+    loadConfig(projDir);
+
+    const userBackups = readdirSync(userDir).filter((name) => name.includes(".corrupt"));
+    expect(userBackups.length).toBe(1);
+    const backupContent = readFileSync(join(userDir, userBackups[0]!));
+    expect(backupContent.equals(binaryCorruptData)).toBe(true);
+  });
+
+  test("4. Safe repaired output for legacy fields vs typed refusal on failed backup", () => {
+    const userPath = join(userDir, "config.json");
+
+    // Safe repaired output
+    writeFileSync(userPath, JSON.stringify({ geminiModel: "gemini-1.5-flash", inputGain: 1.25 }));
+    const repaired = loadConfig(projDir);
+    expect(repaired.geminiModel).toBe("gemini-3.1-flash-lite");
+
+    const onDiskRaw = JSON.parse(readFileSync(userPath, "utf-8"));
+    expect(onDiskRaw.geminiModel).toBe("gemini-3.1-flash-lite");
+
+    // Typed refusal when backup fails
+    writeFileSync(userPath, "corrupt {{{");
+
+    const fsModule = require("node:fs").default || require("node:fs");
+    const originalOpen = fsModule.openSync;
+    try {
+      fsModule.openSync = (path: string, ...args: unknown[]) => {
+        if (path.includes(".corrupt")) throw new Error("EACCES: permission denied, open");
+        return originalOpen(path, ...args);
+      };
+
+      expect(() => updateConfig(projDir, { inputGain: 1.5 })).toThrow(/Failed to backup corrupt user config file/);
+      expect(readFileSync(userPath, "utf-8")).toBe("corrupt {{{");
+    } finally {
+      fsModule.openSync = originalOpen;
+    }
+  });
+
+  test("5. Backup rename/write failure leaves corrupt file untouched and rejects update", () => {
+    const userPath = join(userDir, "config.json");
+    const projPath = join(projDir, ".pi", "pi-voice.json");
+
+    writeFileSync(userPath, "valid json object");
+    writeFileSync(userPath, "{ invalid json syntax");
+    writeFileSync(projPath, "{ bad project syntax");
+
+    const fsModule = require("node:fs").default || require("node:fs");
+    const originalOpen = fsModule.openSync;
+    try {
+      fsModule.openSync = (path: string, ...args: unknown[]) => {
+        if (path.includes("pi-voice.json.corrupt")) {
+          throw new Error("EROFS: read-only file system");
+        }
+        return originalOpen(path, ...args);
+      };
+
+      expect(() => updateConfig(projDir, { inputGain: 1.2 })).toThrow(ConfigError);
+      expect(readFileSync(projPath, "utf-8")).toBe("{ bad project syntax");
+    } finally {
+      fsModule.openSync = originalOpen;
+    }
+  });
+
+  test("6. Sequential saves create distinct collision-free backup files", () => {
+    const userPath = join(userDir, "config.json");
+
+    writeFileSync(userPath, "corrupt content 1");
+    loadConfig(projDir);
+
+    writeFileSync(userPath, "corrupt content 2");
+    loadConfig(projDir);
+
+    const backups = readdirSync(userDir).filter((name) => name.includes(".corrupt"));
+    expect(backups.length).toBe(2);
+
+    const contents = backups.map((b) => readFileSync(join(userDir, b), "utf-8"));
+    expect(contents).toContain("corrupt content 1");
+    expect(contents).toContain("corrupt content 2");
+  });
+
+  test("7. Enforces mode 0600 permissions on active and corrupt user config files", () => {
+    const userPath = join(userDir, "config.json");
+    writeFileSync(userPath, '{"geminiApiKey":"plaintext-secret", broken');
+    chmodSync(userPath, 0o644);
+
+    updateConfig(projDir, { inputGain: 1.3 });
+
+    expect(existsSync(userPath)).toBe(true);
+    expect(statSync(userPath).mode & 0o777).toBe(0o600);
+    const backup = readdirSync(userDir).find((name) => name.includes(".corrupt"));
+    expect(backup).toBeDefined();
+    expect(statSync(join(userDir, backup!)).mode & 0o777).toBe(0o600);
+    expect(readFileSync(join(userDir, backup!), "utf8")).toContain("plaintext-secret");
+  });
+
+  test("8. Concurrent recovery preserves the original corrupt bytes", async () => {
+    const userPath = join(userDir, "config.json");
+    const original = '{"provider":"gemini", BROKEN ORIGINAL';
+    writeFileSync(userPath, original);
+    mkdirSync(join(testRoot, "markers"), { recursive: true });
+
+    const worker = join(import.meta.dir, "..", "fixtures", "config-recovery-worker.ts");
+    const env = {
+      ...process.env,
+      HOME: join(testRoot, "home"),
+      XDG_CONFIG_HOME: join(testRoot, "home", ".config"),
+    };
+    const a = Bun.spawn(["bun", worker, "A", testRoot], { env, stdout: "pipe", stderr: "pipe" });
+    const b = Bun.spawn(["bun", worker, "B", testRoot], { env, stdout: "pipe", stderr: "pipe" });
+    const [aExit, bExit] = await Promise.all([a.exited, b.exited]);
+
+    expect(aExit).toBe(0);
+    expect(bExit).toBe(0);
+    const backups = readdirSync(userDir).filter((name) => name.includes(".corrupt"));
+    expect(backups).toHaveLength(1);
+    expect(readFileSync(join(userDir, backups[0]!), "utf8")).toBe(original);
+    const saved = JSON.parse(readFileSync(userPath, "utf8"));
+    expect(saved.inputGain).toBe(1.1);
+    expect(saved.targetLanguage).toBe("French");
+    expect(readdirSync(userDir).some((name) => name.endsWith(".tmp") || name.endsWith(".lock"))).toBe(false);
+  });
+
+  test("9. Repairs malformed nested records without deleting valid siblings", () => {
+    const userPath = join(userDir, "config.json");
+    writeFileSync(userPath, JSON.stringify({
+      targetLanguage: "French",
+      appPresetMappings: { "custom-editor": "fast", broken: 42 },
+      presetVocabulary: { careful: ["alpha", 42, "beta"] },
+    }));
+
+    const updated = updateConfig(projDir, { inputGain: 1.4 });
+    const onDisk = JSON.parse(readFileSync(userPath, "utf8"));
+
+    expect(updated.targetLanguage).toBe("French");
+    expect(updated.appPresetMappings?.["custom-editor"]).toBe("fast");
+    expect(onDisk.appPresetMappings).toEqual({ "custom-editor": "fast" });
+    expect(onDisk.presetVocabulary.careful).toEqual(["alpha", "beta"]);
+  });
+
+  test("10. Later project backup failure restores earlier user recovery", () => {
+    const userPath = join(userDir, "config.json");
+    const projPath = join(projDir, ".pi", "pi-voice.json");
+    const userCorrupt = "{ broken user";
+    const projectCorrupt = "{ broken project";
+    writeFileSync(userPath, userCorrupt);
+    writeFileSync(projPath, projectCorrupt);
+
+    const fsModule = require("node:fs").default || require("node:fs");
+    const originalOpen = fsModule.openSync;
+    try {
+      fsModule.openSync = (path: string, ...args: unknown[]) => {
+        if (path.includes("pi-voice.json.corrupt")) {
+          throw new Error("EROFS: read-only file system");
+        }
+        return originalOpen(path, ...args);
+      };
+
+      expect(() => updateConfig(projDir, { inputGain: 1.2 })).toThrow(ConfigError);
+    } finally {
+      fsModule.openSync = originalOpen;
+    }
+
+    expect(readFileSync(userPath, "utf8")).toBe(userCorrupt);
+    expect(readFileSync(projPath, "utf8")).toBe(projectCorrupt);
+    expect(readdirSync(userDir).filter((name) => name.includes(".corrupt"))).toHaveLength(0);
+    expect(readdirSync(join(projDir, ".pi")).filter((name) => name.includes(".corrupt"))).toHaveLength(0);
   });
 });

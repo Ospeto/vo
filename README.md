@@ -118,9 +118,10 @@ override and non-secret setting changes update both files; API keys are stored
 only in the user config with strong OS-backed encryption. Legacy project-local
 API keys are migrated when possible, or reported for manual removal when safe
 migration is unavailable. The project file is never created solely by saving
-settings. Malformed config files are backed up as
-`config.json.corrupt*.bak` and replaced with safe defaults so they cannot
-prevent vo from starting.
+settings. Config reads and writes are serialized across processes. Malformed
+files are preserved in unique `<filename>.corrupt.*.bak` backups (user backups
+use mode `0600`) before runtime defaults or a settings patch are applied; a
+failed multi-file recovery restores earlier files and aborts the update.
 
 ---
 

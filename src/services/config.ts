@@ -1,5 +1,6 @@
-import { join, dirname } from "node:path";
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync, unlinkSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
+import fs, { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync, unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
@@ -581,19 +582,120 @@ const LEGACY_MODEL_MAP: Record<string, GeminiModelChoice> = {
   "gemini-2.0-flash": "gemini-2.5-flash",
 };
 
-function backupCorruptConfig(filePath: string): void {
-  const basePath = join(dirname(filePath), "config.json.corrupt");
-  let backupPath = `${basePath}.bak`;
-  let suffix = 0;
-  while (existsSync(backupPath)) {
-    suffix += 1;
-    backupPath = `${basePath}.${Date.now()}${suffix}.bak`;
+const CONFIG_LOCK_TIMEOUT_MS = 10_000;
+const CONFIG_LOCK_RETRY_MS = 10;
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: any) {
+    return err?.code !== "ESRCH";
   }
-  renameSync(filePath, backupPath);
+}
+
+function lockIsStale(lockPath: string): boolean {
+  try {
+    const owner = Number(readFileSync(lockPath, "utf8"));
+    if (Number.isInteger(owner) && owner > 0) return !processIsAlive(owner);
+    return Date.now() - fs.statSync(lockPath).mtimeMs > 1_000;
+  } catch {
+    return !existsSync(lockPath);
+  }
+}
+
+function withFileLock<T>(lockPath: string, action: () => T): T {
+  mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
+  const started = Date.now();
+  while (true) {
+    try {
+      const fd = fs.openSync(lockPath, "wx", 0o600);
+      try {
+        fs.writeFileSync(fd, String(process.pid));
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      break;
+    } catch (err: any) {
+      if (err?.code !== "EEXIST") throw err;
+      if (lockIsStale(lockPath)) {
+        try { unlinkSync(lockPath); } catch {}
+        continue;
+      }
+      if (Date.now() - started >= CONFIG_LOCK_TIMEOUT_MS) {
+        throw new ConfigError(lockPath, "Timed out waiting for another config operation");
+      }
+      sleepSync(CONFIG_LOCK_RETRY_MS);
+    }
+  }
+
+  try {
+    return action();
+  } finally {
+    try { unlinkSync(lockPath); } catch {}
+  }
+}
+
+function withConfigLock<T>(action: () => T): T {
+  return withFileLock(`${getUserConfigPath()}.lock`, action);
+}
+
+function backupCorruptConfig(filePath: string, rawBytes: Buffer, mode: number): string {
+  const backupPath = join(
+    dirname(filePath),
+    `${basename(filePath)}.corrupt.${Date.now()}.${process.pid}.${randomUUID()}.bak`,
+  );
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(backupPath, "wx", mode);
+    fs.writeFileSync(fd, rawBytes);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    chmodSync(backupPath, mode);
+    unlinkSync(filePath);
+    return backupPath;
+  } catch (err) {
+    if (fd !== undefined) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    try { unlinkSync(backupPath); } catch {}
+    throw err;
+  }
+}
+
+function removeInvalidValue(json: Record<string, unknown>, path: PropertyKey[]): boolean {
+  if (path.length === 0 || typeof path[0] !== "string") return false;
+  if (path[0] === "dictionaryEntries" && typeof path[1] === "number" && Array.isArray(json.dictionaryEntries)) {
+    if (path[1] < 0 || path[1] >= json.dictionaryEntries.length) return false;
+    json.dictionaryEntries.splice(path[1], 1);
+    return true;
+  }
+
+  let parent: any = json;
+  for (const segment of path.slice(0, -1)) {
+    if (parent === null || typeof parent !== "object" || !(segment in parent)) return false;
+    parent = parent[segment as any];
+  }
+  const leaf = path[path.length - 1]!;
+  if (Array.isArray(parent) && typeof leaf === "number" && leaf >= 0 && leaf < parent.length) {
+    parent.splice(leaf, 1);
+    return true;
+  }
+  if (parent !== null && typeof parent === "object" && leaf in parent) {
+    delete parent[leaf as any];
+    return true;
+  }
+  return false;
 }
 
 function repairConfigJson(raw: Record<string, unknown>): { json: Record<string, unknown>; changed: boolean } {
-  const json = { ...raw };
+  const json = structuredClone(raw);
   let changed = false;
 
   if (typeof json.geminiModel === "string") {
@@ -618,27 +720,79 @@ function repairConfigJson(raw: Record<string, unknown>): { json: Record<string, 
 
   let result = configFileSchema.safeParse(json);
   while (!result.success) {
-    const fields = new Set(result.error.issues.map((issue) => issue.path[0]).filter((field): field is string => typeof field === "string"));
-    if (fields.size === 0) break;
-    for (const field of fields) {
-      delete json[field];
-      changed = true;
+    const issue = result.error.issues[0];
+    if (!issue || !removeInvalidValue(json, issue.path)) {
+      throw new ConfigError("config.json", issue?.message || "Config cannot be repaired safely");
     }
+    changed = true;
     result = configFileSchema.safeParse(json);
   }
 
   return { json, changed };
 }
 
-function readConfigJson(filePath: string): Record<string, unknown> {
-  const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new SyntaxError("Config must be a JSON object");
-  }
-  return parsed;
+export interface ReadConfigResult {
+  filePath: string;
+  exists: boolean;
+  json: Record<string, unknown>;
+  corrupt: boolean;
+  backupPath?: string;
+  backupError?: Error;
+  repaired: boolean;
+  rawBytes?: Buffer;
+  mode?: number;
 }
 
-export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
+function inspectConfig(filePath: string): ReadConfigResult {
+  if (!existsSync(filePath)) {
+    return { filePath, exists: false, json: {}, corrupt: false, repaired: false };
+  }
+
+  let rawBytes: Buffer;
+  let mode = 0o600;
+  try {
+    rawBytes = readFileSync(filePath);
+    mode = fs.statSync(filePath).mode & 0o777;
+  } catch (err: any) {
+    return {
+      filePath,
+      exists: true,
+      json: {},
+      corrupt: true,
+      backupError: err instanceof Error ? err : new Error(String(err)),
+      repaired: false,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawBytes.toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new SyntaxError("Config must be a JSON object");
+    }
+    const { json, changed } = repairConfigJson(parsed);
+    return { filePath, exists: true, json, corrupt: false, repaired: changed, rawBytes, mode };
+  } catch (err: any) {
+    if (err instanceof ConfigError) throw err;
+    return { filePath, exists: true, json: {}, corrupt: true, repaired: false, rawBytes, mode };
+  }
+}
+
+function recoverConfig(result: ReadConfigResult, userScope: boolean): ReadConfigResult {
+  if (!result.corrupt || result.backupError || !result.rawBytes) return result;
+  try {
+    result.backupPath = backupCorruptConfig(result.filePath, result.rawBytes, userScope ? 0o600 : (result.mode ?? 0o600));
+  } catch (err: any) {
+    result.backupError = err instanceof Error ? err : new Error(String(err));
+  }
+  return result;
+}
+
+export function readAndRepairConfig(filePath: string): ReadConfigResult {
+  const userScope = filePath === getUserConfigPath() || filePath === getLegacyUserConfigPath();
+  return withConfigLock(() => recoverConfig(inspectConfig(filePath), userScope));
+}
+
+function loadConfigUnlocked(cwd: string = process.cwd()): PiVoiceConfig {
   const defaults = defaultConfig();
   const canonicalUserConfigPath = getUserConfigPath();
   const legacyUserConfigPath = getLegacyUserConfigPath();
@@ -649,53 +803,55 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
 
   let globalJson: Record<string, unknown> = {};
   let globalExists = false;
-  if (existsSync(userConfigPath)) {
-    try {
-      globalJson = readConfigJson(userConfigPath);
-      globalExists = true;
-    } catch (err: any) {
-      if (err instanceof ConfigError) throw err;
+
+  const globalResult = recoverConfig(inspectConfig(userConfigPath), true);
+  if (globalResult.exists && !globalResult.corrupt) {
+    globalJson = globalResult.json;
+    globalExists = true;
+  } else if (globalResult.corrupt) {
+    if (globalResult.backupError) {
+      logger.warn({ userConfigPath, err: globalResult.backupError.message }, "Failed to rename corrupt user config file");
+    } else {
       logger.warn(
-        { userConfigPath, err: err?.message },
-        "Corrupt user config file, backing up to config.json.corrupt.bak and auto-recovering to defaults",
+        { userConfigPath, backupPath: globalResult.backupPath },
+        "Corrupt user config file, backed up to config.json.corrupt.bak and auto-recovering to defaults",
       );
-      try {
-        backupCorruptConfig(userConfigPath);
-      } catch (backupErr: any) {
-        logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt user config file");
-      }
-      if (userConfigPath === canonicalUserConfigPath && canonicalUserConfigPath !== legacyUserConfigPath && existsSync(legacyUserConfigPath)) {
-        try {
-          globalJson = readConfigJson(legacyUserConfigPath);
-          globalExists = true;
-          userConfigPath = legacyUserConfigPath;
-        } catch {
-          try {
-            backupCorruptConfig(legacyUserConfigPath);
-          } catch (backupErr: any) {
-            logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt legacy user config file");
-          }
+    }
+    if (userConfigPath === canonicalUserConfigPath && canonicalUserConfigPath !== legacyUserConfigPath && existsSync(legacyUserConfigPath)) {
+      const legacyResult = recoverConfig(inspectConfig(legacyUserConfigPath), true);
+      if (legacyResult.exists && !legacyResult.corrupt) {
+        globalJson = legacyResult.json;
+        globalExists = true;
+        userConfigPath = legacyUserConfigPath;
+      } else if (legacyResult.corrupt) {
+        if (legacyResult.backupError) {
+          logger.warn({ legacyUserConfigPath, err: legacyResult.backupError.message }, "Failed to rename corrupt legacy user config file");
+        } else {
+          logger.warn(
+            { legacyUserConfigPath, backupPath: legacyResult.backupPath },
+            "Corrupt legacy user config file, backed up to config.json.corrupt.bak",
+          );
         }
       }
     }
   }
 
+  let projResult: ReadConfigResult = { filePath: projConfigPath || "", exists: false, json: {}, corrupt: false, repaired: false };
   let projJson: Record<string, unknown> = {};
   let projExists = false;
   if (projConfigPath && existsSync(projConfigPath)) {
-    try {
-      projJson = readConfigJson(projConfigPath);
+    projResult = recoverConfig(inspectConfig(projConfigPath), false);
+    if (projResult.exists && !projResult.corrupt) {
+      projJson = projResult.json;
       projExists = true;
-    } catch (err: any) {
-      if (err instanceof ConfigError) throw err;
-      logger.warn(
-        { projConfigPath, err: err?.message },
-        "Corrupt project config file, backing up to config.json.corrupt.bak and auto-recovering to defaults",
-      );
-      try {
-        backupCorruptConfig(projConfigPath);
-      } catch (backupErr: any) {
-        logger.warn({ backupErr: backupErr?.message }, "Failed to rename corrupt project config file");
+    } else if (projResult.corrupt) {
+      if (projResult.backupError) {
+        logger.warn({ projConfigPath, err: projResult.backupError.message }, "Failed to rename corrupt project config file");
+      } else {
+        logger.warn(
+          { projConfigPath, backupPath: projResult.backupPath },
+          "Corrupt project config file, backed up to config.json.corrupt.bak and auto-recovering to defaults",
+        );
       }
     }
   }
@@ -775,8 +931,12 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   globalJson = repairedGlobal.json;
   projJson = repairedProject.json;
   try {
-    if (repairedGlobal.changed) atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
-    if (repairedProject.changed && projConfigPath) atomicWriteJson(projConfigPath, projJson);
+    if ((globalResult.repaired || repairedGlobal.changed) && globalExists) {
+      atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
+    }
+    if ((projResult.repaired || repairedProject.changed) && projExists && projConfigPath) {
+      atomicWriteJson(projConfigPath, projJson);
+    }
   } catch (saveErr: any) {
     logger.warn({ err: saveErr?.message }, "Failed to auto-heal config to disk");
   }
@@ -918,21 +1078,33 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   };
 }
 
+export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
+  return withConfigLock(() => loadConfigUnlocked(cwd));
+}
+
 function atomicWriteJson(filePath: string, data: unknown, options: { mode?: number } = {}): void {
   const targetDir = dirname(filePath);
-  const tmpPath = `${filePath}.tmp`;
   if (!existsSync(targetDir)) {
     mkdirSync(targetDir, { recursive: true, mode: 0o700 });
   }
   const mode = options.mode ?? 0o600;
-  writeFileSync(tmpPath, JSON.stringify(data, null, 2), { encoding: "utf-8", mode });
+  const tmpPath = join(targetDir, `.${basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+  let fd: number | undefined;
   try {
+    fd = fs.openSync(tmpPath, "wx", mode);
+    fs.writeFileSync(fd, JSON.stringify(data, null, 2), "utf8");
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
     chmodSync(tmpPath, mode);
-  } catch {}
-  renameSync(tmpPath, filePath);
-  try {
-    chmodSync(filePath, mode);
-  } catch {}
+    renameSync(tmpPath, filePath);
+    try { chmodSync(filePath, mode); } catch {}
+  } finally {
+    if (fd !== undefined) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    try { unlinkSync(tmpPath); } catch {}
+  }
 }
 
 function preparePatchSave(
@@ -981,12 +1153,6 @@ function preparePatchSave(
   if (dictionaryErrors.length > 0) {
     throw new ConfigError(targetPath, dictionaryErrors.map((error) => `${error.alias}: ${error.message}`).join("\n"));
   }
-
-  savePersistedVocabulary({
-    customVocabulary: finalCustomVocab,
-    presetVocabulary: mergedPresetVocab,
-    entries: finalDictionaryEntries,
-  });
 
   const existingAppMappings = (baseJson.appPresetMappings as Record<string, DictationPreset>) || DEFAULT_APP_PRESET_MAPPINGS;
   const mergedAppMappings = patchCopy.appPresetMappings !== undefined
@@ -1060,64 +1226,129 @@ function preparePatchSave(
   };
 }
 
-export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
+interface RecoveryRequest {
+  result: ReadConfigResult;
+  userScope: boolean;
+  label: string;
+}
+
+function restoreRecoveries(recoveries: RecoveryRequest[]): void {
+  for (const { result } of [...recoveries].reverse()) {
+    if (!result.backupPath || !existsSync(result.backupPath)) continue;
+    if (existsSync(result.filePath)) unlinkSync(result.filePath);
+    fs.renameSync(result.backupPath, result.filePath);
+    chmodSync(result.filePath, result.mode ?? 0o600);
+    result.backupPath = undefined;
+  }
+}
+
+function backupRecoveries(requests: RecoveryRequest[]): RecoveryRequest[] {
+  const completed: RecoveryRequest[] = [];
+  for (const request of requests) {
+    const { result, userScope, label } = request;
+    if (!result.corrupt) continue;
+    if (result.backupError || !result.rawBytes) {
+      restoreRecoveries(completed);
+      throw new ConfigError(result.filePath, `Failed to backup corrupt ${label} config file: ${result.backupError?.message || "backup failed"}`);
+    }
+    try {
+      result.backupPath = backupCorruptConfig(result.filePath, result.rawBytes, userScope ? 0o600 : (result.mode ?? 0o600));
+      completed.push(request);
+    } catch (err: any) {
+      restoreRecoveries(completed);
+      throw new ConfigError(result.filePath, `Failed to backup corrupt ${label} config file: ${err?.message || "backup failed"}`);
+    }
+  }
+  return completed;
+}
+
+function updateConfigUnlocked(cwd: string, patch: PiVoiceConfigPatch): PiVoiceConfig {
   const userConfigPath = getUserConfigPath();
   const legacyUserConfigPath = getLegacyUserConfigPath();
   const projConfigPath = getProjConfigPath(cwd);
   const hasProjConfig = projConfigPath ? existsSync(projConfigPath) : false;
 
-  let existingUserJson: Record<string, unknown> = {};
-  try {
-    existingUserJson = readConfigJson(userConfigPath);
-  } catch {
-    if (userConfigPath !== legacyUserConfigPath && existsSync(legacyUserConfigPath)) {
-      try {
-        existingUserJson = readConfigJson(legacyUserConfigPath);
-      } catch {}
-    }
-  }
-  const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath, true);
-  let toSaveProj: Record<string, unknown> | undefined;
-  let existingProjJson: Record<string, unknown> | undefined;
-  if (hasProjConfig && projConfigPath) {
-    existingProjJson = {};
-    try {
-      const content = readFileSync(projConfigPath, "utf-8");
-      existingProjJson = JSON.parse(content);
-    } catch {}
-    const hasProjectGeminiKey = typeof existingProjJson.geminiApiKey === "string" && existingProjJson.geminiApiKey.trim().length > 0;
-    const hasProjectFallbackKey = typeof existingProjJson.geminiFallbackApiKey === "string" && existingProjJson.geminiFallbackApiKey.trim().length > 0;
-    if ((hasProjectGeminiKey && patch.geminiApiKey === undefined) || (hasProjectFallbackKey && patch.geminiFallbackApiKey === undefined)) {
-      throw new ConfigError(projConfigPath, "Legacy project API keys must be migrated or explicitly cleared before updating project config");
-    }
-    toSaveProj = preparePatchSave(existingProjJson!, patch, projConfigPath, false);
-  }
+  const userResult = inspectConfig(userConfigPath);
+  const legacyResult = (!userResult.exists || userResult.corrupt)
+    && userConfigPath !== legacyUserConfigPath
+    && existsSync(legacyUserConfigPath)
+    ? inspectConfig(legacyUserConfigPath)
+    : undefined;
+  const projResult = hasProjConfig && projConfigPath ? inspectConfig(projConfigPath) : undefined;
 
-  if (toSaveProj && projConfigPath && existingProjJson) {
-    try {
-      atomicWriteJson(projConfigPath, toSaveProj);
-    } catch (err: any) {
-      logger.error({ err: String(err), configPath: projConfigPath }, "Failed atomic write of project config patch");
-      throw new ConfigError(projConfigPath, `Atomic write failed: ${err.message}`);
-    }
-  }
+  const recoveries = backupRecoveries([
+    { result: userResult, userScope: true, label: "user" },
+    ...(legacyResult ? [{ result: legacyResult, userScope: true, label: "legacy user" }] : []),
+    ...(projResult ? [{ result: projResult, userScope: false, label: "project" }] : []),
+  ]);
+  let committed = false;
 
   try {
-    atomicWriteJson(userConfigPath, toSaveUser, { mode: 0o600 });
-  } catch (err: any) {
+    for (const { result, label } of recoveries) {
+      logger.warn(
+        { configPath: result.filePath, backupPath: result.backupPath },
+        `Corrupt ${label} config file backed up prior to patch update`,
+      );
+    }
+
+    let existingUserJson = userResult.corrupt ? {} : userResult.json;
+    if ((!userResult.exists || userResult.corrupt) && legacyResult?.exists && !legacyResult.corrupt) {
+      existingUserJson = legacyResult.json;
+    }
+
+    const toSaveUser = preparePatchSave(existingUserJson, patch, userConfigPath, true);
+    let toSaveProj: Record<string, unknown> | undefined;
+    let existingProjJson: Record<string, unknown> | undefined;
+
+    if (projResult && projConfigPath) {
+      existingProjJson = projResult.corrupt ? {} : projResult.json;
+      const hasProjectGeminiKey = typeof existingProjJson.geminiApiKey === "string" && existingProjJson.geminiApiKey.trim().length > 0;
+      const hasProjectFallbackKey = typeof existingProjJson.geminiFallbackApiKey === "string" && existingProjJson.geminiFallbackApiKey.trim().length > 0;
+      if ((hasProjectGeminiKey && patch.geminiApiKey === undefined) || (hasProjectFallbackKey && patch.geminiFallbackApiKey === undefined)) {
+        throw new ConfigError(projConfigPath, "Legacy project API keys must be migrated or explicitly cleared before updating project config");
+      }
+      toSaveProj = preparePatchSave(existingProjJson, patch, projConfigPath, false);
+    }
+
     if (toSaveProj && projConfigPath && existingProjJson) {
       try {
-        atomicWriteJson(projConfigPath, existingProjJson);
-      } catch (rollbackErr: any) {
-        logger.error({ err: String(rollbackErr), configPath: projConfigPath }, "Failed to roll back project config patch");
+        atomicWriteJson(projConfigPath, toSaveProj);
+      } catch (err: any) {
+        throw new ConfigError(projConfigPath, `Atomic write failed: ${err.message}`);
       }
     }
-    if (err instanceof SecretStoreError || err instanceof ConfigError) {
-      throw err;
-    }
-    logger.error({ err: String(err), configPath: userConfigPath }, "Failed atomic write of global user config patch");
-    throw new ConfigError(userConfigPath, `Atomic write failed: ${err.message}`);
-  }
 
-  return loadConfig(cwd);
+    try {
+      atomicWriteJson(userConfigPath, toSaveUser, { mode: 0o600 });
+    } catch (err: any) {
+      if (toSaveProj && projConfigPath && existingProjJson) {
+        try {
+          if (projResult?.corrupt) unlinkSync(projConfigPath);
+          else atomicWriteJson(projConfigPath, existingProjJson);
+        } catch (rollbackErr: any) {
+          logger.error({ err: String(rollbackErr), configPath: projConfigPath }, "Failed to roll back project config patch");
+        }
+      }
+      throw err instanceof ConfigError
+        ? err
+        : new ConfigError(userConfigPath, `Atomic write failed: ${err.message}`);
+    }
+
+    committed = true;
+    const vocabularySource = toSaveProj ?? toSaveUser;
+    savePersistedVocabulary({
+      customVocabulary: (vocabularySource.customVocabulary as string[]) || [],
+      presetVocabulary: (vocabularySource.presetVocabulary as Record<string, string[]>) || {},
+      entries: (vocabularySource.dictionaryEntries as DictionaryEntry[]) || [],
+    });
+
+    return loadConfigUnlocked(cwd);
+  } catch (err) {
+    if (!committed) restoreRecoveries(recoveries);
+    throw err;
+  }
+}
+
+export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
+  return withConfigLock(() => updateConfigUnlocked(cwd, patch));
 }
