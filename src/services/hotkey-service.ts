@@ -44,7 +44,35 @@ export function bindingToElectronAccelerator(binding: KeyBinding): string {
   if (binding.shift) parts.push("Shift");
 
   const formatted = formatKeyBinding(binding);
-  const keyPart = formatted.split("+").pop()?.toUpperCase() ?? "V";
+  const keyName = formatted.split("+").pop() ?? "v";
+  const keyPart = ({
+    space: "Space",
+    enter: "Enter",
+    escape: "Escape",
+    tab: "Tab",
+    backspace: "Backspace",
+    delete: "Delete",
+    insert: "Insert",
+    home: "Home",
+    end: "End",
+    pageup: "PageUp",
+    pagedown: "PageDown",
+    up: "Up",
+    down: "Down",
+    left: "Left",
+    right: "Right",
+    semicolon: ";",
+    equal: "=",
+    comma: ",",
+    minus: "-",
+    period: ".",
+    slash: "/",
+    backquote: "`",
+    bracketleft: "[",
+    backslash: "\\",
+    bracketright: "]",
+    quote: '"',
+  } as Record<string, string>)[keyName] ?? keyName.toUpperCase();
   parts.push(keyPart);
   return parts.join("+");
 }

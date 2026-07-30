@@ -46,6 +46,14 @@ describe("Dual Hotkey Configuration & Parsing Suite", () => {
     expect(binding.alt).toBe(true);
   });
 
+  test("maps punctuation bindings to Electron accelerators", async () => {
+    const { bindingToElectronAccelerator } = await import("../../services/hotkey-service.js");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+semicolon"))).toBe("Control+;");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+bracketleft"))).toBe("Control+[");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+backslash"))).toBe("Control+\\");
+    expect(bindingToElectronAccelerator(parseKeyBinding("ctrl+quote"))).toBe('Control+"');
+  });
+
   test("parses edit key binding (Ctrl+Cmd+Opt+E) correctly", () => {
     const editBinding = parseKeyBinding("ctrl+cmd+option+e");
     expect(editBinding.ctrl).toBe(true);
