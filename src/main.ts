@@ -57,7 +57,6 @@ dictationCoordinator = new DictationControlCoordinator(
     },
     onStopRecording: async (ensureMinimumDuration) => {
       setState("stopping", "Stopping...");
-      playToggleStopChime();
       captureWindow?.webContents.send(IPC.STOP_RECORDING, ensureMinimumDuration);
       return true;
     },
@@ -931,8 +930,7 @@ function setupIpcHandlers() {
 
     try {
       const binding = parseKeyBinding(newKeyStr);
-      currentConfig = updateConfig(workingCwd, { editKey: newKeyStr });
-      await hotkeyService.start(
+      const res = await hotkeyService.start(
         currentConfig.key,
         {
           onDown: (mode) => handleHotkeyDown(mode),
@@ -943,10 +941,12 @@ function setupIpcHandlers() {
             }
           },
         },
-        currentConfig.editKey,
+        binding,
         currentConfig.dictationMode
       );
-      return { success: true, binding, keyDisplay: currentConfig.editKeyDisplay };
+      if (!res.success) return res;
+      currentConfig = updateConfig(workingCwd, { editKey: newKeyStr });
+      return { ...res, binding, keyDisplay: currentConfig.editKeyDisplay };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
