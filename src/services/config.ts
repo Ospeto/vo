@@ -616,6 +616,7 @@ function withFileLock<T>(lockPath: string, action: () => T): T {
   } finally {
     try { unlinkSync(readyPath); } catch {}
     locker.stdin?.end();
+    locker.kill();
   }
 }
 
