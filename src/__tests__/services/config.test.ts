@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
 
 // Mock logger to prevent file I/O during tests
 mock.module("../../services/logger.js", () => ({
@@ -33,6 +34,7 @@ import {
   SecretStoreError,
   setSafeStorageProvider,
   configPatchSchema,
+  terminateLockHelper,
 } from "../../services/config.js";
 import { getSanitizedSettingsConfig } from "../../services/ipc-policy.js";
 
@@ -1022,6 +1024,25 @@ describe("PR-05 Unified Corrupt-Config Remediation & Recovery Suite", () => {
     expect(updated.appPresetMappings?.["custom-editor"]).toBe("fast");
     expect(onDisk.appPresetMappings).toEqual({ "custom-editor": "fast" });
     expect(onDisk.presetVocabulary.careful).toEqual(["alpha", "beta"]);
+  });
+
+  test("timeout cleanup closes stdin and reaps the full lock helper", async () => {
+    const helper = spawn("/bin/sh", ["-c", "cat >/dev/null & wait"], {
+      detached: true,
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+    const pid = helper.pid!;
+    const exited = new Promise<void>((resolve, reject) => {
+      helper.once("exit", () => resolve());
+      helper.once("error", reject);
+    });
+
+    terminateLockHelper(helper);
+    await exited;
+
+    expect(helper.stdin?.destroyed).toBe(true);
+    expect(helper.exitCode ?? helper.signalCode).not.toBeNull();
+    expect(() => process.kill(-pid, 0)).toThrow();
   });
 
   test("10. Later project backup failure restores earlier user recovery", () => {

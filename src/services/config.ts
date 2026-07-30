@@ -590,6 +590,16 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+type LockHelper = Pick<ReturnType<typeof spawn>, "stdin" | "pid" | "kill">;
+
+export function terminateLockHelper(locker: LockHelper): void {
+  locker.stdin?.destroy();
+  if (locker.pid) {
+    try { process.kill(-locker.pid, "SIGTERM"); } catch {}
+  }
+  locker.kill();
+}
+
 function withFileLock<T>(lockPath: string, action: () => T): T {
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
   const fd = fs.openSync(lockPath, "a", 0o600);
@@ -598,13 +608,13 @@ function withFileLock<T>(lockPath: string, action: () => T): T {
 
   const readyPath = `${lockPath}.${process.pid}.${randomUUID()}.ready`;
   const locker = existsSync("/usr/bin/lockf")
-    ? spawn("/usr/bin/lockf", ["-k", "-t", "10", lockPath, "/bin/sh", "-c", ': > "$1"; cat', "sh", readyPath], { stdio: ["pipe", "ignore", "ignore"] })
-    : spawn("/usr/bin/flock", ["-x", "-w", "10", lockPath, "/bin/sh", "-c", ': > "$1"; cat', "sh", readyPath], { stdio: ["pipe", "ignore", "ignore"] });
+    ? spawn("/usr/bin/lockf", ["-k", "-t", "10", lockPath, "/bin/sh", "-c", ': > "$1"; cat', "sh", readyPath], { detached: true, stdio: ["pipe", "ignore", "ignore"] })
+    : spawn("/usr/bin/flock", ["-x", "-w", "10", lockPath, "/bin/sh", "-c", ': > "$1"; cat', "sh", readyPath], { detached: true, stdio: ["pipe", "ignore", "ignore"] });
   locker.on("error", () => {});
   const started = Date.now();
   while (!existsSync(readyPath)) {
     if (Date.now() - started >= CONFIG_LOCK_TIMEOUT_MS) {
-      locker.kill();
+      terminateLockHelper(locker);
       try { unlinkSync(readyPath); } catch {}
       throw new ConfigError(lockPath, "Timed out waiting for another config operation");
     }
@@ -615,8 +625,7 @@ function withFileLock<T>(lockPath: string, action: () => T): T {
     return action();
   } finally {
     try { unlinkSync(readyPath); } catch {}
-    locker.stdin?.end();
-    locker.kill();
+    terminateLockHelper(locker);
   }
 }
 
