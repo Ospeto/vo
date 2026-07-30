@@ -2,6 +2,9 @@ import { describe, test, expect, beforeEach, mock } from "bun:test";
 
 let isTrustedAccessibilityMock = true;
 let registerMockReturn = true;
+type KeyCallback = (event: any) => void;
+const keydownCallbacks: KeyCallback[] = [];
+const keyupCallbacks: KeyCallback[] = [];
 
 // Mock logger
 mock.module("../../services/logger.js", () => ({
@@ -27,7 +30,14 @@ mock.module("electron", () => ({
 // Mock uiohook-napi
 mock.module("uiohook-napi", () => ({
   uIOhook: {
-    on: () => {},
+    on: (event: string, callback: KeyCallback) => {
+      (event === "keydown" ? keydownCallbacks : keyupCallbacks).push(callback);
+    },
+    off: (event: string, callback: KeyCallback) => {
+      const callbacks = event === "keydown" ? keydownCallbacks : keyupCallbacks;
+      const index = callbacks.indexOf(callback);
+      if (index >= 0) callbacks.splice(index, 1);
+    },
     start: () => {
       if (!isTrustedAccessibilityMock) {
         throw new Error("uIOhook start failed or permission denied");
@@ -47,6 +57,17 @@ mock.module("uiohook-napi", () => ({
     AltRight: 312,
     Meta: 3675,
     MetaRight: 3676,
+    Semicolon: 39,
+    Equal: 13,
+    Comma: 51,
+    Minus: 12,
+    Period: 52,
+    Slash: 53,
+    Backquote: 41,
+    BracketLeft: 26,
+    Backslash: 43,
+    BracketRight: 27,
+    Quote: 40,
   },
 }));
 
@@ -56,6 +77,22 @@ const { HotkeyService } = await import("../../services/hotkey-service.js");
 const { parseKeyBinding } = await import("../../services/config.js");
 const { globalShortcut } = await import("electron");
 
+function simulateKeyDown(keycode: number, modifiers: Record<string, boolean> = {}) {
+  for (const callback of keydownCallbacks) {
+    callback({
+      keycode,
+      ctrlKey: modifiers.ctrlKey ?? false,
+      shiftKey: modifiers.shiftKey ?? false,
+      altKey: modifiers.altKey ?? false,
+      metaKey: modifiers.metaKey ?? false,
+    });
+  }
+}
+
+function simulateKeyUp(keycode: number) {
+  for (const callback of keyupCallbacks) callback({ keycode });
+}
+
 describe("PR-07 Dictation Control Coordinator & Hotkey Remediation Suite", () => {
   let lifecycle: InstanceType<typeof RecordingLifecycle>;
 
@@ -63,6 +100,8 @@ describe("PR-07 Dictation Control Coordinator & Hotkey Remediation Suite", () =>
     lifecycle = new RecordingLifecycle();
     isTrustedAccessibilityMock = true;
     registerMockReturn = true;
+    keydownCallbacks.length = 0;
+    keyupCallbacks.length = 0;
   });
 
   test("1. Native hold down/start/up stops once and transcribes", async () => {
@@ -244,6 +283,102 @@ describe("PR-07 Dictation Control Coordinator & Hotkey Remediation Suite", () =>
 
     expect(result.action).toBe("stopped");
     expect(stopCalled).toBe(true);
+  });
+
+  test("8. Re-registering while a hold is starting is rejected without losing the release edge", async () => {
+    const hotkeyService = new HotkeyService();
+    let stopCalled = 0;
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => hotkeyService.isNativeKeyUpAvailable(),
+        isFnDown: () => hotkeyService.isFnDown(),
+        onStartRecording: () => true,
+        onStopRecording: () => {
+          stopCalled += 1;
+          return true;
+        },
+        onCancelDictation: () => {},
+      },
+      lifecycle
+    );
+    const callbacks = {
+      onDown: (mode: "dictate" | "edit") => void coordinator.handlePhysicalDown(mode),
+      onUp: () => void coordinator.handlePhysicalUp(),
+    };
+    const binding = parseKeyBinding("ctrl+cmd+option+v");
+    await hotkeyService.start(binding, callbacks, undefined, "hold");
+
+    simulateKeyDown(binding.keycode, { ctrlKey: true, altKey: true, metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    expect(coordinator.snapshot().state).toBe("starting");
+
+    const replacement = await hotkeyService.replace("ctrl+cmd+option+e", callbacks, undefined, "hold");
+    expect(replacement.success).toBe(false);
+    expect(coordinator.snapshot().state).toBe("starting");
+
+    await coordinator.acknowledgeStart(coordinator.snapshot().sequenceId, true);
+    simulateKeyUp(binding.keycode);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(stopCalled).toBe(1);
+    expect(coordinator.snapshot().state).toBe("stopping");
+    await hotkeyService.stop();
+  });
+
+  test("9. Re-registering while recording is rejected and the current binding still stops", async () => {
+    const hotkeyService = new HotkeyService();
+    let stopCalled = 0;
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => hotkeyService.isNativeKeyUpAvailable(),
+        isFnDown: () => hotkeyService.isFnDown(),
+        onStartRecording: () => true,
+        onStopRecording: () => {
+          stopCalled += 1;
+          return true;
+        },
+        onCancelDictation: () => {},
+      },
+      lifecycle
+    );
+    const callbacks = {
+      onDown: (mode: "dictate" | "edit") => void coordinator.handlePhysicalDown(mode),
+      onUp: () => void coordinator.handlePhysicalUp(),
+    };
+    const binding = parseKeyBinding("ctrl+cmd+option+v");
+    await hotkeyService.start(binding, callbacks, undefined, "hold");
+
+    simulateKeyDown(binding.keycode, { ctrlKey: true, altKey: true, metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    await coordinator.acknowledgeStart(coordinator.snapshot().sequenceId, true);
+    expect(coordinator.snapshot().state).toBe("recording");
+
+    const replacement = await hotkeyService.replace("ctrl+cmd+option+e", callbacks, undefined, "hold");
+    expect(replacement.success).toBe(false);
+    simulateKeyUp(binding.keycode);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(stopCalled).toBe(1);
+    expect(coordinator.snapshot().state).toBe("stopping");
+    await hotkeyService.stop();
+  });
+
+  test("10. Starting a new binding retires the old native shortcut listener", async () => {
+    const hotkeyService = new HotkeyService();
+    let downCount = 0;
+    const callbacks = {
+      onDown: () => {
+        downCount += 1;
+      },
+      onUp: () => {},
+    };
+    await hotkeyService.start(parseKeyBinding("ctrl+cmd+option+v"), callbacks, undefined, "hold");
+    await hotkeyService.start(parseKeyBinding("ctrl+cmd+option+e"), callbacks, undefined, "hold");
+
+    simulateKeyDown(47, { ctrlKey: true, altKey: true, metaKey: true });
+    simulateKeyDown(18, { ctrlKey: true, altKey: true, metaKey: true });
+    expect(downCount).toBe(1);
+    await hotkeyService.stop();
   });
 
   test("6. False fallback registration reports failure in HotkeyService", async () => {

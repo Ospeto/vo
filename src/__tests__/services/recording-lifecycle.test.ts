@@ -39,13 +39,13 @@ describe("RecordingLifecycle", () => {
     });
   });
 
-  test("rejects requests in transient and error states", () => {
+  test("rejects transient requests but permits restart from recoverable error", () => {
     const lifecycle = new RecordingLifecycle();
     const start = lifecycle.requestStart();
 
     expect(lifecycle.requestToggle()).toMatchObject({ accepted: false, state: "starting" });
     lifecycle.acknowledgeStart(start.sequenceId, false);
-    expect(lifecycle.requestToggle()).toMatchObject({ accepted: false, state: "error" });
+    expect(lifecycle.requestStart()).toMatchObject({ accepted: true, state: "starting", sequenceId: start.sequenceId + 1 });
   });
 
   test("ignores stale acknowledgements and events", () => {

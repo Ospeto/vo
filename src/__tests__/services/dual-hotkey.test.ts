@@ -30,6 +30,7 @@ mock.module("../../services/logger.js", () => ({
 mock.module("uiohook-napi", () => ({
   uIOhook: {
     on: mock(() => {}),
+    off: mock(() => {}),
     start: mock(() => {
       throw new Error("uIOhook unavailable in test environment");
     }),

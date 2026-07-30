@@ -945,6 +945,9 @@ function enableControls(enabled: boolean) {
   gainSlider.disabled = !enabled;
   if (modelSelect) modelSelect.disabled = !enabled;
   if (recordBtn) recordBtn.disabled = !enabled;
+  if (resetShortcutBtn) resetShortcutBtn.disabled = !enabled;
+  if (recordEditBtn) recordEditBtn.disabled = !enabled;
+  if (resetEditShortcutBtn) resetEditShortcutBtn.disabled = !enabled;
   configBtn.disabled = !enabled;
 }
 

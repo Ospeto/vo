@@ -1,4 +1,4 @@
-import type { DictationMode, RecordingLifecycleResult, RecordingLifecycleSnapshot } from "../shared/types.js";
+import type { DictationMode, RecordingLifecycleSnapshot } from "../shared/types.js";
 import { RecordingLifecycle } from "./recording-lifecycle.js";
 import { getHoldModeMinimumDuration, shouldEnsureMinimumDuration, SHORT_TAP_THRESHOLD_MS } from "./hold-mode-protections.js";
 
@@ -39,7 +39,6 @@ export class DictationControlCoordinator {
   private keyHoldPressStartTime = 0;
   private lastHoldPressDuration = 0;
   private recordingStartTime = 0;
-  private currentTriggerMode: DictationTriggerMode = "dictate";
   private shortTapTimer: any = null;
 
   constructor(options: DictationControlCoordinatorOptions, lifecycle?: RecordingLifecycle) {
@@ -73,15 +72,10 @@ export class DictationControlCoordinator {
     return this.pendingStopOrigin !== null;
   }
 
-  public clearPendingStop(): void {
-    this.pendingStopOrigin = null;
-  }
-
   /** Physical key-down handler from FnHook */
   public async handlePhysicalDown(triggerMode: DictationTriggerMode = "dictate"): Promise<CoordinatorActionResult> {
     const now = Date.now();
     this.keyHoldPressStartTime = now;
-    this.currentTriggerMode = triggerMode;
 
     if (this.mode === "hold") {
       if (!this.isNativeKeyUpAvailableFn()) {
@@ -217,7 +211,6 @@ export class DictationControlCoordinator {
   private async startRecording(triggerMode: DictationTriggerMode): Promise<CoordinatorActionResult> {
     this.pendingStopOrigin = null;
     this.recordingStartTime = Date.now();
-    this.currentTriggerMode = triggerMode;
     const reqRes = this.lifecycle.requestStart();
     if (!reqRes.accepted) {
       return { accepted: false, action: "rejected", reason: reqRes.reason };
@@ -270,7 +263,7 @@ export class DictationControlCoordinator {
     }
 
     this.playStopChimeFn?.();
-    const stoppedOk = await this.onStopRecordingFn(ensureMinimumDuration);
+    await this.onStopRecordingFn(ensureMinimumDuration);
     return { accepted: true, action: "stopped" };
   }
 }

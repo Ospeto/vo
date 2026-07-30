@@ -91,6 +91,17 @@ export class HotkeyService implements IHotkeyService {
     editBinding?: KeyBinding,
     mode: DictationMode = "toggle"
   ): Promise<HotkeyRegisterResult> {
+    if (this.fnHook?.isFnDown) {
+      return {
+        success: false,
+        nativeKeyUpAvailable: this.fnHook.isStarted(),
+        fallbackRegistered: false,
+        error: "Cannot change hotkeys while the current shortcut is held",
+      };
+    }
+
+    this.fnHook?.stop();
+    this.fnHook = null;
     this.currentBinding = binding;
     this.currentEditBinding = editBinding ?? null;
     this.currentDisplay = formatKeyDisplay(binding);
@@ -208,6 +219,15 @@ export class HotkeyService implements IHotkeyService {
     editBindingStr?: string,
     mode: DictationMode = "toggle"
   ): Promise<HotkeyRegisterResult> {
+    if (this.fnHook?.isFnDown) {
+      return {
+        success: false,
+        nativeKeyUpAvailable: this.fnHook.isStarted(),
+        fallbackRegistered: false,
+        error: "Cannot change hotkeys while the current shortcut is held",
+      };
+    }
+
     let candidateBinding: KeyBinding;
     try {
       candidateBinding = parseKeyBinding(newBindingStr);

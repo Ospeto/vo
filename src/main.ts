@@ -25,7 +25,6 @@ import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
 import { DictationControlCoordinator } from "./services/dictation-control-coordinator.js";
-import { MINIMUM_HOLD_RECORDING_MS, SHORT_TAP_THRESHOLD_MS, getHoldModeMinimumDuration, shouldEnsureMinimumDuration } from "./services/hold-mode-protections.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -89,14 +88,6 @@ let lastPasteTime = 0;
 let activeSelectionText = "";
 
 let stoppingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
-let shortTapStopTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearShortTapStopTimer() {
-  if (shortTapStopTimer) {
-    clearTimeout(shortTapStopTimer);
-    shortTapStopTimer = null;
-  }
-}
 
 function restoreCapturedSelection(sequenceId?: number) {
   const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, selectionClipboardPort);
@@ -151,7 +142,6 @@ let activeUsedPaidKey = false;
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
   sequenceId++;
-  clearShortTapStopTimer();
 
   if (state === "starting" || state === "recording") {
     activeUsedPaidKey = false;
@@ -659,6 +649,13 @@ function validateIpcSender(
   }
 }
 
+function hotkeyRegistrationError(): string | null {
+  const state = recordingLifecycle.snapshot().state;
+  return state === "idle" || state === "error"
+    ? null
+    : "Hotkeys can only be changed while dictation is idle or in a recoverable error state";
+}
+
 function setupIpcHandlers() {
   ipcMain.on(IPC.RECORDING_DATA, async (event, data: ArrayBuffer) => {
     if (!validateIpcSender(event, IPC.RECORDING_DATA)) return;
@@ -947,6 +944,8 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.REGISTER_HOTKEY, async (event, newKeyStr: string) => {
     validateIpcSenderPolicy(event, IPC.REGISTER_HOTKEY, popoverWindow, captureWindow, hudWindow);
+    const registrationError = hotkeyRegistrationError();
+    if (registrationError) return { success: false, error: registrationError };
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
     const res = await hotkeyService.replace(
@@ -971,6 +970,8 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.REGISTER_EDIT_HOTKEY, async (event, newKeyStr: string) => {
     validateIpcSenderPolicy(event, IPC.REGISTER_EDIT_HOTKEY, popoverWindow, captureWindow, hudWindow);
+    const registrationError = hotkeyRegistrationError();
+    if (registrationError) return { success: false, error: registrationError };
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
 
     try {
@@ -999,14 +1000,9 @@ function setupIpcHandlers() {
 }
 
 let lastHotkeyDownTime = 0;
-let keyHoldPressStartTime = 0;
-let lastHoldPressDuration = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
-let pendingStopOnStart = false;
-let recordingStartTime = 0;
 
 async function startRecordingFlow() {
-  recordingStartTime = Date.now();
   const reqRes = recordingLifecycle.snapshot();
   if (reqRes.state !== "starting") {
     logger.warn({ state: reqRes.state }, "Cannot start recording flow");
@@ -1094,7 +1090,6 @@ function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
     return;
   }
   lastHotkeyDownTime = now;
-  keyHoldPressStartTime = now;
 
   prewarmConnection();
 
