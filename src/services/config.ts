@@ -1,6 +1,7 @@
 import { join, dirname, basename } from "node:path";
 import fs, { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
@@ -362,7 +363,7 @@ export const configFileSchema = z.object({
   customVocabulary: z.array(z.string()).optional().default([]),
   presetVocabulary: z.record(z.string(), z.array(z.string())).optional().default({}),
   dictionaryEntries: z.array(z.object({ id: z.string(), phrase: z.string(), spokenAliases: z.array(z.string()), enabled: z.boolean(), legacyWhitespace: z.boolean().optional(), category: z.enum(["general", "person_name", "technical"]).optional() })).optional().default([]),
-  appPresetMappings: z.record(z.string(), z.string()).optional().default(DEFAULT_APP_PRESET_MAPPINGS),
+  appPresetMappings: z.record(z.string(), z.enum(["auto", "careful", "code_comment", "fast", "email_polish", "burmese_written", "translate"])).optional().default(DEFAULT_APP_PRESET_MAPPINGS),
   geminiApiKey: z.string().optional(),
   geminiFallbackApiKey: z.string().optional(),
   audioDeviceId: z.string().optional(),
@@ -589,55 +590,32 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function processIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err: any) {
-    return err?.code !== "ESRCH";
-  }
-}
-
-function lockIsStale(lockPath: string): boolean {
-  try {
-    const owner = Number(readFileSync(lockPath, "utf8"));
-    if (Number.isInteger(owner) && owner > 0) return !processIsAlive(owner);
-    return Date.now() - fs.statSync(lockPath).mtimeMs > 1_000;
-  } catch {
-    return !existsSync(lockPath);
-  }
-}
-
 function withFileLock<T>(lockPath: string, action: () => T): T {
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
+  const fd = fs.openSync(lockPath, "a", 0o600);
+  fs.closeSync(fd);
+  chmodSync(lockPath, 0o600);
+
+  const readyPath = `${lockPath}.${process.pid}.${randomUUID()}.ready`;
+  const locker = existsSync("/usr/bin/lockf")
+    ? spawn("/usr/bin/lockf", ["-k", "-t", "10", lockPath, "/bin/sh", "-c", ': > "$1"; cat', "sh", readyPath], { stdio: ["pipe", "ignore", "ignore"] })
+    : spawn("/usr/bin/flock", ["-x", "-w", "10", lockPath, "/bin/sh", "-c", ': > "$1"; cat', "sh", readyPath], { stdio: ["pipe", "ignore", "ignore"] });
+  locker.on("error", () => {});
   const started = Date.now();
-  while (true) {
-    try {
-      const fd = fs.openSync(lockPath, "wx", 0o600);
-      try {
-        fs.writeFileSync(fd, String(process.pid));
-        fs.fsyncSync(fd);
-      } finally {
-        fs.closeSync(fd);
-      }
-      break;
-    } catch (err: any) {
-      if (err?.code !== "EEXIST") throw err;
-      if (lockIsStale(lockPath)) {
-        try { unlinkSync(lockPath); } catch {}
-        continue;
-      }
-      if (Date.now() - started >= CONFIG_LOCK_TIMEOUT_MS) {
-        throw new ConfigError(lockPath, "Timed out waiting for another config operation");
-      }
-      sleepSync(CONFIG_LOCK_RETRY_MS);
+  while (!existsSync(readyPath)) {
+    if (Date.now() - started >= CONFIG_LOCK_TIMEOUT_MS) {
+      locker.kill();
+      try { unlinkSync(readyPath); } catch {}
+      throw new ConfigError(lockPath, "Timed out waiting for another config operation");
     }
+    sleepSync(CONFIG_LOCK_RETRY_MS);
   }
 
   try {
     return action();
   } finally {
-    try { unlinkSync(lockPath); } catch {}
+    try { unlinkSync(readyPath); } catch {}
+    locker.stdin?.end();
   }
 }
 
@@ -765,7 +743,7 @@ function inspectConfig(filePath: string): ReadConfigResult {
   }
 
   try {
-    const parsed = JSON.parse(rawBytes.toString("utf8"));
+    const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(rawBytes));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new SyntaxError("Config must be a JSON object");
     }
