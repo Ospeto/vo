@@ -883,7 +883,7 @@ describe("PR-05 Unified Corrupt-Config Remediation & Recovery Suite", () => {
 
   test("3. Byte-identical backup preservation", () => {
     const userPath = join(userDir, "config.json");
-    const binaryCorruptData = Buffer.from([0x7b, 0x22, 0x62, 0x61, 0x64, 0x22, 0x3a, 0xff, 0xfe, 0x7d]);
+    const binaryCorruptData = Buffer.from([0x7b, 0x22, 0x62, 0x61, 0x64, 0x22, 0x3a, 0x22, 0xff, 0xfe, 0x22, 0x7d]);
     writeFileSync(userPath, binaryCorruptData);
 
     loadConfig(projDir);
@@ -1004,14 +1004,14 @@ describe("PR-05 Unified Corrupt-Config Remediation & Recovery Suite", () => {
     const saved = JSON.parse(readFileSync(userPath, "utf8"));
     expect(saved.inputGain).toBe(1.1);
     expect(saved.targetLanguage).toBe("French");
-    expect(readdirSync(userDir).some((name) => name.endsWith(".tmp") || name.endsWith(".lock"))).toBe(false);
+    expect(readdirSync(userDir).some((name) => name.endsWith(".tmp") || name.endsWith(".ready"))).toBe(false);
   });
 
   test("9. Repairs malformed nested records without deleting valid siblings", () => {
     const userPath = join(userDir, "config.json");
     writeFileSync(userPath, JSON.stringify({
       targetLanguage: "French",
-      appPresetMappings: { "custom-editor": "fast", broken: 42 },
+      appPresetMappings: { "custom-editor": "fast", broken: "bogus" },
       presetVocabulary: { careful: ["alpha", 42, "beta"] },
     }));
 
