@@ -81,7 +81,7 @@ export interface StatePayload {
 ### Sequence ID Protocol & Crash Recovery:
 - Recording commands (`START_RECORDING`, `STOP_RECORDING`) and acknowledgements require incrementing monotonic `sequenceId` numbers.
 - Stale acknowledgements (matching an older `sequenceId`) are discarded immediately.
-- If the hidden capture renderer crashes, main process detects `render-process-gone`, resets state to `idle`, recreates the capture window automatically, and notifies popover UI.
+- The main process assigns each hidden capture renderer a monotonic session generation and accepts capture IPC only after that generation is ready. On `render-process-gone`, it idempotently aborts active capture/transcription and paste work, restores captured selection state, detaches the failed sender, resets to `idle` without playing a UI chime, and creates at most one pending replacement; only that replacement's matching ready acknowledgement can promote it to the active capture window.
 
 ---
 

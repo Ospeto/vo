@@ -115,7 +115,7 @@ function abortSelectionCapture() {
 function abortActiveFlow(failedSender?: Electron.WebContents) {
   abortSelectionCapture();
   const currentSeq = recordingLifecycle.snapshot().sequenceId;
-  
+
   if (activeSTTAbortController) {
     activeSTTAbortController.abort();
     activeSTTAbortController = null;
@@ -124,7 +124,7 @@ function abortActiveFlow(failedSender?: Electron.WebContents) {
   pasteCoordinator.invalidate();
   recordingLifecycle.cancel();
   restoreCapturedSelection(currentSeq);
-  
+
   if (failedSender) {
     captureRendererSession.detach(failedSender);
   }
@@ -132,7 +132,7 @@ function abortActiveFlow(failedSender?: Electron.WebContents) {
 
 function cancelDictation(reason: string = "Cancelled") {
   abortActiveFlow();
-  
+
   if (currentState === "idle") {
     if (hudWindow && hudWindow.isVisible()) {
       hudWindow.hide();
@@ -424,7 +424,7 @@ function ensureCaptureWindow() {
       backgroundThrottling: false,
     },
   });
-  
+
   pendingCaptureWindow = win;
   const sender = win.webContents;
   const generation = captureRendererSession.attach(sender);
@@ -442,9 +442,9 @@ function ensureCaptureWindow() {
 
   sender.on("render-process-gone", (_event, details) => {
     logger.error({ details }, "Capture renderer process crashed, auto-recovering...");
-    
+
     abortActiveFlow(sender);
-    
+
     if (captureWindow === win) {
       captureWindow = null;
     }
@@ -454,7 +454,7 @@ function ensureCaptureWindow() {
     if (!win.isDestroyed()) {
       win.destroy();
     }
-    
+
     setState("idle", "Capture engine recovered");
     ensureCaptureWindow();
   });
