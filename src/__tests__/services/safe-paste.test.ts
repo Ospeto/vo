@@ -161,7 +161,7 @@ describe("SafePasteService", () => {
     service.captureTarget();
     expect(await service.paste("secret")).toEqual({ ok: false, reason: "injection_failed" });
     expect(received).toEqual([target()]);
-    expect(events).toEqual(["snapshot", "write", "restore"]);
+    expect(events).toEqual(["snapshot", "write", "snapshot", "snapshot", "restore"]);
   });
 
   test("holds the written transcript readable until the clipboard is restored", async () => {
@@ -182,14 +182,14 @@ describe("SafePasteService", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(clipboard.value).toBe("transcript");
-    expect(events).toEqual(["snapshot", "write", "inject", `hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`]);
+    expect(events).toEqual(["snapshot", "write", "snapshot", "inject", `hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`]);
     let resolved = false;
     void paste.then(() => { resolved = true; });
     await Promise.resolve();
     expect(resolved).toBe(false);
     releaseHold();
     expect(await paste).toEqual({ ok: true, reason: "injection_requested" });
-    expect(events).toEqual(["snapshot", "write", "inject", `hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`, "restore"]);
+    expect(events).toEqual(["snapshot", "write", "snapshot", "inject", `hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`, "snapshot", "restore"]);
     expect(clipboard.value).toBe("old");
   });
 
@@ -206,7 +206,7 @@ describe("SafePasteService", () => {
     );
     service.captureTarget();
     expect(await service.paste("transcript")).toEqual({ ok: false, reason: "injection_failed" });
-    expect(events).toEqual(["snapshot", "write", "restore"]);
+    expect(events).toEqual(["snapshot", "write", "snapshot", "snapshot", "restore"]);
     expect(held).toBe(false);
   });
 
@@ -245,7 +245,7 @@ describe("SafePasteService", () => {
     expect(await service.paste("secret", () => isCurrent)).toEqual({ ok: false, reason: "target_mismatch" });
     expect(value).toBe("old");
     expect(injected).toBe(false);
-    expect(events).toEqual(["snapshot", "write", "restore"]);
+    expect(events).toEqual(["snapshot", "write", "snapshot", "snapshot", "restore"]);
   });
 
   test("parses optional non-authoritative title without widening target policy", () => {
@@ -370,7 +370,7 @@ describe("SafePasteService", () => {
 
       const res = await service.paste("text", () => isCurrent);
       expect(res).toEqual({ ok: false, reason: "target_mismatch" });
-      expect(events).toEqual(["authorize", "snapshot", "write", "restore"]);
+      expect(events).toEqual(["authorize", "snapshot", "write", "snapshot", "snapshot", "restore"]);
       expect(clipboardValue).toBe("old");
     });
   });

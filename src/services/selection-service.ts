@@ -88,9 +88,12 @@ export async function captureActiveSelection(
   let previousSnapshot: ClipboardSnapshot = { formats: [], text: "" };
   if (clipPort) previousSnapshot = clipPort.snapshot();
 
-  // Write sentinel to clipboard to reliably detect new selection copy
+  // Write sentinel to clipboard to reliably detect new selection copy.
+  // Only restore it if the clipboard still has this exact sentinel snapshot.
+  let sentinelSnapshot: ClipboardSnapshot | null = null;
   try {
     clipPort?.writeText(SELECTION_SENTINEL);
+    sentinelSnapshot = clipPort?.snapshot() ?? null;
   } catch {}
 
   return new Promise((resolve) => {
@@ -134,9 +137,9 @@ export async function captureActiveSelection(
         logger.info({ byteLength: trimmed.length }, "Captured active text selection from foreground app");
         resolve({ hasSelection: true, selectedText: trimmed, previousClipboard: previousSnapshot });
       } else {
-        // Restore previous clipboard if no selection was captured
+        // Restore only our sentinel; never overwrite a user or newer capture copy.
         try {
-          if (clipPort) {
+          if (clipPort && sentinelSnapshot && areClipboardSnapshotsEqual(clipPort.snapshot(), sentinelSnapshot)) {
             clipPort.restore(previousSnapshot);
           }
         } catch {}
@@ -196,6 +199,140 @@ export async function captureActiveSelection(
     }, upfrontDelay);
   });
 }
+
+/**
+ * Compares two clipboard snapshots (or snapshot / string) for format and content equality.
+ * Used to verify if the clipboard was modified by the user or target app after selection capture.
+ */
+export function areClipboardSnapshotsEqual(
+  a: ClipboardSnapshot | string | undefined | null,
+  b: ClipboardSnapshot | string | undefined | null
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+
+  if (typeof a === "string" || typeof b === "string") {
+    const textA = typeof a === "string" ? a : (a.text ?? "");
+    const textB = typeof b === "string" ? b : (b.text ?? "");
+    return textA === textB;
+  }
+
+  if ((a.text ?? "") !== (b.text ?? "")) return false;
+  if ((a.html ?? "") !== (b.html ?? "")) return false;
+  if ((a.rtf ?? "") !== (b.rtf ?? "")) return false;
+
+  const hasImgA = Boolean(a.image && !(a.image.isEmpty?.() ?? false));
+  const hasImgB = Boolean(b.image && !(b.image.isEmpty?.() ?? false));
+  if (hasImgA !== hasImgB) return false;
+  if (hasImgA && hasImgB && a.image && b.image) {
+    if (a.image !== b.image) {
+      const imgA = a.image as any;
+      const imgB = b.image as any;
+      const dataA = typeof imgA?.toDataURL === "function" ? imgA.toDataURL() : null;
+      const dataB = typeof imgB?.toDataURL === "function" ? imgB.toDataURL() : null;
+      if (dataA || dataB) {
+        if (dataA !== dataB) return false;
+      }
+    }
+  }
+
+  const formatsA = a.formats || [];
+  const formatsB = b.formats || [];
+  if (formatsA.length !== formatsB.length) return false;
+
+  for (const itemA of formatsA) {
+    const itemB = formatsB.find((f) => f.format.toLowerCase() === itemA.format.toLowerCase());
+    if (!itemB) return false;
+    if (Buffer.compare(itemA.data, itemB.data) !== 0) return false;
+  }
+
+  return true;
+}
+
+export interface SelectionOwnership {
+  sequenceId: number;
+  previousClipboard: ClipboardSnapshot | string;
+  hasSelection: boolean;
+  selectedText: string;
+  ownershipSnapshot: ClipboardSnapshot;
+}
+
+export class SelectionOwnershipManager {
+  private activeOwnership: SelectionOwnership | null = null;
+  private latestSequenceId = 0;
+
+  setOwnership(ownership: SelectionOwnership): void {
+    if (ownership.sequenceId < this.latestSequenceId) return;
+    this.latestSequenceId = ownership.sequenceId;
+    this.activeOwnership = ownership;
+  }
+
+  getOwnership(): SelectionOwnership | null {
+    return this.activeOwnership;
+  }
+
+  clearOwnership(sequenceId?: number): void {
+    if (sequenceId === undefined) {
+      if (this.activeOwnership) this.latestSequenceId = Math.max(this.latestSequenceId, this.activeOwnership.sequenceId);
+      this.activeOwnership = null;
+      return;
+    }
+    if (sequenceId < this.latestSequenceId) return;
+    this.latestSequenceId = sequenceId;
+    if (!this.activeOwnership || this.activeOwnership.sequenceId <= sequenceId) {
+      this.activeOwnership = null;
+    }
+  }
+
+  restoreCapturedSelection(
+    sequenceId?: number,
+    portOverride?: ClipboardPort<any> | ClipboardAdapter<any> | null
+  ): boolean {
+    if (sequenceId !== undefined) {
+      if (sequenceId < this.latestSequenceId) return false;
+      this.latestSequenceId = sequenceId;
+    }
+    if (!this.activeOwnership) {
+      return false;
+    }
+
+    if (sequenceId !== undefined && this.activeOwnership.sequenceId !== sequenceId) {
+      logger.info(
+        { requestedSequenceId: sequenceId, ownershipSequenceId: this.activeOwnership.sequenceId },
+        "Ignoring restoreCapturedSelection for non-matching sequence"
+      );
+      if (this.activeOwnership.sequenceId < sequenceId) this.activeOwnership = null;
+      return false;
+    }
+
+    const currentOwnership = this.activeOwnership;
+    let restored = false;
+
+    if (currentOwnership.hasSelection) {
+      const clipPort = getClipboardPort(portOverride);
+      const currentSnapshot = clipPort ? clipPort.snapshot() : { formats: [], text: "" };
+
+      if (areClipboardSnapshotsEqual(currentSnapshot, currentOwnership.ownershipSnapshot)) {
+        logger.info(
+          { sequenceId: currentOwnership.sequenceId },
+          "Clipboard unchanged since selection capture; restoring previous selection clipboard"
+        );
+        restoreClipboard(currentOwnership.previousClipboard, portOverride);
+        restored = true;
+      } else {
+        logger.info(
+          { sequenceId: currentOwnership.sequenceId },
+          "Clipboard modified by user or target app since selection capture; skipping restoration"
+        );
+      }
+    }
+
+    this.activeOwnership = null;
+    return restored;
+  }
+}
+
+export const selectionOwnershipManager = new SelectionOwnershipManager();
 
 /**
  * Restores the previous clipboard content using format-preserving ClipboardPort.
