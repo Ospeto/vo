@@ -834,9 +834,13 @@ function setupIpcHandlers() {
     validateIpcSenderPolicy(event, IPC.SAVE_CONFIG, popoverWindow, captureWindow, hudWindow);
     const validatedPatch = configPatchSchema.parse(patch);
     const previousDictationMode = currentConfig.dictationMode;
+    const modeChanged = validatedPatch.dictationMode && validatedPatch.dictationMode !== previousDictationMode;
+    if (modeChanged && !["idle", "error"].includes(recordingLifecycle.snapshot().state)) {
+      throw new Error("Dictation mode can only be changed while recording is idle");
+    }
     currentConfig = updateConfig(workingCwd, validatedPatch);
     dictationCoordinator.setDictationMode(currentConfig.dictationMode);
-    if (hotkeyService && validatedPatch.dictationMode && validatedPatch.dictationMode !== previousDictationMode) {
+    if (hotkeyService && modeChanged) {
       await hotkeyService.stop();
       const hotkeyRes = await hotkeyService.start(
         currentConfig.key,
