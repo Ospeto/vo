@@ -35,7 +35,19 @@ mock.module("uiohook-napi", () => ({
     }),
     stop: mock(() => {}),
   },
-  UiohookKey: {},
+  UiohookKey: {
+    Semicolon: 39,
+    Equal: 13,
+    Comma: 51,
+    Minus: 12,
+    Period: 52,
+    Slash: 53,
+    Backquote: 41,
+    BracketLeft: 26,
+    Backslash: 43,
+    BracketRight: 27,
+    Quote: 40,
+  },
 }));
 
 describe("Dual Hotkey Configuration & Parsing Suite", () => {

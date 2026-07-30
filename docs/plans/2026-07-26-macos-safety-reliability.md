@@ -41,7 +41,7 @@ Implement the approved macOS safety and reliability design in `docs/superpowers/
   - `src/__tests__/services/recording-lifecycle.test.ts`
   - `src/__tests__/shared/types.test.ts` (existing type assertions)
 
-- **Failing test:** Add transition-table tests for `idle → starting → recording → stopping → transcribing → idle`, permitted `error` exits, ignored toggles outside `idle`/`recording`, matching start/stop acknowledgements, stale/duplicate sequence numbers, timeout, renderer failure, and repeated shutdown.
+- **Failing test:** Add transition-table tests for `idle → starting → recording → stopping → transcribing → idle`, permitted `error` exits, deterministic toggle behavior including one queued stop during `starting`, matching start/stop acknowledgements, stale/duplicate sequence numbers, timeout, renderer failure, and repeated shutdown.
 - **Command to prove failure:** `bun test src/__tests__/services/recording-lifecycle.test.ts src/__tests__/shared/types.test.ts`
 - **Minimal implementation:** Replace obsolete states/contracts with the approved states and a small pure lifecycle coordinator. Allocate monotonically increasing command sequence IDs, commit state only after the matching ack, retain completed transcripts on paste/error, and expose a guarded cleanup transition.
 - **Passing test:** `bun test src/__tests__/services/recording-lifecycle.test.ts src/__tests__/shared/types.test.ts`
