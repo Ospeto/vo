@@ -68,13 +68,6 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     const sender = this.options.getWebContents(win);
     const generation = this.session.attach(sender);
 
-    if (this.options.applySecurityGuards) {
-      this.options.applySecurityGuards(win);
-    }
-    if (this.options.loadFile) {
-      this.options.loadFile(win);
-    }
-
     this.options.onDidFinishLoad(sender, () => {
       if (this.options.isDestroyed(win)) return;
       if (!this.session.acknowledgeReady(sender, generation)) return;
@@ -122,6 +115,13 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
         this.ensureCaptureWindow();
       }
     });
+
+    if (this.options.applySecurityGuards) {
+      this.options.applySecurityGuards(win);
+    }
+    if (this.options.loadFile) {
+      this.options.loadFile(win);
+    }
 
     return win;
   }

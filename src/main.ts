@@ -44,7 +44,7 @@ const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const recordingLifecycle = new RecordingLifecycle();
-let dictationCoordinator: DictationControlCoordinator;
+export let dictationCoordinator: DictationControlCoordinator;
 
 dictationCoordinator = new DictationControlCoordinator(
   {
@@ -657,7 +657,7 @@ function createTray() {
 
 
 
-function enforceIpcSender(
+export function enforceIpcSender(
   event: IpcMainInvokeEvent | Electron.IpcMainEvent,
   channel: string
 ) {
@@ -1033,7 +1033,7 @@ function setupIpcHandlers() {
 let lastHotkeyDownTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
 
-async function startRecordingFlow(): Promise<boolean> {
+export async function startRecordingFlow(): Promise<boolean> {
   const reqRes = recordingLifecycle.snapshot();
   if (reqRes.state !== "starting") {
     logger.warn({ state: reqRes.state }, "Cannot start recording flow");

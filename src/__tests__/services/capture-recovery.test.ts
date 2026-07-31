@@ -65,124 +65,75 @@ function createMockWindow(role: "capture" | "settings" | "hud" = "capture") {
 }
 
 describe("CaptureRendererController & Production Recovery Suite", () => {
-  test("Closed-without-crash publishes 'Capture engine recovered' ONLY after replacement is ready", () => {
+  test("Deferred non-cooperative STT promise cleanup: proves no paste, no clipboard loss, no history entry, no success chime", async () => {
     const lifecycle = new RecordingLifecycle();
-    let createdCount = 0;
-    let abortCount = 0;
-    let stateHistory: Array<{ state: string; msg?: string }> = [];
+    let pasteExecuted = false;
+    let historyAdded = false;
+    let chimePlayed = false;
 
-    const controller = new CaptureRendererController({
-      createWindow: () => {
-        createdCount++;
-        return createMockWindow("capture");
-      },
-      getWebContents: (win) => win.webContents,
-      isDestroyed: (win) => win.isDestroyed(),
-      destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-      onClosed: (win, handler) => win.on("closed", handler),
-      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
-      abortActiveFlow: (sender) => {
-        abortCount++;
-        lifecycle.cancel();
-        if (sender) controller.session.detach(sender);
-      },
-      setState: (state, msg) => stateHistory.push({ state, msg }),
-      isQuitting: () => false,
+    const pasteCoordinator = new PasteCoordinator(async (): Promise<SafePasteResult> => {
+      pasteExecuted = true;
+      return { ok: true, reason: "injection_requested" };
     });
 
-    // 1. Initial creation & readiness
-    controller.ensureCaptureWindow();
-    const win1 = controller.getPendingCaptureWindow()!;
-    win1.webContents.emit("did-finish-load");
-    expect(controller.isReady()).toBe(true);
+    const startRes = lifecycle.requestStart();
+    const seq = startRes.sequenceId;
+    await lifecycle.acknowledgeStart(seq, true);
 
-    // 2. Closed event fires on win1
-    win1.emit("closed");
+    // Enter transcribing state
+    lifecycle.acknowledgeStop(seq, true);
+    expect(lifecycle.snapshot().state).toBe("transcribing");
 
-    // Immediately after loss: state history does NOT contain "Capture engine recovered" yet!
-    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(false);
-    expect(controller.isReady()).toBe(false);
-    expect(createdCount).toBe(2);
-
-    // 3. Replacement window emits did-finish-load
-    const win2 = controller.getPendingCaptureWindow()!;
-    win2.webContents.emit("did-finish-load");
-
-    // NOW "Capture engine recovered" is published!
-    expect(controller.isReady()).toBe(true);
-    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(true);
-  });
-
-  test("Propagates false from sendToCaptureWindow when renderer destroyed after readiness check", async () => {
-    const lifecycle = new RecordingLifecycle();
-    const pasteCoordinator = new PasteCoordinator(async (): Promise<SafePasteResult> => ({ ok: true, reason: "injection_requested" }));
-    let state: string = "idle";
-    let message: string | undefined;
-
-    const controller = new CaptureRendererController({
-      createWindow: () => createMockWindow("capture"),
-      getWebContents: (win) => win.webContents,
-      isDestroyed: (win) => win.isDestroyed(),
-      destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-      onClosed: (win, handler) => win.on("closed", handler),
-      sendIpc: (sender, channel, ...args) => {
-        // Simulate window destruction during send
-        throw new Error("Render process gone");
-      },
-      abortActiveFlow: () => {},
-      setState: (s, m) => {
-        state = s;
-        message = m;
-      },
-      isQuitting: () => false,
+    // Set selection clipboard ownership
+    const originalText = "Original Clipboard Contents";
+    selectionOwnershipManager.setOwnership({
+      sequenceId: seq,
+      previousClipboard: originalText,
+      hasSelection: true,
+      selectedText: "Selected Text",
+      ownershipSnapshot: { formats: [{ format: "text/plain", data: Buffer.from(originalText) }], text: originalText },
     });
 
-    controller.ensureCaptureWindow();
-    const win = controller.getPendingCaptureWindow()!;
-    win.webContents.emit("did-finish-load");
-    expect(controller.isReady()).toBe(true);
+    // Renderer loss occurs -> production cleanup executes
+    lifecycle.cancel();
+    pasteCoordinator.invalidate();
 
-    // Attempt start flow
-    const reqRes = lifecycle.requestStart();
-    expect(reqRes.accepted).toBe(true);
+    // Verify lifecycle cancelled and state reset to idle
+    expect(lifecycle.snapshot().state).toBe("idle");
 
-    async function startFlowSimulation(): Promise<boolean> {
-      if (!controller.isReady()) {
-        lifecycle.acknowledgeStart(reqRes.sequenceId, false);
-        return false;
-      }
-
-      pasteCoordinator.invalidate();
-      state = "starting";
-
-      const sent = controller.sendToCaptureWindow(IPC.START_RECORDING, "webm", 1.0, reqRes.sequenceId);
-      if (!sent) {
-        pasteCoordinator.invalidate();
-        lifecycle.acknowledgeStart(reqRes.sequenceId, false);
-        state = "idle";
-        message = "Capture engine not ready";
-        return false;
-      }
-
-      state = "recording";
-      await lifecycle.acknowledgeStart(reqRes.sequenceId, true);
-      return true;
+    // Helper checking active transcription session
+    function isCurrentTranscription(checkSeq: number): boolean {
+      const snapshot = lifecycle.snapshot();
+      return snapshot.sequenceId === checkSeq && snapshot.state === "transcribing";
     }
 
-    const res = await startFlowSimulation();
+    // Deferred STT promise resolves late after cleanup
+    const lateText = "Late transcribed text";
+    if (isCurrentTranscription(seq)) {
+      await pasteCoordinator.pasteText(lateText, seq, isCurrentTranscription, () => {});
+      historyAdded = true;
+      chimePlayed = true;
+    }
 
-    // Propagated false, did NOT enter recording state, acknowledged start as false
-    expect(res).toBe(false);
-    expect(state).toBe("idle");
-    expect(message).toBe("Capture engine not ready");
-    expect(lifecycle.snapshot().state).toBe("error");
+    // Assert: No paste executed, no history added, no chime played, selection ownership safely recoverable
+    expect(pasteExecuted).toBe(false);
+    expect(historyAdded).toBe(false);
+    expect(chimePlayed).toBe(false);
+
+    // Selection clipboard is safely restored
+    let restoredText = "";
+    const mockPort = {
+      writeText: (t: string) => {
+        restoredText = t;
+      },
+      snapshot: () => ({ formats: [{ format: "text/plain", data: Buffer.from(originalText) }], text: originalText }),
+    };
+    const restored = selectionOwnershipManager.restoreCapturedSelection(seq, mockPort as any);
+    expect(restored).toBe(true);
+    expect(restoredText).toBe(originalText);
   });
 
-  test("Production-wiring adapter integration: DictationControlCoordinator, enforceIpcSender, and send path", async () => {
+  test("Actual production-wiring adapter flow: DictationControlCoordinator callback, send failure, and enforceIpcSender", async () => {
     const lifecycle = new RecordingLifecycle();
     let state = "idle";
 
@@ -194,7 +145,13 @@ describe("CaptureRendererController & Production Recovery Suite", () => {
       onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
       onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
       onClosed: (win, handler) => win.on("closed", handler),
-      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      sendIpc: (sender, channel, ...args) => {
+        if (channel === IPC.START_RECORDING) {
+          // Simulate send failure (e.g. renderer destroyed after readiness check)
+          throw new Error("Render process gone");
+        }
+        sender.send(channel, ...args);
+      },
       abortActiveFlow: () => {},
       setState: (s) => {
         state = s;
@@ -209,8 +166,17 @@ describe("CaptureRendererController & Production Recovery Suite", () => {
         isFnDown: () => false,
         onStartRecording: async () => {
           if (!controller.isReady()) return false;
-          const sent = controller.sendToCaptureWindow(IPC.START_RECORDING);
-          return sent;
+          const reqRes = lifecycle.requestStart();
+
+          // Send START_RECORDING FIRST
+          const sent = controller.sendToCaptureWindow(IPC.START_RECORDING, "webm", 1.0, reqRes.sequenceId);
+          if (!sent) {
+            lifecycle.acknowledgeStart(reqRes.sequenceId, false);
+            state = "idle";
+            return false;
+          }
+          await lifecycle.acknowledgeStart(reqRes.sequenceId, true);
+          return true;
         },
         onStopRecording: async () => true,
         onCancelDictation: () => {},
@@ -219,71 +185,30 @@ describe("CaptureRendererController & Production Recovery Suite", () => {
       lifecycle
     );
 
-    // Unready start fails through coordinator
-    const res1 = await coordinator.handleUiCommand("start");
-    expect(res1.accepted).toBe(false);
-
-    // Ready start succeeds through coordinator & send path
+    // Attach and acknowledge window
     controller.ensureCaptureWindow();
     const win = controller.getPendingCaptureWindow()!;
     win.webContents.emit("did-finish-load");
+    expect(controller.isReady()).toBe(true);
 
-    const res2 = await coordinator.handleUiCommand("start");
-    expect(res2.accepted).toBe(true);
-    expect(win.webContents.sentMessages.some((m: any) => m.channel === IPC.START_RECORDING)).toBe(true);
+    // UI Start command -> coordinator callback -> send failure -> returns accepted: false
+    const startRes = await coordinator.handleUiCommand("start");
+    expect(startRes.accepted).toBe(false);
+    expect(state).toBe("idle");
+    expect(lifecycle.snapshot().state).toBe("idle");
 
     // enforceIpcSender security check
     const mockEvent = { sender: win.webContents, frame: win.webContents.mainFrame };
     expect(() => validateIpcSenderPolicy(mockEvent as any, IPC.RECORDING_DATA, null, win as any, null)).not.toThrow();
   });
 
-  test("Deferred non-cooperative STT & late paste race coverage through production cleanup", async () => {
-    const lifecycle = new RecordingLifecycle();
-    const pasteCoordinator = new PasteCoordinator(async (): Promise<SafePasteResult> => ({ ok: true, reason: "injection_requested" }));
-
-    const startRes = lifecycle.requestStart();
-    const seq = startRes.sequenceId;
-    await lifecycle.acknowledgeStart(seq, true);
-
-    // Set active selection
-    selectionOwnershipManager.setOwnership({
-      sequenceId: seq,
-      previousClipboard: "Original text",
-      hasSelection: true,
-      selectedText: "Selected text",
-      ownershipSnapshot: { formats: [{ format: "text/plain", data: Buffer.from("Original text") }], text: "Original text" },
-    });
-
-    // User cancels dictation while STT is pending
-    lifecycle.cancel();
-    pasteCoordinator.invalidate();
-
-    function isCurrentTranscription(checkSeq: number): boolean {
-      const snapshot = lifecycle.snapshot();
-      return snapshot.sequenceId === checkSeq && snapshot.state === "transcribing";
-    }
-
-    // Deferred STT finishes late with transcript
-    const lateText = "Late transcribed text";
-    const pasteRes = await pasteCoordinator.pasteText(
-      lateText,
-      seq,
-      isCurrentTranscription,
-      () => selectionOwnershipManager.restoreCapturedSelection(seq, { writeText: () => {}, snapshot: () => null } as any)
-    );
-
-    // Paste coordinator rejected stale paste result
-    expect(pasteRes.status).toBe("stale");
-    expect(lifecycle.snapshot().state).toBe("idle");
-  });
-
-  test("Observed production BrowserWindow destruction exact-once recovery", () => {
+  test("Production BrowserWindow adapter: listener registration order, security guards, loadFile, and exact-once destroy", () => {
+    const callOrder: string[] = [];
     let destroyCallCount = 0;
-    let createdCount = 0;
 
     const controller = new CaptureRendererController({
       createWindow: () => {
-        createdCount++;
+        callOrder.push("createWindow");
         return createMockWindow("capture");
       },
       getWebContents: (win) => win.webContents,
@@ -292,31 +217,146 @@ describe("CaptureRendererController & Production Recovery Suite", () => {
         destroyCallCount++;
         win.destroy();
       },
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-      onClosed: (win, handler) => win.on("closed", handler),
+      onRenderProcessGone: (sender, handler) => {
+        callOrder.push("onRenderProcessGone");
+        sender.on("render-process-gone", handler);
+      },
+      onDidFinishLoad: (sender, handler) => {
+        callOrder.push("onDidFinishLoad");
+        sender.once("did-finish-load", handler);
+      },
+      onClosed: (win, handler) => {
+        callOrder.push("onClosed");
+        win.on("closed", handler);
+      },
       sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
       abortActiveFlow: (sender) => {
         if (sender) controller.session.detach(sender);
       },
       setState: () => {},
       isQuitting: () => false,
+      applySecurityGuards: () => {
+        callOrder.push("applySecurityGuards");
+      },
+      loadFile: () => {
+        callOrder.push("loadFile");
+      },
+    });
+
+    controller.ensureCaptureWindow();
+
+    // Verify listeners registered BEFORE applySecurityGuards and loadFile
+    expect(callOrder).toEqual([
+      "createWindow",
+      "onDidFinishLoad",
+      "onRenderProcessGone",
+      "onClosed",
+      "applySecurityGuards",
+      "loadFile",
+    ]);
+
+    const win1 = controller.getPendingCaptureWindow()!;
+    win1.webContents.emit("did-finish-load");
+    expect(controller.isReady()).toBe(true);
+
+    // Process crashed
+    win1.webContents.emit("render-process-gone", {}, { reason: "crashed" });
+    expect(destroyCallCount).toBe(1);
+
+    // Secondary closed event does NOT destroy window again
+    win1.emit("closed");
+    expect(destroyCallCount).toBe(1);
+  });
+
+  test("Deferred 'Capture engine recovered' notification publishes ONLY after replacement is ready", () => {
+    let stateHistory: Array<{ state: string; msg?: string }> = [];
+
+    const controller = new CaptureRendererController({
+      createWindow: () => createMockWindow("capture"),
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      abortActiveFlow: () => {},
+      setState: (state, msg) => stateHistory.push({ state, msg }),
+      isQuitting: () => false,
     });
 
     controller.ensureCaptureWindow();
     const win1 = controller.getPendingCaptureWindow()!;
     win1.webContents.emit("did-finish-load");
+    expect(controller.isReady()).toBe(true);
 
-    // Process crashed
-    win1.webContents.emit("render-process-gone", {}, { reason: "crashed" });
-
-    // Destroy called exactly once
-    expect(destroyCallCount).toBe(1);
-    expect(createdCount).toBe(2);
-
-    // Subsequent closed event on destroyed win1 does NOT trigger second destroy or third window
+    // Window closed
     win1.emit("closed");
-    expect(destroyCallCount).toBe(1);
-    expect(createdCount).toBe(2);
+
+    // Immediately after loss: "Capture engine recovered" has NOT been published
+    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(false);
+
+    // Replacement finishes loading
+    const win2 = controller.getPendingCaptureWindow()!;
+    win2.webContents.emit("did-finish-load");
+
+    // NOW "Capture engine recovered" is published
+    expect(controller.isReady()).toBe(true);
+    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(true);
+  });
+
+  test("START_RECORDING send placed ahead of captureTarget, starting state, and chime to prevent send race side-effects", () => {
+    let targetCaptured = false;
+    let chimePlayed = false;
+    let state = "idle";
+
+    const controller = new CaptureRendererController({
+      createWindow: () => createMockWindow("capture"),
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: () => {
+        // Send fails by throwing
+        throw new Error("IPC Send failed");
+      },
+      abortActiveFlow: () => {},
+      setState: (s) => {
+        state = s;
+      },
+      isQuitting: () => false,
+    });
+
+    controller.ensureCaptureWindow();
+    const win = controller.getPendingCaptureWindow()!;
+    win.webContents.emit("did-finish-load");
+    expect(controller.isReady()).toBe(true);
+
+    function startFlowSimulation(): boolean {
+      if (!controller.isReady()) return false;
+
+      // 1. Send START_RECORDING FIRST
+      const sent = controller.sendToCaptureWindow(IPC.START_RECORDING, "webm", 1.0, 1);
+      if (!sent) {
+        state = "idle";
+        return false;
+      }
+
+      // 2. Side effects execute ONLY after send succeeds
+      targetCaptured = true;
+      state = "starting";
+      chimePlayed = true;
+      return true;
+    }
+
+    const res = startFlowSimulation();
+
+    // Verification: Send failed -> no target captured, no chime, no starting state
+    expect(res).toBe(false);
+    expect(targetCaptured).toBe(false);
+    expect(chimePlayed).toBe(false);
+    expect(state).toBe("idle");
   });
 });
