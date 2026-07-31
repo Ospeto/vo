@@ -27,6 +27,7 @@ import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
 import { DictationControlCoordinator } from "./services/dictation-control-coordinator.js";
 import { CaptureRendererController } from "./services/capture-renderer-controller.js";
+import { CaptureOrchestrator } from "./services/capture-orchestrator.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -81,40 +82,51 @@ let tray: Tray | null = null;
 let hotkeyService: HotkeyService | null = null;
 let currentConfig: PiVoiceConfig;
 
-export const captureController = new CaptureRendererController<Electron.WebContents, BrowserWindow>({
-  createWindow: () => new BrowserWindow({
-    width: 200,
-    height: 200,
-    show: false,
-    focusable: false,
-    skipTaskbar: true,
-    webPreferences: {
-      preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false,
-    },
-  }),
-  getWebContents: (win) => win.webContents,
-  isDestroyed: (win) => win.isDestroyed(),
-  destroyWindow: (win) => win.destroy(),
-  onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-  onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-  onClosed: (win, handler) => win.on("closed", handler),
-  sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
-  abortActiveFlow: (sender) => abortActiveFlow(sender),
-  setState: (state, msg) => setState(state, msg),
-  isQuitting: () => isQuitting,
-  applySecurityGuards: (win) => applyWindowSecurityGuards(win),
-  loadFile: (win) => win.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url))),
-});
+export const captureOrchestrator = new CaptureOrchestrator<BrowserWindow, Electron.WebContents>(
+  {
+    createWindow: () => new BrowserWindow({
+      width: 200,
+      height: 200,
+      show: false,
+      focusable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
+        contextIsolation: true,
+        nodeIntegration: false,
+        backgroundThrottling: false,
+      },
+    }),
+    getWebContents: (win) => win.webContents,
+    isDestroyed: (win) => win.isDestroyed(),
+    destroyWindow: (win) => win.destroy(),
+    onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+    onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+    onClosed: (win, handler) => win.on("closed", handler),
+    sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+    setState: (state, msg, options) => setState(state, msg, options),
+    isQuitting: () => isQuitting,
+    applySecurityGuards: (win) => applyWindowSecurityGuards(win),
+    loadFile: (win) => win.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url))),
+    captureActiveSelection: (timeoutMs, options) => captureActiveSelection(timeoutMs, options),
+    capturePasteTarget: () => safePasteService.captureTarget(),
+    playStartChime: () => playStartChime(),
+    getInputGain: () => currentConfig?.inputGain ?? 1.0,
+    selectionClipboardPort,
+    getPopoverWindow: () => popoverWindow,
+    getHudWindow: () => hudWindow,
+  },
+  recordingLifecycle,
+  pasteCoordinator
+);
 
-export const captureRendererSession = captureController.session;
+export const captureController = captureOrchestrator.controller;
+export const captureRendererSession = captureOrchestrator.session;
 export function ensureCaptureWindow() {
-  return captureController.ensureCaptureWindow();
+  return captureOrchestrator.ensureCaptureWindow();
 }
 export function sendToCaptureWindow(channel: string, ...args: any[]) {
-  return captureController.sendToCaptureWindow(channel, ...args);
+  return captureOrchestrator.sendToCaptureWindow(channel, ...args);
 }
 
 let currentState: AppState = "idle";
@@ -1034,117 +1046,8 @@ let lastHotkeyDownTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
 
 export async function startRecordingFlow(): Promise<boolean> {
-  const reqRes = recordingLifecycle.snapshot();
-  if (reqRes.state !== "starting") {
-    logger.warn({ state: reqRes.state }, "Cannot start recording flow");
-    return false;
-  }
-
-  if (!captureController.isReady()) {
-    logger.warn("Cannot start recording: capture window is not ready");
-    pasteCoordinator.invalidate();
-    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
-    setState("idle", "Capture engine not ready");
-    return false;
-  }
-
-  const targetSender = captureController.getCaptureWindow()?.webContents;
-
-  pasteCoordinator.invalidate();
-  safePasteService.captureTarget();
-  setState("starting", "Starting...");
-  playStartChime();
-
-  // Start pre-roll audio capture immediately in starting state to prevent first-phoneme clipping
-  const sent = sendToCaptureWindow(IPC.START_RECORDING, "webm", currentConfig.inputGain, reqRes.sequenceId);
-  if (!sent) {
-    logger.warn("Failed to send START_RECORDING to capture window");
-    pasteCoordinator.invalidate();
-    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
-    setState("idle", "Capture engine not ready");
-    return false;
-  }
-
-  const selectionAbortController = new AbortController();
-  activeSelectionAbortController = selectionAbortController;
-  let selection: Awaited<ReturnType<typeof captureActiveSelection>>;
-  try {
-    selection = await captureActiveSelection(350, { signal: selectionAbortController.signal, port: selectionClipboardPort ?? undefined });
-  } catch (err: any) {
-    if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
-    const snapshot = recordingLifecycle.snapshot();
-    if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return false;
-    pasteCoordinator.invalidate();
-    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
-    selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-    if (
-      targetSender &&
-      captureController.getCaptureWindow() &&
-      captureController.getCaptureWindow()?.webContents === targetSender &&
-      captureRendererSession.isAvailable(targetSender)
-    ) {
-      sendToCaptureWindow(IPC.CANCEL_RECORDING);
-    }
-    logger.error({ err: err?.message || String(err) }, "Selection capture failed");
-    setState("error", "Selection capture failed");
-    return false;
-  }
-  if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
-  const lifecycleSnapshot = recordingLifecycle.snapshot();
-  if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
-    if (
-      lifecycleSnapshot.sequenceId === reqRes.sequenceId &&
-      targetSender &&
-      captureController.getCaptureWindow() &&
-      captureController.getCaptureWindow()?.webContents === targetSender &&
-      captureRendererSession.isAvailable(targetSender)
-    ) {
-      sendToCaptureWindow(IPC.CANCEL_RECORDING);
-    }
-    if (selection.hasSelection) {
-      const ownershipSnapshot = selectionClipboardPort
-        ? selectionClipboardPort.snapshot()
-        : { formats: [], text: selection.selectedText };
-      selectionOwnershipManager.setOwnership({
-        sequenceId: reqRes.sequenceId,
-        previousClipboard: selection.previousClipboard,
-        hasSelection: true,
-        selectedText: selection.selectedText,
-        ownershipSnapshot,
-      });
-      restoreCapturedSelection(reqRes.sequenceId);
-    } else {
-      selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-    }
-    return false;
-  }
-
-  if (selection.hasSelection) {
-    const ownershipSnapshot = selectionClipboardPort
-      ? selectionClipboardPort.snapshot()
-      : { formats: [], text: selection.selectedText };
-    selectionOwnershipManager.setOwnership({
-      sequenceId: reqRes.sequenceId,
-      previousClipboard: selection.previousClipboard,
-      hasSelection: true,
-      selectedText: selection.selectedText,
-      ownershipSnapshot,
-    });
-  } else {
-    selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-  }
-
-  if (currentTriggerMode === "edit" && selection.hasSelection) {
-    activeSelectionText = selection.selectedText;
-  } else {
-    // Pure Dictation mode: clear activeSelectionText for STT prompt so Gemini does pure dictation (and overwrites selection)
-    activeSelectionText = "";
-  }
-
-  logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
-  setState("recording", "Recording...");
-  await dictationCoordinator.acknowledgeStart(reqRes.sequenceId, true);
-  return true;
+  captureOrchestrator.currentTriggerMode = currentTriggerMode;
+  return captureOrchestrator.startRecordingFlow();
 }
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
