@@ -149,11 +149,30 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     }
   }
 
-  async teardownCaptureWindow(_timeoutMs: number = 2000): Promise<void> {
+  async teardownCaptureWindow(timeoutMs: number = 2000): Promise<void> {
     const win = this.captureWindow;
     const pendingWin = this.pendingCaptureWindow;
 
+    let closedPromise: Promise<void> | null = null;
     if (win && !this.options.isDestroyed(win)) {
+      closedPromise = new Promise<void>((resolve) => {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let done = false;
+        const cleanup = () => {
+          if (done) return;
+          done = true;
+          if (timer) clearTimeout(timer);
+          resolve();
+        };
+
+        timer = setTimeout(cleanup, Math.min(timeoutMs, 2000));
+        try {
+          this.options.onClosed(win, cleanup);
+        } catch {
+          cleanup();
+        }
+      });
+
       try {
         const contents = this.options.getWebContents(win);
         if (contents) {
@@ -181,5 +200,9 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     }
 
     this.destroyCaptureWindow();
+
+    if (closedPromise) {
+      await closedPromise;
+    }
   }
 }

@@ -1257,6 +1257,7 @@ function withBoundedWait<T>(promise: Promise<T>, timeoutMs: number): Promise<T |
 let shutdownPromise: Promise<void> | null = null;
 
 export function gracefulShutdown(): Promise<void> {
+  isQuitting = true;
   if (shutdownPromise) {
     return shutdownPromise;
   }
@@ -1340,6 +1341,7 @@ export function gracefulShutdown(): Promise<void> {
 export function _resetShutdownStateForTests(): void {
   shutdownPromise = null;
   isFatalShuttingDown = false;
+  isQuitting = false;
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();

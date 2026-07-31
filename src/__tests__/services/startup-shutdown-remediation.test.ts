@@ -17,14 +17,17 @@ const mockElectronObj = {
   },
   BrowserWindow: class MockBrowserWindow {
     static getAllWindows() { return []; }
+    closedHandler: (() => void) | null = null;
     webContents = { send: mock(() => {}), on: mock(() => {}), once: mock(() => {}), setWindowOpenHandler: mock(() => {}) };
     isDestroyed() { return false; }
-    destroy() {}
+    destroy() { if (this.closedHandler) this.closedHandler(); }
     hide() {}
     showInactive() {}
     focus() {}
     loadFile() {}
-    on() {}
+    on(event: string, handler: () => void) {
+      if (event === "closed") this.closedHandler = handler;
+    }
     once() {}
   },
   ipcMain: { on: mock(() => {}), handle: mock(() => {}) },
@@ -280,9 +283,11 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
         sendCalledWith = channel;
       };
 
+      const origDestroy = win!.destroy.bind(win);
       let destroyCalled = false;
       (win as any).destroy = () => {
         destroyCalled = true;
+        origDestroy();
       };
 
       // Attach & acknowledge session ready
@@ -307,16 +312,65 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       let daemonReadyBeforeUI = false;
       let uiCreated = false;
 
-      const ok = await runStartupSequence(testStateDir);
-      expect(ok).toBe(true);
-      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
-      await gracefulShutdown();
+      const controllerOptions = (captureOrchestrator as any).controller.options;
+      const origCreateWindow = controllerOptions.createWindow;
+      controllerOptions.createWindow = () => {
+        uiCreated = true;
+        daemonReadyBeforeUI = existsSync(join(testStateDir, "runtime-state.json"));
+        return origCreateWindow();
+      };
+
+      try {
+        const ok = await runStartupSequence(testStateDir);
+        expect(ok).toBe(true);
+        expect(uiCreated).toBe(true);
+        expect(daemonReadyBeforeUI).toBe(true);
+        expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
+      } finally {
+        controllerOptions.createWindow = origCreateWindow;
+        await gracefulShutdown();
+      }
     });
 
     test("runStartupSequence handles mandatory service fault, runs gracefulShutdown and returns false without partial UI", async () => {
       setRuntimeStateDirectoryForTests("/dev/null/invalid_state_directory");
-      const ok = await runStartupSequence(testStateDir);
-      expect(ok).toBe(false);
+      let exitCalledWith: number | null = null;
+      const origExit = mockElectronObj.app.exit;
+      mockElectronObj.app.exit = ((code: number) => {
+        exitCalledWith = code;
+      }) as any;
+
+      try {
+        const ok = await runStartupSequence(testStateDir);
+        expect(ok).toBe(false);
+        expect(captureOrchestrator.isReady()).toBe(false);
+        expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(false);
+      } finally {
+        mockElectronObj.app.exit = origExit;
+        setRuntimeStateDirectoryForTests(null);
+        await gracefulShutdown();
+      }
+    });
+
+    test("capture window is not re-created by closed handler when destroyed during gracefulShutdown", async () => {
+      const win = captureOrchestrator.ensureCaptureWindow();
+      expect(win).not.toBeNull();
+
+      let ensureCalledOnClosed = false;
+      const controller = (captureOrchestrator as any).controller;
+      const origEnsure = controller.ensureCaptureWindow.bind(controller);
+      controller.ensureCaptureWindow = () => {
+        ensureCalledOnClosed = true;
+        return origEnsure();
+      };
+
+      try {
+        await gracefulShutdown();
+        expect(ensureCalledOnClosed).toBe(false);
+        expect(captureOrchestrator.isReady()).toBe(false);
+      } finally {
+        controller.ensureCaptureWindow = origEnsure;
+      }
     });
   });
 
