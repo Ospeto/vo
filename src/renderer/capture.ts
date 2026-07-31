@@ -253,8 +253,7 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: baseAudioConstraints,
         });
-        const trackLabel = localStream?.getAudioTracks()[0]?.label || "default microphone";
-        fallbackDeviceStatus = `configured microphone unavailable; using ${trackLabel}`;
+        fallbackDeviceStatus = "configured microphone unavailable; using default microphone";
       }
     } else {
       localStream = await navigator.mediaDevices.getUserMedia({

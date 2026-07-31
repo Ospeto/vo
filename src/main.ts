@@ -746,6 +746,26 @@ function setupIpcHandlers() {
       return;
     }
 
+    if (arrayBuffer.byteLength < MIN_STT_PAYLOAD_BYTES) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection(currentSeq);
+      setState("idle", "Recording too short");
+      return;
+    }
+
+    if (arrayBuffer.byteLength > MAX_STT_PAYLOAD_BYTES) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection(currentSeq);
+      setState("error", "Recording payload too large");
+      return;
+    }
+
     if (!isValidWebmHeader(arrayBuffer)) {
       sendToCaptureWindow(IPC.CANCEL_RECORDING);
       captureOrchestrator.markCaptureInactive(currentSeq);

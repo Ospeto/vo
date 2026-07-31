@@ -233,6 +233,11 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
           err.name = "AbortError";
           throw err;
         }
+        if (constraints?.audio?.deviceId?.exact === "hardware-failure-mic") {
+          const err = new Error("Hardware failure / mic busy");
+          err.name = "NotReadableError";
+          throw err;
+        }
         return new FakeStream([new FakeTrack("System Default Microphone")]);
       },
       addEventListener: () => {},
@@ -340,7 +345,7 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
   });
 
   describe("AUD-03 Exact-Device Acquisition & Fallback Policy", () => {
-    test("falls back to system default only for NotFoundError and OverconstrainedError and emits visible status", async () => {
+    test("falls back to system default only for NotFoundError and OverconstrainedError and emits generic status", async () => {
       configuredDeviceId = "non-existent-mic";
       await startRecordingHandler?.("webm", 1.0, 101);
 
@@ -350,7 +355,7 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
 
       expect(startReadyPayloads.length).toBe(1);
       expect(startReadyPayloads[0]!.sequenceId).toBe(101);
-      expect(startReadyPayloads[0]!.deviceStatus).toBe("configured microphone unavailable; using System Default Microphone");
+      expect(startReadyPayloads[0]!.deviceStatus).toBe("configured microphone unavailable; using default microphone");
     });
 
     test("falls back cleanly on OverconstrainedError", async () => {
@@ -359,7 +364,7 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
 
       expect(getUserMediaCallLogs.length).toBe(2);
       expect(getUserMediaCallLogs[0].audio.deviceId.exact).toBe("overconstrained-mic");
-      expect(startReadyPayloads[0]!.deviceStatus).toBe("configured microphone unavailable; using System Default Microphone");
+      expect(startReadyPayloads[0]!.deviceStatus).toBe("configured microphone unavailable; using default microphone");
     });
 
     test("DOES NOT fall back for NotAllowedError (permission denied) and reports start failed", async () => {
@@ -373,7 +378,7 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
       expect(startFailedPayloads[0]!.error).toContain("Microphone access error: Permission denied");
     });
 
-    test("DOES NOT fall back for SecurityError or AbortError", async () => {
+    test("DOES NOT fall back for SecurityError, AbortError, or NotReadableError (hardware failure)", async () => {
       configuredDeviceId = "security-error-mic";
       await startRecordingHandler?.("webm", 1.0, 104);
 
@@ -390,6 +395,16 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
       expect(getUserMediaCallLogs.length).toBe(1);
       expect(startFailedPayloads.length).toBe(1);
       expect(startFailedPayloads[0]!.error).toContain("Microphone access aborted");
+
+      startFailedPayloads.length = 0;
+      getUserMediaCallLogs.length = 0;
+
+      configuredDeviceId = "hardware-failure-mic";
+      await startRecordingHandler?.("webm", 1.0, 106);
+
+      expect(getUserMediaCallLogs.length).toBe(1);
+      expect(startFailedPayloads.length).toBe(1);
+      expect(startFailedPayloads[0]!.error).toContain("Hardware failure / mic busy");
     });
   });
 
@@ -466,30 +481,32 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
       expect(sentErrors[0]!.error).toBe("Recording payload size limit exceeded");
     });
 
-    test("rejects overlong recording duration exceeding MAX_RECORDING_DURATION_MS", async () => {
-      await startRecordingHandler?.("webm", 1.0, 305);
-      const recorder = (FakeMediaRecorder as any).lastInstance;
-      expect(recorder).toBeDefined();
+    test("enforces controlled time/real duration termination exceeding MAX_RECORDING_DURATION_MS", async () => {
+      const realNow = Date.now;
+      try {
+        const startTime = realNow();
+        let mockedNow = startTime;
+        Date.now = () => mockedNow;
 
-      const validBlob = new Blob([createValidWebmBuffer(2000)], { type: "audio/webm" });
-      recorder.emitData(validBlob);
+        await startRecordingHandler?.("webm", 1.0, 305);
+        const recorder = (FakeMediaRecorder as any).lastInstance;
+        expect(recorder).toBeDefined();
 
-      // Fast-forward recording start time past MAX_RECORDING_DURATION_MS (5 minutes)
-      resetAudioStateForTest();
-      registerCaptureListeners();
-      await startRecordingHandler?.("webm", 1.0, 305);
-      
-      // Access internal start time by advancing timer or calling stopRecording after setting startTime in past
-      (globalThis as any).window.piVoice.sendRecordingError = (error: string, sequenceId: number) => {
-        sentErrors.push({ error, sequenceId });
-      };
+        const validBlob = new Blob([createValidWebmBuffer(2000)], { type: "audio/webm" });
+        recorder.emitData(validBlob);
 
-      // Ensure duration exceeds limit
-      expect(MAX_RECORDING_DURATION_MS).toBe(300_000);
-      expect(MAX_RECORDING_CHUNKS).toBe(3_600);
-      expect(MAX_RECORDING_BYTE_SIZE).toBe(15 * 1024 * 1024);
-      expect(MAX_STT_PAYLOAD_BYTES).toBe(15 * 1024 * 1024);
-      expect(MIN_STT_PAYLOAD_BYTES).toBe(1000);
+        // Advance time past 5 minutes (300,000 ms)
+        mockedNow = startTime + MAX_RECORDING_DURATION_MS + 1000;
+
+        stopRecordingHandler?.(false);
+        await new Promise((r) => setTimeout(r, 350));
+
+        expect(sentData.length).toBe(0);
+        expect(sentErrors.length).toBe(1);
+        expect(sentErrors[0]!.error).toBe("Recording duration limit exceeded");
+      } finally {
+        Date.now = realNow;
+      }
     });
 
     test("accepts valid post-roll WebM recording and emits arrayBuffer data", async () => {
@@ -555,13 +572,13 @@ describe("VO Remediation PR-11: Device Fallback and Recording Payload Remediatio
       orchestrator.controller.session.acknowledgeReady(mockWebContents as any, gen);
 
       const reqRes = lifecycle.requestStart();
-      orchestrator.setSequenceDeviceStatus(reqRes.sequenceId, "configured microphone unavailable; using Fallback Mic");
+      orchestrator.setSequenceDeviceStatus(reqRes.sequenceId, "configured microphone unavailable; using default microphone");
 
       await orchestrator.startRecordingFlow();
 
       const lastState = stateLog[stateLog.length - 1];
       expect(lastState?.state).toBe("recording");
-      expect(lastState?.msg).toBe("configured microphone unavailable; using Fallback Mic");
+      expect(lastState?.msg).toBe("configured microphone unavailable; using default microphone");
     });
   });
 });
