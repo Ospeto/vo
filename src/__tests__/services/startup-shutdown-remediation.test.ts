@@ -272,7 +272,18 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
     test("captureOrchestrator.teardownCaptureWindow sends cancellation IPC, detaches session, and tears down window cleanly", async () => {
       const win = captureOrchestrator.ensureCaptureWindow();
       expect(win).not.toBeNull();
+      (captureOrchestrator as any).controller.captureWindow = win;
       const contents = (captureOrchestrator as any).controller.options.getWebContents(win);
+
+      let sendCalledWith: string | null = null;
+      (contents as any).send = (channel: string) => {
+        sendCalledWith = channel;
+      };
+
+      let destroyCalled = false;
+      (win as any).destroy = () => {
+        destroyCalled = true;
+      };
 
       // Attach & acknowledge session ready
       const gen = captureOrchestrator.session.attach(contents);
@@ -283,14 +294,19 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       expect(typeof teardownPromise.then).toBe("function");
       await teardownPromise;
 
-      // Session should be detached/unavailable and window destroyed
+      // Assert cancellation IPC sent, session detached, and window destroyed
+      expect(sendCalledWith as string | null).toBe("cancel-recording");
       expect(captureOrchestrator.session.isAvailable(contents)).toBe(false);
+      expect(destroyCalled).toBe(true);
       expect(captureOrchestrator.isReady()).toBe(false);
     });
   });
 
   describe("4. Deterministic Startup Sequence & Fault Injection", () => {
     test("runStartupSequence completes mandatory services before exposing UI and returns true", async () => {
+      let daemonReadyBeforeUI = false;
+      let uiCreated = false;
+
       const ok = await runStartupSequence(testStateDir);
       expect(ok).toBe(true);
       expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
