@@ -38,6 +38,7 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
   public activeSTTAbortController: AbortController | null = null;
   public activeSelectionText = "";
   public currentTriggerMode: "dictate" | "edit" = "dictate";
+  private sequenceDeviceStatuses = new Map<number, string>();
   private options: CaptureOrchestratorOptions<TWindow, TSender>;
   private captureActive = false;
   private activeCaptureSequenceId: number | null = null;
@@ -101,7 +102,20 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     this.captureActive = true;
   }
 
+  public setSequenceDeviceStatus(sequenceId: number, status: string): void {
+    this.sequenceDeviceStatuses.set(sequenceId, status);
+  }
+
+  public getSequenceDeviceStatus(sequenceId: number): string | undefined {
+    return this.sequenceDeviceStatuses.get(sequenceId);
+  }
+
   public markCaptureInactive(sequenceId?: number): void {
+    if (sequenceId !== undefined) {
+      this.sequenceDeviceStatuses.delete(sequenceId);
+    } else {
+      this.sequenceDeviceStatuses.clear();
+    }
     if (sequenceId === undefined || sequenceId === this.activeCaptureSequenceId) {
       this.captureActive = false;
       this.activeCaptureSequenceId = null;
@@ -300,7 +314,9 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
       { triggerMode: this.currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: this.activeSelectionText.length },
       "STARTING recording flow"
     );
-    this.options.setState("recording", "Recording...");
+    const deviceStatus = this.sequenceDeviceStatuses.get(reqRes.sequenceId);
+    const recordingMsg = deviceStatus || "Recording...";
+    this.options.setState("recording", recordingMsg);
     if (this.options.acknowledgeStart) {
       await this.options.acknowledgeStart(reqRes.sequenceId, true);
     } else {

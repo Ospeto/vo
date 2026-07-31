@@ -172,7 +172,7 @@ export interface CaptureElectronAPI {
   getConfig: () => Promise<CaptureConfigPayload>;
   sendRecordingData: (data: ArrayBuffer) => void;
   sendRecordingError: (error: string, sequenceId: number) => void;
-  sendRecordingStartReady?: (sequenceId: number) => void;
+  sendRecordingStartReady?: (sequenceId: number, deviceStatus?: string) => void;
   sendRecordingStartFailed?: (sequenceId: number, error: string) => void;
   sendRecordingStopped?: (sequenceId: number) => void;
   sendAudioLevelUpdate: (payload: any) => void;

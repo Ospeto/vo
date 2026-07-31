@@ -4,6 +4,11 @@ import {
   SpeechEndpointDetector,
   diagnoseAudioStats,
   type AudioRecordingStats,
+  MAX_RECORDING_DURATION_MS,
+  MAX_RECORDING_CHUNKS,
+  MAX_RECORDING_BYTE_SIZE,
+  isValidWebmHeader,
+  getBestSupportedMimeType,
 } from "../shared/audio-utils.js";
 import { isAutoEndpointEnabled } from "../services/hold-mode-protections.js";
 
@@ -51,6 +56,8 @@ let sessionClippingFrames = 0;
 let autoEndpointTriggered = false;
 let finalizedRecordingGeneration = -1;
 let tornDownGeneration = -1;
+let activeMimeType: string | null = null;
+let activeFallbackDeviceStatus: string | undefined = undefined;
 
 let sessionMaxAbs = 0;
 let sessionClippedSamples = 0;
@@ -163,6 +170,8 @@ export function teardownAudio(generation?: number): void {
   autoEndpointTriggered = false;
   isStartingUp = false;
   stopRequestedDuringStartup = false;
+  activeMimeType = null;
+  activeFallbackDeviceStatus = undefined;
 
   if (activeSequenceId !== undefined && (generation === undefined || targetGen <= recordingGeneration)) {
     const seq = activeSequenceId;
@@ -200,6 +209,14 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
   try {
     currentGainValue = inputGain;
 
+    const selectedMime = getBestSupportedMimeType();
+    if (!selectedMime) {
+      cleanupLocals();
+      sendRecordingErrorOnce(generation, sequenceId, "No supported WebM/Opus audio MIME type found");
+      teardownAudio(generation);
+      return false;
+    }
+
     const win = getWindowApi();
     const config = win?.piVoice ? await win.piVoice.getConfig() : undefined;
     if (generation !== recordingGeneration) {
@@ -216,6 +233,7 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
       noiseSuppression: true,
     };
 
+    let fallbackDeviceStatus: string | undefined;
     if (targetDeviceId && targetDeviceId !== "default") {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({
@@ -226,10 +244,16 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
           cleanupLocals();
           return false;
         }
+        const errName = err?.name || "";
+        const isFallbackAllowed = errName === "NotFoundError" || errName === "OverconstrainedError";
+        if (!isFallbackAllowed) {
+          throw err;
+        }
         console.warn(`Target audio device '${targetDeviceId}' unavailable (${err?.message}), falling back to system default.`);
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: baseAudioConstraints,
         });
+        fallbackDeviceStatus = "configured microphone unavailable; using default microphone";
       }
     } else {
       localStream = await navigator.mediaDevices.getUserMedia({
@@ -277,7 +301,7 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
     localCompressorNode.connect(destination);
 
     localRecorder = new MediaRecorder(destination.stream, {
-      mimeType: "audio/webm;codecs=opus",
+      mimeType: selectedMime,
       audioBitsPerSecond: 24000,
     });
 
@@ -355,6 +379,8 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
     analyserNode = localAnalyserNode;
     compressorNode = localCompressorNode;
     mediaRecorder = localRecorder;
+    activeMimeType = selectedMime;
+    activeFallbackDeviceStatus = fallbackDeviceStatus;
 
     startMetering(generation);
     return true;
@@ -414,6 +440,13 @@ function startMetering(generation: number) {
 
     if (generation === recordingGeneration && mediaRecorder && mediaRecorder.state === "recording") {
       const elapsedMs = recordingStartTime > 0 ? Date.now() - recordingStartTime : 0;
+      if (elapsedMs > MAX_RECORDING_DURATION_MS) {
+        if (activeSequenceId !== undefined) {
+          sendRecordingErrorOnce(generation, activeSequenceId, "Recording duration limit exceeded");
+        }
+        teardownAudio(generation);
+        return;
+      }
       const isWarmingUp = elapsedMs < 200;
       if (!isWarmingUp) {
         const endpointStatus = endpointDetector.processFrame(normalizedRms);
@@ -507,6 +540,12 @@ async function finalizeRecording(generation: number, sequenceId: number) {
   }
 
   const durationMs = Date.now() - recordingStartTime;
+  if (durationMs > MAX_RECORDING_DURATION_MS) {
+    sendRecordingError("Recording duration limit exceeded", sequenceId);
+    audioChunks = [];
+    teardownAudio(generation);
+    return;
+  }
   const stats: AudioRecordingStats = {
     durationMs,
     maxRms: sessionMaxRms,
@@ -537,12 +576,20 @@ async function finalizeRecording(generation: number, sequenceId: number) {
     return;
   }
 
-  const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+  const audioBlob = new Blob(audioChunks, { type: activeMimeType || "audio/webm" });
   audioChunks = [];
   teardownAudio(generation);
   if (generation !== recordingGeneration) return;
   const arrayBuffer = await audioBlob.arrayBuffer();
   if (generation !== recordingGeneration) return;
+  if (arrayBuffer.byteLength > MAX_RECORDING_BYTE_SIZE) {
+    sendRecordingError("Recording payload size limit exceeded", sequenceId);
+    return;
+  }
+  if (!isValidWebmHeader(arrayBuffer)) {
+    sendRecordingError("Malformed recording payload (missing WebM header)", sequenceId);
+    return;
+  }
   const win = getWindowApi();
   if (win?.piVoice) {
     win.piVoice.sendRecordingData(arrayBuffer);
@@ -685,8 +732,15 @@ export function registerCaptureListeners(): void {
       }
 
       if (mediaRecorder && mediaRecorder.state === "inactive") {
+        let recordingTotalBytes = 0;
         mediaRecorder.ondataavailable = (event) => {
-          if (generation === recordingGeneration && event.data.size > 0) {
+          if (generation === recordingGeneration && event.data && event.data.size > 0) {
+            recordingTotalBytes += event.data.size;
+            if (recordingTotalBytes > MAX_RECORDING_BYTE_SIZE || audioChunks.length >= MAX_RECORDING_CHUNKS) {
+              sendRecordingErrorOnce(generation, sequenceId, "Recording payload size limit exceeded");
+              teardownAudio(generation);
+              return;
+            }
             audioChunks.push(event.data);
           }
         };
@@ -697,7 +751,7 @@ export function registerCaptureListeners(): void {
 
         const liveWin = getWindowApi();
         if (liveWin?.piVoice) {
-          liveWin.piVoice.sendRecordingStartReady?.(sequenceId);
+          liveWin.piVoice.sendRecordingStartReady?.(sequenceId, activeFallbackDeviceStatus);
         }
 
         if (stopRequestedDuringStartup && generation === recordingGeneration) {
