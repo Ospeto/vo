@@ -27,6 +27,7 @@ export interface CaptureOrchestratorOptions<TWindow = any, TSender = any> {
   selectionClipboardPort?: any;
   getPopoverWindow?: () => TWindow | null;
   getHudWindow?: () => TWindow | null;
+  acknowledgeStart?: (seqId: number, success: boolean) => Promise<any> | any;
 }
 
 export class CaptureOrchestrator<TWindow = any, TSender = any> {
@@ -34,6 +35,7 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
   public lifecycle: RecordingLifecycle;
   public pasteCoordinator: PasteCoordinator;
   public activeSelectionAbortController: AbortController | null = null;
+  public activeSTTAbortController: AbortController | null = null;
   public activeSelectionText = "";
   public currentTriggerMode: "dictate" | "edit" = "dictate";
   private options: CaptureOrchestratorOptions<TWindow, TSender>;
@@ -91,8 +93,16 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     this.activeSelectionAbortController = null;
   }
 
+  public abortSTT(): void {
+    if (this.activeSTTAbortController) {
+      this.activeSTTAbortController.abort();
+      this.activeSTTAbortController = null;
+    }
+  }
+
   public abortActiveFlow(failedSender?: TSender): void {
     this.abortSelectionCapture();
+    this.abortSTT();
     const currentSeq = this.lifecycle.snapshot().sequenceId;
     this.pasteCoordinator.invalidate();
     this.lifecycle.cancel();
@@ -236,6 +246,11 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
       "STARTING recording flow"
     );
     this.options.setState("recording", "Recording...");
+    if (this.options.acknowledgeStart) {
+      await this.options.acknowledgeStart(reqRes.sequenceId, true);
+    } else {
+      await this.lifecycle.acknowledgeStart(reqRes.sequenceId, true);
+    }
     return true;
   }
 }

@@ -113,6 +113,10 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     orchestrator.lifecycle.acknowledgeStop(seq, true);
     expect(orchestrator.lifecycle.snapshot().state).toBe("transcribing");
 
+    // Set active STT abort controller
+    const sttController = new AbortController();
+    orchestrator.activeSTTAbortController = sttController;
+
     // Set clipboard ownership
     selectionOwnershipManager.setOwnership({
       sequenceId: seq,
@@ -131,7 +135,9 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     // Production cleanup triggered by renderer process crash during STT
     win.webContents.emit("render-process-gone", {}, { reason: "crashed" });
 
-    // Verify cleanup reset lifecycle to idle
+    // Verify STT controller was aborted, lifecycle reset to idle, and clipboard restored
+    expect(sttController.signal.aborted).toBe(true);
+    expect(orchestrator.activeSTTAbortController).toBeNull();
     expect(orchestrator.lifecycle.snapshot().state).toBe("idle");
     expect(restoredText).toBe(originalText);
 
@@ -165,10 +171,66 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     expect(restoredText).toBe(originalText);
   });
 
+  test("Successful startRecordingFlow calls acknowledgeStart and transitions lifecycle state to 'recording'", async () => {
+    let currentState: string = "idle";
+
+    const orchestrator = new CaptureOrchestrator({
+      createWindow: () => createMockWindow("capture"),
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      setState: (s) => {
+        currentState = s;
+      },
+      isQuitting: () => false,
+      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
+      capturePasteTarget: () => {},
+      playStartChime: () => {},
+      getInputGain: () => 1.0,
+    });
+
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "toggle",
+        isNativeKeyUpAvailable: () => false,
+        isFnDown: () => false,
+        onStartRecording: async () => orchestrator.startRecordingFlow(),
+        onStopRecording: async () => true,
+        onCancelDictation: () => {},
+        playStopChime: () => {},
+      },
+      orchestrator.lifecycle
+    );
+
+    // Provide coordinator's acknowledgeStart to orchestrator
+    (orchestrator as any).options.acknowledgeStart = (seqId: number, success: boolean) => coordinator.acknowledgeStart(seqId, success);
+
+    orchestrator.ensureCaptureWindow();
+    const win = orchestrator.controller.getPendingCaptureWindow()!;
+    win.webContents.emit("did-finish-load");
+
+    // Execute start command
+    const startRes = await coordinator.handleUiCommand("start");
+    expect(startRes.accepted).toBe(true);
+    expect(currentState).toBe("recording");
+
+    // CRITICAL: Lifecycle state is now "recording" (NOT stuck in "starting")
+    expect(orchestrator.lifecycle.snapshot().state).toBe("recording");
+
+    // Normal stop request is now accepted cleanly
+    const stopRes = orchestrator.lifecycle.requestStop();
+    expect(stopRes.accepted).toBe(true);
+    expect(orchestrator.lifecycle.snapshot().state).toBe("stopping");
+  });
+
   test("START_RECORDING send placed BEFORE captureTarget, starting state, and chime to prevent send race side-effects", async () => {
     let targetCaptured = false;
     let chimePlayed = false;
-    let currentState: AppState = "idle";
+    let currentState: string = "idle";
 
     const orchestrator = new CaptureOrchestrator({
       createWindow: () => createMockWindow("capture"),
@@ -182,8 +244,8 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
         // Send fails by throwing
         throw new Error("IPC Send failed");
       },
-      setState: (state) => {
-        currentState = state;
+      setState: (s) => {
+        currentState = s;
       },
       isQuitting: () => false,
       captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
@@ -215,7 +277,7 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
   });
 
   test("Actual production-wiring adapter flow: DictationControlCoordinator callback, send failure, and enforceIpcSender", async () => {
-    let currentState: AppState = "idle";
+    let currentState: string = "idle";
 
     const orchestrator = new CaptureOrchestrator({
       createWindow: () => createMockWindow("capture"),

@@ -115,6 +115,7 @@ export const captureOrchestrator = new CaptureOrchestrator<BrowserWindow, Electr
     selectionClipboardPort,
     getPopoverWindow: () => popoverWindow,
     getHudWindow: () => hudWindow,
+    acknowledgeStart: (seqId, success) => dictationCoordinator.acknowledgeStart(seqId, success),
   },
   recordingLifecycle,
   pasteCoordinator
