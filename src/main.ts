@@ -221,7 +221,7 @@ function setState(state: AppState, message?: string, options?: { usedPaidKey?: b
   }
 
   updateTrayIconForState(state);
-  captureWindow?.webContents.send(IPC.STATE_CHANGED, payload);
+  sendToCaptureWindow(IPC.STATE_CHANGED, payload);
   popoverWindow?.webContents.send(IPC.STATE_CHANGED, payload);
 }
 
@@ -443,28 +443,40 @@ function ensureCaptureWindow() {
   sender.on("render-process-gone", (_event, details) => {
     logger.error({ details }, "Capture renderer process crashed, auto-recovering...");
 
-    abortActiveFlow(sender);
-
     if (captureWindow === win) {
       captureWindow = null;
     }
     if (pendingCaptureWindow === win) {
       pendingCaptureWindow = null;
     }
+
+    abortActiveFlow(sender);
+
     if (!win.isDestroyed()) {
       win.destroy();
     }
 
-    setState("idle", "Capture engine recovered");
-    ensureCaptureWindow();
+    if (!isQuitting) {
+      setState("idle", "Capture engine recovered");
+      ensureCaptureWindow();
+    }
   });
 
   win.on("closed", () => {
+    if (captureWindow !== win && pendingCaptureWindow !== win) return;
+
     if (captureWindow === win) {
       captureWindow = null;
     }
     if (pendingCaptureWindow === win) {
       pendingCaptureWindow = null;
+    }
+
+    abortActiveFlow(sender);
+
+    if (!isQuitting) {
+      setState("idle", "Capture engine recovered");
+      ensureCaptureWindow();
     }
   });
 }
@@ -943,7 +955,7 @@ function setupIpcHandlers() {
       _resetGeminiClient();
     }
     if (validatedPatch.inputGain !== undefined) {
-      captureWindow?.webContents.send(IPC.GAIN_UPDATE, currentConfig.inputGain);
+      sendToCaptureWindow(IPC.GAIN_UPDATE, currentConfig.inputGain);
     }
     return getSanitizedSettingsConfig(currentConfig);
   });
@@ -1078,6 +1090,8 @@ async function startRecordingFlow() {
     return;
   }
 
+  const targetSender = captureWindow.webContents;
+
   pasteCoordinator.invalidate();
   safePasteService.captureTarget();
   setState("starting", "Starting...");
@@ -1098,7 +1112,13 @@ async function startRecordingFlow() {
     pasteCoordinator.invalidate();
     recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
     selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-    captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
+    if (
+      captureWindow &&
+      captureWindow.webContents === targetSender &&
+      captureRendererSession.isAvailable(targetSender)
+    ) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+    }
     logger.error({ err: err?.message || String(err) }, "Selection capture failed");
     setState("error", "Selection capture failed");
     return;
@@ -1106,7 +1126,14 @@ async function startRecordingFlow() {
   if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
-    captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
+    if (
+      lifecycleSnapshot.sequenceId === reqRes.sequenceId &&
+      captureWindow &&
+      captureWindow.webContents === targetSender &&
+      captureRendererSession.isAvailable(targetSender)
+    ) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+    }
     if (selection.hasSelection) {
       const ownershipSnapshot = selectionClipboardPort
         ? selectionClipboardPort.snapshot()
