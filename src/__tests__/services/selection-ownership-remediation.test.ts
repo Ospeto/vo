@@ -8,6 +8,11 @@ const mockElectronObj = {
   BrowserWindow: class { webContents = { send: () => {}, on: () => {}, once: () => {} }; isDestroyed() { return false; } destroy() {} },
   ipcMain: { on: () => {}, handle: () => {} },
   clipboard: { readText: () => "", writeText: () => {}, readBuffer: () => Buffer.from(""), writeBuffer: () => true },
+  Tray: class { setToolTip() {} on() {} setImage() {} },
+  Menu: { buildFromTemplate: () => ({}) },
+  screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+  nativeImage: { createFromPath: () => ({ setTemplateImage: () => {} }) },
+  Notification: class { static isSupported() { return false; } show() {} },
   contextBridge: { exposeInMainWorld: (_name: string, api: unknown) => { exposedCaptureApi = api; } },
   ipcRenderer: {
     send: (_channel: string, payload: unknown) => { sentIpc.push(payload); },

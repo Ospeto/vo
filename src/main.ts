@@ -325,23 +325,23 @@ function playSound(soundName?: string) {
 }
 
 function playStartChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundStart || "glass");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundStart || "glass");
 }
 
 function playToggleStopChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundEnd || "submarine");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundEnd || "submarine");
 }
 
 function playSuccessChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundEnd || "hero");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundEnd || "hero");
 }
 
 function playUndoChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundEnd || "submarine");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundEnd || "submarine");
 }
 
 function isTerminalApp(appName: string): boolean {

@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, mock } from "bun:test";
+import { test, expect, describe, beforeEach, beforeAll, mock } from "bun:test";
 
 function createMockWebContents() {
   const handlers: Record<string, Function[]> = {};
@@ -107,39 +107,54 @@ import { validateIpcSenderPolicy } from "../../services/ipc-policy.js";
 import { type SafePasteResult } from "../../services/safe-paste.js";
 import { IPC, type AppState } from "../../shared/types.js";
 
+let captureOrchestrator: any;
+let dictationCoordinator: any;
+let abortActiveFlow: any;
+
+beforeAll(async () => {
+  const mainMod = await import("../../main.js");
+  captureOrchestrator = mainMod.captureOrchestrator;
+  dictationCoordinator = mainMod.dictationCoordinator;
+  abortActiveFlow = mainMod.abortActiveFlow;
+});
+
 describe("CaptureOrchestrator & Production Recovery Suite", () => {
   beforeEach(() => {
     selectionOwnershipManager.clearOwnership();
   });
-  test("Production composition path: CaptureOrchestrator unifies STT controller ownership and aborts active STT on cleanup", () => {
-    const orchestrator = new CaptureOrchestrator({
-      createWindow: () => createMockWindow("capture"),
-      getWebContents: (win) => win.webContents,
-      isDestroyed: (win) => win.isDestroyed(),
-      destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-      onClosed: (win, handler) => win.on("closed", handler),
-      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
-      setState: () => {},
-      isQuitting: () => false,
-      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
-      capturePasteTarget: () => {},
-      playStartChime: () => {},
-      getInputGain: () => 1.0,
-    });
+  test("Exported production main.ts composition path: STT controller created via captureOrchestrator is aborted on abortActiveFlow", () => {
+    expect(captureOrchestrator).toBeDefined();
 
-    // Create STT abort controller via production orchestrator factory
-    const sttController = orchestrator.createSTTAbortController();
-    expect(orchestrator.activeSTTAbortController).toBe(sttController);
+    // Create STT abort controller on production captureOrchestrator
+    const sttController = captureOrchestrator.createSTTAbortController();
+    expect(captureOrchestrator.activeSTTAbortController).toBe(sttController);
     expect(sttController.signal.aborted).toBe(false);
 
-    // Call orchestrator abortActiveFlow (as called by main.ts abortActiveFlow)
-    orchestrator.abortActiveFlow();
+    // Trigger production abortActiveFlow exported from main.ts
+    abortActiveFlow();
 
-    // Assert: STT controller created for production fetch was aborted and cleared
+    // Assert STT controller was aborted and cleared on production captureOrchestrator
     expect(sttController.signal.aborted).toBe(true);
-    expect(orchestrator.activeSTTAbortController).toBeNull();
+    expect(captureOrchestrator.activeSTTAbortController).toBeNull();
+  });
+
+  test("Exported production main.ts composition path: startRecordingFlow calls dictationCoordinator.acknowledgeStart via main.ts:118 options wiring", async () => {
+    captureOrchestrator.ensureCaptureWindow();
+    const win = captureOrchestrator.controller.getPendingCaptureWindow()!;
+    win.webContents.emit("did-finish-load");
+    expect(captureOrchestrator.isReady()).toBe(true);
+
+    const startRes = await dictationCoordinator.handleUiCommand("start");
+    expect(startRes.accepted).toBe(true);
+
+    // CRITICAL: Lifecycle state is now "recording" (NOT stuck in "starting") via main.ts:118 wiring
+    expect(dictationCoordinator.snapshot().state).toBe("recording");
+    expect(captureOrchestrator.lifecycle.snapshot().state).toBe("recording");
+
+    // Normal stop request is now accepted cleanly
+    const stopRes = dictationCoordinator.getLifecycle().requestStop();
+    expect(stopRes.accepted).toBe(true);
+    expect(dictationCoordinator.snapshot().state).toBe("stopping");
   });
 
   test("Real deferred STT promise test: proves no paste, no history entry, no chime, and clipboard restored on production cleanup", async () => {
@@ -249,61 +264,7 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     expect(restoredText).toBe(originalText);
   });
 
-  test("Successful startRecordingFlow calls acknowledgeStart and transitions lifecycle state to 'recording'", async () => {
-    let currentState: string = "idle";
 
-    const orchestrator = new CaptureOrchestrator({
-      createWindow: () => createMockWindow("capture"),
-      getWebContents: (win) => win.webContents,
-      isDestroyed: (win) => win.isDestroyed(),
-      destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-      onClosed: (win, handler) => win.on("closed", handler),
-      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
-      setState: (s) => {
-        currentState = s;
-      },
-      isQuitting: () => false,
-      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
-      capturePasteTarget: () => {},
-      playStartChime: () => {},
-      getInputGain: () => 1.0,
-    });
-
-    const coordinator = new DictationControlCoordinator(
-      {
-        dictationMode: "toggle",
-        isNativeKeyUpAvailable: () => false,
-        isFnDown: () => false,
-        onStartRecording: async () => orchestrator.startRecordingFlow(),
-        onStopRecording: async () => true,
-        onCancelDictation: () => {},
-        playStopChime: () => {},
-      },
-      orchestrator.lifecycle
-    );
-
-    // Provide coordinator's acknowledgeStart to orchestrator
-    (orchestrator as any).options.acknowledgeStart = (seqId: number, success: boolean) => coordinator.acknowledgeStart(seqId, success);
-
-    orchestrator.ensureCaptureWindow();
-    const win = orchestrator.controller.getPendingCaptureWindow()!;
-    win.webContents.emit("did-finish-load");
-
-    // Execute start command
-    const startRes = await coordinator.handleUiCommand("start");
-    expect(startRes.accepted).toBe(true);
-    expect(currentState).toBe("recording");
-
-    // CRITICAL: Lifecycle state is now "recording" (NOT stuck in "starting")
-    expect(orchestrator.lifecycle.snapshot().state).toBe("recording");
-
-    // Normal stop request is now accepted cleanly
-    const stopRes = orchestrator.lifecycle.requestStop();
-    expect(stopRes.accepted).toBe(true);
-    expect(orchestrator.lifecycle.snapshot().state).toBe("stopping");
-  });
 
   test("START_RECORDING send placed BEFORE captureTarget, starting state, and chime to prevent send race side-effects", async () => {
     let targetCaptured = false;

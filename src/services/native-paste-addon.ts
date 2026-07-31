@@ -32,6 +32,7 @@ export function resolveNativePastePath(projectRoot: string): string {
 }
 
 export function loadNativePasteAddon(path: string): NativePasteAddon | null {
+  if (process.env.NODE_ENV === "test") return null;
   try {
     const addon = createRequire(import.meta.url)(path) as NativePasteAddon;
     if (!addon || typeof addon.capture !== "function" || typeof addon.authorize !== "function" || typeof addon.inject !== "function" || addon.selfCheck() !== true) return null;
