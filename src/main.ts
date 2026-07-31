@@ -150,7 +150,6 @@ function isCurrentTranscription(sequenceId: number): boolean {
   return snapshot.sequenceId === sequenceId && snapshot.state === "transcribing";
 }
 
-let activeSTTAbortController: AbortController | null = null;
 let activeSelectionAbortController: AbortController | null = null;
 
 function abortSelectionCapture() {
@@ -159,21 +158,7 @@ function abortSelectionCapture() {
 }
 
 function abortActiveFlow(failedSender?: Electron.WebContents) {
-  abortSelectionCapture();
-  const currentSeq = recordingLifecycle.snapshot().sequenceId;
-
-  if (activeSTTAbortController) {
-    activeSTTAbortController.abort();
-    activeSTTAbortController = null;
-  }
-
-  pasteCoordinator.invalidate();
-  recordingLifecycle.cancel();
-  restoreCapturedSelection(currentSeq);
-
-  if (failedSender) {
-    captureRendererSession.detach(failedSender);
-  }
+  captureOrchestrator.abortActiveFlow(failedSender);
 }
 
 function cancelDictation(reason: string = "Cancelled") {
@@ -721,8 +706,7 @@ function setupIpcHandlers() {
       return;
     }
 
-    const sttAbortController = new AbortController();
-    activeSTTAbortController = sttAbortController;
+    const sttAbortController = captureOrchestrator.createSTTAbortController();
 
     try {
       setState("transcribing", "Transcribing...", { usedPaidKey: activeUsedPaidKey });
@@ -832,8 +816,8 @@ function setupIpcHandlers() {
         }
       }, 6000);
     } finally {
-      if (activeSTTAbortController === sttAbortController) {
-        activeSTTAbortController = null;
+      if (captureOrchestrator.activeSTTAbortController === sttAbortController) {
+        captureOrchestrator.activeSTTAbortController = null;
       }
     }
   });

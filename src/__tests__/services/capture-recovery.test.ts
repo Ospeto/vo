@@ -113,9 +113,8 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     orchestrator.lifecycle.acknowledgeStop(seq, true);
     expect(orchestrator.lifecycle.snapshot().state).toBe("transcribing");
 
-    // Set active STT abort controller
-    const sttController = new AbortController();
-    orchestrator.activeSTTAbortController = sttController;
+    // Set active STT abort controller via production orchestrator factory
+    const sttController = orchestrator.createSTTAbortController();
 
     // Set clipboard ownership
     selectionOwnershipManager.setOwnership({

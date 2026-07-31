@@ -100,6 +100,13 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     }
   }
 
+  public createSTTAbortController(): AbortController {
+    this.abortSTT();
+    const controller = new AbortController();
+    this.activeSTTAbortController = controller;
+    return controller;
+  }
+
   public abortActiveFlow(failedSender?: TSender): void {
     this.abortSelectionCapture();
     this.abortSTT();
