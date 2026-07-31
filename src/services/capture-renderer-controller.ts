@@ -147,4 +147,19 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
       } catch {}
     }
   }
+
+  async teardownCaptureWindow(_timeoutMs: number = 2000): Promise<void> {
+    const win = this.captureWindow;
+    if (win && !this.options.isDestroyed(win)) {
+      if (this.session.isAvailable(win.webContents)) {
+        try {
+          this.options.sendIpc(win.webContents, IPC.CANCEL_RECORDING);
+        } catch {}
+        try {
+          this.session.teardown(win.webContents);
+        } catch {}
+      }
+    }
+    this.destroyCaptureWindow();
+  }
 }

@@ -58,24 +58,29 @@ function createPinoLogger(): pino.Logger {
   const logPath = resolveLogPath();
   rotateLogIfNeeded(logPath);
 
-  const streams: pino.StreamEntry[] = [
-    { level: "debug", stream: process.stdout },
-  ];
-
+  let fileStream: pino.DestinationStream | null = null;
   try {
-    const fileStream = pino.destination({ dest: logPath, mkdir: true, sync: true });
-    streams.push({ level: "debug", stream: fileStream });
+    fileStream = pino.destination({ dest: logPath, mkdir: true, sync: true });
     fileLoggingActive = true;
   } catch (err: any) {
     fileLoggingActive = false;
     try {
       process.stderr.write(
-        `[logger] Warning: Failed to initialize file logger at "${logPath}": ${err?.message || String(err)}. Falling back to console/stderr logging.\n`
+        `[logger] Warning: Failed to initialize file logger at "${logPath}": ${err?.message || String(err)}. Falling back to stderr logging.\n`
       );
     } catch {
       // Ignore stderr write errors
     }
   }
+
+  const streams: pino.StreamEntry[] = fileLoggingActive && fileStream
+    ? [
+        { level: "debug", stream: process.stdout },
+        { level: "debug", stream: fileStream },
+      ]
+    : [
+        { level: "debug", stream: process.stderr },
+      ];
 
   return pino({ level: "debug" }, pino.multistream(streams));
 }

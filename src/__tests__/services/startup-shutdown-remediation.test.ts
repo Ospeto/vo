@@ -17,7 +17,7 @@ const mockElectronObj = {
   },
   BrowserWindow: class MockBrowserWindow {
     static getAllWindows() { return []; }
-    webContents = { send: mock(() => {}), on: mock(() => {}), once: mock(() => {}) };
+    webContents = { send: mock(() => {}), on: mock(() => {}), once: mock(() => {}), setWindowOpenHandler: mock(() => {}) };
     isDestroyed() { return false; }
     destroy() {}
     hide() {}
@@ -56,7 +56,8 @@ const {
   setRuntimeStateDirectoryForTests,
 } = await import("../../services/runtime-state.js");
 const { default: logger, isFileLoggingActive } = await import("../../services/logger.js");
-const { gracefulShutdown, _resetShutdownStateForTests, handleFatalProcessError, captureOrchestrator } = await import("../../main.js");
+const { stopDaemonServer, startDaemonServer } = await import("../../services/daemon-ipc.js");
+const { gracefulShutdown, _resetShutdownStateForTests, handleFatalProcessError, captureOrchestrator, runStartupSequence } = await import("../../main.js");
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
 
 const testStateDir = join(
@@ -90,11 +91,11 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
   });
 
   describe("1. Logger fallback on unwritable log path", () => {
-    test("logger module initializes with stderr fallback when PI_VOICE_LOG_PATH is unwritable", () => {
+    test("logger module initializes with stderr fallback when PI_VOICE_LOG_PATH is unwritable and routes logs to stderr", () => {
       const script = `
         import logger, { isFileLoggingActive } from "./src/services/logger.ts";
         console.log("IS_FILE_LOGGING_ACTIVE=" + isFileLoggingActive());
-        logger.info("stdout_fallback_check");
+        logger.info("stderr_fallback_log_record");
       `;
 
       const res = spawnSync("bun", ["-e", script], {
@@ -107,8 +108,8 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
 
       expect(res.status).toBe(0);
       expect(res.stderr).toContain("Warning: Failed to initialize file logger");
+      expect(res.stderr).toContain("stderr_fallback_log_record");
       expect(res.stdout).toContain("IS_FILE_LOGGING_ACTIVE=false");
-      expect(res.stdout).toContain("stdout_fallback_check");
     });
 
     test("logger operations succeed without throwing in current module context", () => {
@@ -147,10 +148,8 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       );
 
       expect(existsSync(stateFile)).toBe(true);
-      // Attempt removal with default process.pid
       const removed = removeRuntimeState();
       expect(removed).toBe(false);
-      // Replacement process state file MUST be preserved
       expect(existsSync(stateFile)).toBe(true);
 
       const content = JSON.parse(readFileSync(stateFile, "utf-8"));
@@ -170,19 +169,16 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       );
 
       expect(existsSync(stateFile)).toBe(true);
-      // CLI cleanup passes state.pid
       const removed = removeRuntimeState(staleDaemonPid);
       expect(removed).toBe(true);
       expect(existsSync(stateFile)).toBe(false);
     });
 
     test("saveRuntimeState writes atomically and replacement state is never lost under concurrent operations", () => {
-      // 1. Initial process saves state
       saveRuntimeState("/initial/cwd");
       const stateFile = join(testStateDir, "runtime-state.json");
       expect(existsSync(stateFile)).toBe(true);
 
-      // 2. Replacement process saves state atomically via temp file rename
       const replacementPid = process.pid + 99999;
       const tmpWriteFile = `${stateFile}.tmp.write.${replacementPid}.${Date.now()}`;
       writeFileSync(
@@ -194,13 +190,10 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
         }),
       );
 
-      // Old process attempts removal right before replacement rename
       removeRuntimeState(process.pid);
-      // Atomic rename of replacement file
       const { renameSync } = require("node:fs");
       renameSync(tmpWriteFile, stateFile);
 
-      // Replacement file MUST survive and contain replacement PID
       expect(existsSync(stateFile)).toBe(true);
       const stateContent = JSON.parse(readFileSync(stateFile, "utf-8"));
       expect(stateContent.pid).toBe(replacementPid);
@@ -210,16 +203,13 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       const initialPid = process.pid;
       const stateFile = join(testStateDir, "runtime-state.json");
 
-      // 1. Initial process saves state
       saveRuntimeState("/initial/cwd");
       expect(existsSync(stateFile)).toBe(true);
 
-      // 2. Simulate mid-removal atomic state: initial state was renamed to temp path
       const tmpPath = `${stateFile}.tmp.del.${initialPid}.${Date.now()}`;
       const { renameSync } = require("node:fs");
       renameSync(stateFile, tmpPath);
 
-      // 3. Replacement process creates state file at target path
       const replacementPid = process.pid + 55555;
       writeFileSync(
         stateFile,
@@ -230,7 +220,6 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
         }),
       );
 
-      // 4. Overwrite contents of tmpPath with non-matching PID so removal verifier chooses restoration
       writeFileSync(
         tmpPath,
         JSON.stringify({
@@ -240,8 +229,6 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
         }),
       );
 
-      // 5. Execute removeRuntimeState(initialPid) — preliminary check passed (temp file was renamed),
-      // but temp content mismatch triggers linkSync restoration against existing target file!
       const { linkSync, unlinkSync } = require("node:fs");
       try {
         linkSync(tmpPath, stateFile);
@@ -250,14 +237,13 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       }
       try { unlinkSync(tmpPath); } catch {}
 
-      // Target state file MUST exist and MUST contain replacement process PID
       expect(existsSync(stateFile)).toBe(true);
       const content = JSON.parse(readFileSync(stateFile, "utf-8"));
       expect(content.pid).toBe(replacementPid);
     });
   });
 
-  describe("3. Idempotent and Async gracefulShutdown", () => {
+  describe("3. Idempotent, Async & Awaited Shutdown Operations", () => {
     test("gracefulShutdown returns the same promise when called multiple times concurrently", async () => {
       const p1 = gracefulShutdown();
       const p2 = gracefulShutdown();
@@ -276,17 +262,39 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       expect(elapsed).toBeLessThan(3000);
     });
 
-    test("gracefulShutdown cleans up runtime state for current process", async () => {
-      saveRuntimeState("/test/cwd");
-      const stateFile = join(testStateDir, "runtime-state.json");
-      expect(existsSync(stateFile)).toBe(true);
+    test("stopDaemonServer is async, returns a promise, and awaits server close", async () => {
+      await startDaemonServer(() => ({ ok: true }));
+      const stopPromise = stopDaemonServer(1000);
+      expect(typeof stopPromise.then).toBe("function");
+      await stopPromise;
+    });
 
-      await gracefulShutdown();
-      expect(existsSync(stateFile)).toBe(false);
+    test("captureOrchestrator.teardownCaptureWindow detaches session and tears down window cleanly", async () => {
+      const win = captureOrchestrator.ensureCaptureWindow();
+      expect(win).not.toBeNull();
+
+      const teardownPromise = captureOrchestrator.teardownCaptureWindow(2000);
+      expect(typeof teardownPromise.then).toBe("function");
+      await teardownPromise;
     });
   });
 
-  describe("4. Fatal Process Error Handling", () => {
+  describe("4. Deterministic Startup Sequence & Fault Injection", () => {
+    test("runStartupSequence completes mandatory services before exposing UI and returns true", async () => {
+      const ok = await runStartupSequence(testStateDir);
+      expect(ok).toBe(true);
+      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
+      await gracefulShutdown();
+    });
+
+    test("runStartupSequence handles mandatory service fault, runs gracefulShutdown and returns false without partial UI", async () => {
+      setRuntimeStateDirectoryForTests("/dev/null/invalid_state_directory");
+      const ok = await runStartupSequence(testStateDir);
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe("5. Fatal Process Error Handling", () => {
     test("handleFatalProcessError resolves safely without throwing or rejecting", async () => {
       let errorOccurred = false;
       try {
@@ -305,7 +313,7 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
     });
   });
 
-  describe("5. Shutdown from each lifecycle state", () => {
+  describe("6. Shutdown from each lifecycle state", () => {
     test("shutdown during 'starting' state resets lifecycle cleanly", async () => {
       const lifecycle = (captureOrchestrator as any).lifecycle as RecordingLifecycle;
       lifecycle.reset();

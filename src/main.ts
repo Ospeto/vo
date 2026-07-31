@@ -1277,7 +1277,7 @@ export function gracefulShutdown(): Promise<void> {
     recordingLifecycle.reset();
 
     try {
-      captureOrchestrator.destroyCaptureWindow();
+      await withBoundedWait(captureOrchestrator.teardownCaptureWindow(), 2000);
     } catch (err: any) {
       logger.warn({ err: err?.message || String(err) }, "Error tearing down capture window during shutdown");
     }
@@ -1325,7 +1325,7 @@ export function gracefulShutdown(): Promise<void> {
     }
 
     try {
-      stopDaemonServer();
+      await withBoundedWait(stopDaemonServer(), 1000);
     } catch (err: any) {
       logger.warn({ err: err?.message || String(err) }, "Error stopping daemon server during shutdown");
     }
@@ -1357,6 +1357,61 @@ if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
       }
     }
   });
+}
+
+export async function runStartupSequence(cwd: string = workingCwd): Promise<boolean> {
+  try {
+    try {
+      currentConfig = loadConfig(cwd);
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Config error during startup, using defaultConfig");
+      currentConfig = defaultConfig();
+    }
+
+    dictationCoordinator.setDictationMode(currentConfig.dictationMode);
+
+    setupIpcHandlers();
+
+    hotkeyService = new HotkeyService();
+    const hotkeyRes = await hotkeyService.start(
+      currentConfig.key,
+      {
+        onDown: (mode) => handleHotkeyDown(mode),
+        onUp: () => handleHotkeyUp(),
+        onCancel: () => {
+          if (currentState !== "idle") {
+            cancelDictation("Cancelled via Escape key");
+          }
+        },
+      },
+      currentConfig.editKey,
+      currentConfig.dictationMode
+    );
+
+    if (!hotkeyRes.success) {
+      logger.warn({ error: hotkeyRes.error }, "Hotkey registration reported optional degradation on startup");
+    }
+
+    prewarmGeminiClient();
+    await stopDaemonServer();
+    await startDaemonServer(handleDaemonCommand);
+    saveRuntimeState(cwd);
+
+    ensureCaptureWindow();
+    createPopoverWindow();
+    createHudWindow();
+    createTray();
+
+    logger.info({ cwd, provider: currentConfig.provider, geminiModel: currentConfig.geminiModel, dictationMode: currentConfig.dictationMode }, "vo daemon started successfully");
+    return true;
+  } catch (err: any) {
+    logger.error({ err: err?.message || String(err) }, "Fatal error during application startup; cleaning up and exiting");
+    await gracefulShutdown();
+    if (process.env.NODE_ENV !== "test") {
+      app.exit(1);
+    }
+    return false;
+  }
 }
 
 app.whenReady().then(async () => {
@@ -1400,56 +1455,7 @@ app.whenReady().then(async () => {
     app.dock.hide();
   }
 
-  try {
-    try {
-      currentConfig = loadConfig(workingCwd);
-    } catch (err: any) {
-      logger.warn({ err: err?.message || String(err) }, "Config error during startup, using defaultConfig");
-      currentConfig = defaultConfig();
-    }
-
-    dictationCoordinator.setDictationMode(currentConfig.dictationMode);
-
-    ensureCaptureWindow();
-    createPopoverWindow();
-    createHudWindow();
-
-    setupIpcHandlers();
-
-    hotkeyService = new HotkeyService();
-    const hotkeyRes = await hotkeyService.start(
-      currentConfig.key,
-      {
-        onDown: (mode) => handleHotkeyDown(mode),
-        onUp: () => handleHotkeyUp(),
-        onCancel: () => {
-          if (currentState !== "idle") {
-            cancelDictation("Cancelled via Escape key");
-          }
-        },
-      },
-      currentConfig.editKey,
-      currentConfig.dictationMode
-    );
-
-    if (!hotkeyRes.success) {
-      logger.warn({ error: hotkeyRes.error }, "Hotkey registration reported optional degradation on startup");
-    }
-
-    prewarmGeminiClient();
-    startDaemonServer(handleDaemonCommand);
-    saveRuntimeState(workingCwd);
-
-    createTray();
-
-    logger.info({ cwd: workingCwd, provider: currentConfig.provider, geminiModel: currentConfig.geminiModel, dictationMode: currentConfig.dictationMode }, "vo daemon started successfully");
-  } catch (err: any) {
-    logger.error({ err: err?.message || String(err) }, "Fatal error during application startup; cleaning up and exiting");
-    await gracefulShutdown();
-    if (process.env.NODE_ENV !== "test") {
-      app.exit(1);
-    }
-  }
+  await runStartupSequence();
 });
 
 app.on("window-all-closed", () => {});

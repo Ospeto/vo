@@ -85,12 +85,12 @@ export function startDaemonServer(handler: CommandHandler): string {
 
 /**
  * Stop the daemon IPC server and remove the socket file.
+ * Unlinks the socket file immediately and returns a bounded promise for server close.
  */
-export function stopDaemonServer(): void {
-  if (server) {
-    server.close();
-    server = null;
-  }
+export function stopDaemonServer(timeoutMs: number = 1000): Promise<void> | void {
+  const activeServer = server;
+  server = null;
+
   const socketPath = getSocketPath();
   if (existsSync(socketPath)) {
     try {
@@ -99,6 +99,29 @@ export function stopDaemonServer(): void {
       // ignore
     }
   }
+
+  if (activeServer) {
+    const closePromise = new Promise<void>((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let closed = false;
+      const done = () => {
+        if (closed) return;
+        closed = true;
+        if (timer) clearTimeout(timer);
+        resolve();
+      };
+
+      timer = setTimeout(done, timeoutMs);
+      try {
+        activeServer.close(() => done());
+      } catch {
+        done();
+      }
+    });
+    logger.info("DaemonIPC server stopped");
+    return closePromise;
+  }
+
   logger.info("DaemonIPC server stopped");
 }
 
