@@ -4,6 +4,8 @@ import {
   readFileSync,
   writeFileSync,
   unlinkSync,
+  renameSync,
+  linkSync,
   existsSync,
   mkdirSync,
 } from "node:fs";
@@ -69,6 +71,8 @@ function isProcessAlive(pid: number): boolean {
 
 /**
  * Save runtime state to disk (called on successful start).
+ * Uses an atomic write-and-rename protocol so consumers/removers never observe
+ * a partially-written or truncated state file.
  */
 export function saveRuntimeState(cwd: string): { revision: number } {
   ensureDir();
@@ -78,7 +82,19 @@ export function saveRuntimeState(cwd: string): { revision: number } {
     cwd,
     startedAt: new Date().toISOString(),
   };
-  writeFileSync(getStateFile(), JSON.stringify(state, null, 2));
+
+  const targetFile = getStateFile();
+  const tmpFile = `${targetFile}.tmp.write.${process.pid}.${Date.now()}`;
+  try {
+    writeFileSync(tmpFile, JSON.stringify(state, null, 2), "utf-8");
+    renameSync(tmpFile, targetFile);
+  } catch (err) {
+    try {
+      if (existsSync(tmpFile)) unlinkSync(tmpFile);
+    } catch {}
+    throw err;
+  }
+
   return { revision: stateRevision };
 }
 
@@ -111,7 +127,7 @@ export function readRuntimeState(): RuntimeState | null {
     return res.state;
   }
   if (res.kind === "present" && res.liveness === "dead") {
-    removeRuntimeState();
+    removeRuntimeState(res.state.pid);
     return null;
   }
   return null;
@@ -121,18 +137,67 @@ export function removeRuntimeStateIfRevision(revision?: number): { ok: boolean; 
   if (revision !== undefined && revision !== stateRevision) {
     return { ok: true, removed: false };
   }
-  removeRuntimeState();
-  return { ok: true, removed: true };
+  const removed = removeRuntimeState();
+  return { ok: true, removed };
 }
 
 /**
- * Remove runtime state file (called on graceful shutdown).
+ * Remove runtime state file (called on graceful shutdown or stale cleanup).
+ * Uses an atomic rename-and-verify protocol so a replacement process's state
+ * file is never deleted even if written concurrently during removal.
  */
-export function removeRuntimeState(): void {
+export function removeRuntimeState(expectedPid: number = process.pid): boolean {
   try {
     const file = getStateFile();
-    if (existsSync(file)) unlinkSync(file);
+    if (!existsSync(file)) return false;
+
+    // Preliminary check
+    try {
+      const raw = readFileSync(file, "utf-8");
+      const state: RuntimeState = JSON.parse(raw);
+      if (state && typeof state.pid === "number" && state.pid !== expectedPid) {
+        return false;
+      }
+    } catch {
+      // Corrupt file without expected PID match; do not unlink
+      return false;
+    }
+
+    // Atomic isolation via rename
+    const tmpPath = `${file}.tmp.del.${expectedPid}.${Date.now()}`;
+    try {
+      renameSync(file, tmpPath);
+    } catch {
+      return false;
+    }
+
+    let shouldUnlink = false;
+    try {
+      const rawTmp = readFileSync(tmpPath, "utf-8");
+      const tmpState: RuntimeState = JSON.parse(rawTmp);
+      if (tmpState && typeof tmpState.pid === "number" && tmpState.pid === expectedPid) {
+        shouldUnlink = true;
+      }
+    } catch {
+      shouldUnlink = false;
+    }
+
+    if (shouldUnlink) {
+      unlinkSync(tmpPath);
+      return true;
+    } else {
+      // Atomic no-clobber restoration: linkSync fails atomically with EEXIST if replacement process already created target file
+      try {
+        linkSync(tmpPath, file);
+      } catch {
+        // EEXIST or failure: replacement process file is preserved
+      }
+      try {
+        unlinkSync(tmpPath);
+      } catch {}
+      return false;
+    }
   } catch {
-    // Ignore - best effort
+    return false;
   }
 }

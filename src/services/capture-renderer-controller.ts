@@ -130,4 +130,21 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     this.captureWindow = null;
     this.pendingCaptureWindow = null;
   }
+
+  destroyCaptureWindow(): void {
+    const win = this.captureWindow;
+    const pendingWin = this.pendingCaptureWindow;
+    this.captureWindow = null;
+    this.pendingCaptureWindow = null;
+    if (win && !this.options.isDestroyed(win)) {
+      try {
+        this.options.destroyWindow(win);
+      } catch {}
+    }
+    if (pendingWin && pendingWin !== win && !this.options.isDestroyed(pendingWin)) {
+      try {
+        this.options.destroyWindow(pendingWin);
+      } catch {}
+    }
+  }
 }

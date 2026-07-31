@@ -32,14 +32,34 @@ import { CaptureOrchestrator } from "./services/capture-orchestrator.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
-process.on("uncaughtException", (err) => {
+let isFatalShuttingDown = false;
+
+export async function handleFatalProcessError(type: string, err: any) {
   const msg = err?.message || String(err);
   if (msg.includes("sonic boom") || msg.includes("flushSync")) return;
-  logger.error({ err: msg }, "Uncaught main process exception");
+
+  logger.error({ err: msg, type }, `Fatal process error: ${type}`);
+
+  if (isFatalShuttingDown) return;
+  isFatalShuttingDown = true;
+
+  try {
+    await gracefulShutdown();
+  } catch (shutdownErr: any) {
+    logger.error({ err: shutdownErr?.message || String(shutdownErr) }, "Error during fatal shutdown cleanup");
+  } finally {
+    if (process.env.NODE_ENV !== "test") {
+      process.exit(1);
+    }
+  }
+}
+
+process.on("uncaughtException", (err) => {
+  handleFatalProcessError("uncaughtException", err);
 });
 
 process.on("unhandledRejection", (reason) => {
-  logger.error({ reason: String(reason) }, "Unhandled promise rejection");
+  handleFatalProcessError("unhandledRejection", reason);
 });
 
 const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
@@ -1213,19 +1233,113 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
       return { ok: true };
     case "stop":
     case "shutdown":
-      setImmediate(() => app.quit());
+      setImmediate(() => {
+        gracefulShutdown().finally(() => {
+          app.quit();
+        });
+      });
       return { ok: true };
     default:
       return { ok: false, error: `Unknown command: ${command}` };
   }
 }
 
-function gracefulShutdown() {
-  logger.info("Shutting down...");
-  pasteCoordinator.invalidate();
-  hotkeyService?.stop();
-  stopDaemonServer();
-  removeRuntimeState();
+function withBoundedWait<T>(promise: Promise<T>, timeoutMs: number): Promise<T | void> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
+let shutdownPromise: Promise<void> | null = null;
+
+export function gracefulShutdown(): Promise<void> {
+  if (shutdownPromise) {
+    return shutdownPromise;
+  }
+
+  shutdownPromise = (async () => {
+    logger.info("Shutting down...");
+
+    pasteCoordinator.invalidate();
+    abortSelectionCapture();
+
+    try {
+      captureOrchestrator.abortActiveFlow();
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Error aborting active capture flow during shutdown");
+    }
+
+    const currentSeq = recordingLifecycle.snapshot().sequenceId;
+    recordingLifecycle.reset();
+
+    try {
+      captureOrchestrator.destroyCaptureWindow();
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Error tearing down capture window during shutdown");
+    }
+
+    try {
+      restoreCapturedSelection(currentSeq);
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Error restoring selection during shutdown");
+    }
+
+    if (stoppingSafetyTimer) {
+      clearTimeout(stoppingSafetyTimer);
+      stoppingSafetyTimer = null;
+    }
+    if (hudHideTimer) {
+      clearTimeout(hudHideTimer);
+      hudHideTimer = null;
+    }
+    if (trayResetTimer) {
+      clearTimeout(trayResetTimer);
+      trayResetTimer = null;
+    }
+
+    if (hudWindow && !hudWindow.isDestroyed()) {
+      try { hudWindow.destroy(); } catch {}
+      hudWindow = null;
+    }
+
+    if (popoverWindow && !popoverWindow.isDestroyed()) {
+      try { popoverWindow.destroy(); } catch {}
+      popoverWindow = null;
+    }
+
+    if (tray) {
+      try { tray.destroy(); } catch {}
+      tray = null;
+    }
+
+    if (hotkeyService) {
+      try {
+        await withBoundedWait(hotkeyService.stop(), 1000);
+      } catch (err: any) {
+        logger.warn({ err: err?.message || String(err) }, "Error stopping hotkeys during shutdown");
+      }
+    }
+
+    try {
+      stopDaemonServer();
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Error stopping daemon server during shutdown");
+    }
+
+    removeRuntimeState();
+    logger.info("Graceful shutdown complete.");
+  })();
+
+  return shutdownPromise;
+}
+
+export function _resetShutdownStateForTests(): void {
+  shutdownPromise = null;
+  isFatalShuttingDown = false;
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -1287,49 +1401,65 @@ app.whenReady().then(async () => {
   }
 
   try {
-    currentConfig = loadConfig(workingCwd);
-  } catch (err: any) {
-    logger.warn({ err: err?.message || String(err) }, "Config error during startup, using defaultConfig");
-    currentConfig = defaultConfig();
-  }
+    try {
+      currentConfig = loadConfig(workingCwd);
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Config error during startup, using defaultConfig");
+      currentConfig = defaultConfig();
+    }
 
-  dictationCoordinator.setDictationMode(currentConfig.dictationMode);
+    dictationCoordinator.setDictationMode(currentConfig.dictationMode);
 
-  ensureCaptureWindow();
-  createPopoverWindow();
-  createHudWindow();
-  createTray();
+    ensureCaptureWindow();
+    createPopoverWindow();
+    createHudWindow();
 
-  setupIpcHandlers();
+    setupIpcHandlers();
 
-  hotkeyService = new HotkeyService();
-  const hotkeyRes = await hotkeyService.start(
-    currentConfig.key,
-    {
-      onDown: (mode) => handleHotkeyDown(mode),
-      onUp: () => handleHotkeyUp(),
-      onCancel: () => {
-        if (currentState !== "idle") {
-          cancelDictation("Cancelled via Escape key");
-        }
+    hotkeyService = new HotkeyService();
+    const hotkeyRes = await hotkeyService.start(
+      currentConfig.key,
+      {
+        onDown: (mode) => handleHotkeyDown(mode),
+        onUp: () => handleHotkeyUp(),
+        onCancel: () => {
+          if (currentState !== "idle") {
+            cancelDictation("Cancelled via Escape key");
+          }
+        },
       },
-    },
-    currentConfig.editKey,
-    currentConfig.dictationMode
-  );
-  if (!hotkeyRes.success) {
-    logger.warn({ error: hotkeyRes.error }, "Hotkey registration reported notice on startup");
+      currentConfig.editKey,
+      currentConfig.dictationMode
+    );
+
+    if (!hotkeyRes.success) {
+      logger.warn({ error: hotkeyRes.error }, "Hotkey registration reported optional degradation on startup");
+    }
+
+    prewarmGeminiClient();
+    startDaemonServer(handleDaemonCommand);
+    saveRuntimeState(workingCwd);
+
+    createTray();
+
+    logger.info({ cwd: workingCwd, provider: currentConfig.provider, geminiModel: currentConfig.geminiModel, dictationMode: currentConfig.dictationMode }, "vo daemon started successfully");
+  } catch (err: any) {
+    logger.error({ err: err?.message || String(err) }, "Fatal error during application startup; cleaning up and exiting");
+    await gracefulShutdown();
+    if (process.env.NODE_ENV !== "test") {
+      app.exit(1);
+    }
   }
-
-  prewarmGeminiClient();
-  startDaemonServer(handleDaemonCommand);
-  saveRuntimeState(workingCwd);
-
-  logger.info({ cwd: workingCwd, provider: currentConfig.provider, geminiModel: currentConfig.geminiModel, dictationMode: currentConfig.dictationMode }, "vo daemon started successfully");
 });
 
 app.on("window-all-closed", () => {});
-app.on("before-quit", () => {
-  isQuitting = true;
-  if (gotSingleInstanceLock) gracefulShutdown();
+app.on("before-quit", (event) => {
+  if (!gotSingleInstanceLock && !process.argv.includes("--headless")) return;
+  if (!isQuitting) {
+    event.preventDefault();
+    isQuitting = true;
+    gracefulShutdown().finally(() => {
+      app.quit();
+    });
+  }
 });

@@ -85,6 +85,10 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     return this.controller.isReady();
   }
 
+  public destroyCaptureWindow(): void {
+    this.controller.destroyCaptureWindow();
+  }
+
   public restoreCapturedSelection(sequenceId?: number): boolean {
     try {
       const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, this.options.selectionClipboardPort);

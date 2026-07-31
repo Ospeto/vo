@@ -141,7 +141,7 @@ async function cmdStatus(): Promise<void> {
       console.log(`  (daemon responded with error: ${res.error})`);
     }
   } catch {
-    removeRuntimeState();
+    removeRuntimeState(state.pid);
     console.log("not running (stale state cleaned up)");
   }
 }
@@ -168,7 +168,7 @@ async function cmdStop(): Promise<void> {
         process.kill(state.pid, "SIGTERM");
         console.log(`Stopping vo daemon (pid: ${state.pid})...`);
       } catch {
-        removeRuntimeState();
+        removeRuntimeState(state.pid);
         console.log("vo daemon is not running (stale state cleaned up).");
         process.exit(1);
       }
