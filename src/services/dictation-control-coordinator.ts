@@ -252,6 +252,17 @@ export class DictationControlCoordinator {
     return { accepted: true, action: success ? "started" : "rejected" };
   }
 
+  public reset(): void {
+    if (this.shortTapTimer) {
+      clearTimeout(this.shortTapTimer);
+      this.shortTapTimer = null;
+    }
+    this.pendingStopOrigin = null;
+    this.keyHoldPressStartTime = 0;
+    this.lastHoldPressDuration = 0;
+    this.recordingStartTime = 0;
+  }
+
   private async executeStop(ensureMinimumDuration: boolean): Promise<CoordinatorActionResult> {
     if (this.shortTapTimer) {
       clearTimeout(this.shortTapTimer);

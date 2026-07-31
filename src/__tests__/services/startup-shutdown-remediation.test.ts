@@ -265,6 +265,16 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       expect(elapsed).toBeLessThan(3000);
     });
 
+    test("gracefulShutdown resets dictationCoordinator timers so shortTapTimer cannot mutate state after shutdown", async () => {
+      const { dictationCoordinator } = await import("../../main.js");
+      (dictationCoordinator as any).shortTapTimer = setTimeout(() => {}, 5000);
+      expect((dictationCoordinator as any).shortTapTimer).not.toBeNull();
+
+      await gracefulShutdown();
+
+      expect((dictationCoordinator as any).shortTapTimer).toBeNull();
+    });
+
     test("stopDaemonServer is async, returns a promise, and awaits server close", async () => {
       await startDaemonServer(() => ({ ok: true }));
       const stopPromise = stopDaemonServer(1000);

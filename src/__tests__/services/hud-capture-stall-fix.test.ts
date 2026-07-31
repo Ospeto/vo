@@ -74,7 +74,7 @@ describe("PR-03 HUD & Capture Window Stall Fix Regression Suite", () => {
   describe("5. Lifecycle Recovery & Multi-Attempt Continuity", () => {
     test("subsequent dictation attempt can start cleanly after a stop timeout / lifecycle reset", () => {
       const lifecycle = new RecordingLifecycle();
-      
+
       // Attempt 1: Start -> Record -> Stop (Times out)
       const start1 = lifecycle.requestStart();
       expect(start1.accepted).toBe(true);

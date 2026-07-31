@@ -202,6 +202,7 @@ function cancelDictation(reason: string = "Cancelled") {
 
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
+let errorResetTimer: ReturnType<typeof setTimeout> | null = null;
 let activeUsedPaidKey = false;
 
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
@@ -249,6 +250,11 @@ function setState(state: AppState, message?: string, options?: { usedPaidKey?: b
   if (hudHideTimer) {
     clearTimeout(hudHideTimer);
     hudHideTimer = null;
+  }
+
+  if (errorResetTimer) {
+    clearTimeout(errorResetTimer);
+    errorResetTimer = null;
   }
 
   if (hudWindow) {
@@ -905,7 +911,7 @@ function setupIpcHandlers() {
       restoreCapturedSelection(currentSeq);
       logger.error({ err: err.message }, "Transcription failed");
       setState("error", err.message);
-      setTimeout(() => {
+      errorResetTimer = setTimeout(() => {
         if (currentState === "error") {
           recordingLifecycle.settle();
           setState("idle");
@@ -1274,6 +1280,10 @@ export function gracefulShutdown(): Promise<void> {
       logger.warn({ err: err?.message || String(err) }, "Error aborting active capture flow during shutdown");
     }
 
+    try {
+      dictationCoordinator?.reset();
+    } catch {}
+
     const currentSeq = recordingLifecycle.snapshot().sequenceId;
     recordingLifecycle.reset();
 
@@ -1296,6 +1306,10 @@ export function gracefulShutdown(): Promise<void> {
     if (hudHideTimer) {
       clearTimeout(hudHideTimer);
       hudHideTimer = null;
+    }
+    if (errorResetTimer) {
+      clearTimeout(errorResetTimer);
+      errorResetTimer = null;
     }
     if (trayResetTimer) {
       clearTimeout(trayResetTimer);
