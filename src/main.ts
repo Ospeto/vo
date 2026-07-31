@@ -1056,7 +1056,14 @@ async function startRecordingFlow(): Promise<boolean> {
   playStartChime();
 
   // Start pre-roll audio capture immediately in starting state to prevent first-phoneme clipping
-  sendToCaptureWindow(IPC.START_RECORDING, "webm", currentConfig.inputGain, reqRes.sequenceId);
+  const sent = sendToCaptureWindow(IPC.START_RECORDING, "webm", currentConfig.inputGain, reqRes.sequenceId);
+  if (!sent) {
+    logger.warn("Failed to send START_RECORDING to capture window");
+    pasteCoordinator.invalidate();
+    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
+    setState("idle", "Capture engine not ready");
+    return false;
+  }
 
   const selectionAbortController = new AbortController();
   activeSelectionAbortController = selectionAbortController;
@@ -1071,6 +1078,7 @@ async function startRecordingFlow(): Promise<boolean> {
     recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
     selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
     if (
+      targetSender &&
       captureController.getCaptureWindow() &&
       captureController.getCaptureWindow()?.webContents === targetSender &&
       captureRendererSession.isAvailable(targetSender)
@@ -1086,6 +1094,7 @@ async function startRecordingFlow(): Promise<boolean> {
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
     if (
       lifecycleSnapshot.sequenceId === reqRes.sequenceId &&
+      targetSender &&
       captureController.getCaptureWindow() &&
       captureController.getCaptureWindow()?.webContents === targetSender &&
       captureRendererSession.isAvailable(targetSender)

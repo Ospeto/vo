@@ -22,6 +22,7 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
   public session: RendererSession<TSender>;
   private captureWindow: TWindow | null = null;
   private pendingCaptureWindow: TWindow | null = null;
+  private isRecovering = false;
   private options: CaptureRendererControllerOptions<TSender, TWindow>;
 
   constructor(options: CaptureRendererControllerOptions<TSender, TWindow>) {
@@ -79,6 +80,11 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
       if (!this.session.acknowledgeReady(sender, generation)) return;
       this.captureWindow = win;
       this.pendingCaptureWindow = null;
+
+      if (this.isRecovering) {
+        this.isRecovering = false;
+        this.options.setState("idle", "Capture engine recovered");
+      }
     });
 
     this.options.onRenderProcessGone(sender, (_event: any, details: any) => {
@@ -90,6 +96,7 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
       if (this.captureWindow === win) this.captureWindow = null;
       if (this.pendingCaptureWindow === win) this.pendingCaptureWindow = null;
 
+      this.isRecovering = true;
       this.options.abortActiveFlow(sender);
 
       if (!this.options.isDestroyed(win)) {
@@ -97,7 +104,6 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
       }
 
       if (!this.options.isQuitting()) {
-        this.options.setState("idle", "Capture engine recovered");
         this.ensureCaptureWindow();
       }
     });
@@ -109,10 +115,10 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
       if (this.captureWindow === win) this.captureWindow = null;
       if (this.pendingCaptureWindow === win) this.pendingCaptureWindow = null;
 
+      this.isRecovering = true;
       this.options.abortActiveFlow(sender);
 
       if (!this.options.isQuitting()) {
-        this.options.setState("idle", "Capture engine recovered");
         this.ensureCaptureWindow();
       }
     });
