@@ -11,8 +11,8 @@ const api: CaptureElectronAPI = {
   sendRecordingError: (error: string, sequenceId: number) => {
     ipcRenderer.send(IPC.RECORDING_ERROR, createRecordingErrorPayload(error, sequenceId));
   },
-  sendRecordingStartReady: (sequenceId: number) => {
-    ipcRenderer.send(IPC.RECORDING_START_READY, { sequenceId });
+  sendRecordingStartReady: (sequenceId: number, deviceStatus?: string) => {
+    ipcRenderer.send(IPC.RECORDING_START_READY, { sequenceId, deviceStatus });
   },
   sendRecordingStartFailed: (sequenceId: number, error: string) => {
     ipcRenderer.send(IPC.RECORDING_START_FAILED, { sequenceId, error });

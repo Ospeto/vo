@@ -15,6 +15,7 @@ import { transcribe, transcribeDetailed, prewarmGeminiClient, getActiveAppName }
 import { _resetGeminiClient, prewarmConnection } from "./services/gemini-client.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, calculateDictationCost, getMonthlyTotalCost } from "./services/history-service.js";
 import { IPC, type AppState, type StatePayload, type RendererRole } from "./shared/types.js";
+import { MAX_STT_PAYLOAD_BYTES, MIN_STT_PAYLOAD_BYTES, isValidWebmHeader } from "./shared/audio-utils.js";
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
 import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonResponse } from "./services/daemon-ipc.js";
 import { HotkeyService } from "./services/hotkey-service.js";
@@ -686,12 +687,27 @@ function hotkeyRegistrationError(): string | null {
 }
 
 function setupIpcHandlers() {
-  ipcMain.on(IPC.RECORDING_DATA, async (event, data: ArrayBuffer) => {
+  ipcMain.on(IPC.RECORDING_DATA, async (event, data: unknown) => {
     if (!validateIpcSender(event, IPC.RECORDING_DATA)) return;
     if (currentState !== "recording" && currentState !== "stopping") return;
 
-    if (data.byteLength < 1000) {
-      const currentSeq = recordingLifecycle.snapshot().sequenceId;
+    const currentSeq = recordingLifecycle.snapshot().sequenceId;
+
+    if (!data || typeof data !== "object") {
+      logger.warn("Received invalid recording data payload type");
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection(currentSeq);
+      setState("error", "Invalid recording payload type");
+      return;
+    }
+
+    const rawByteLength = (data as any)?.byteLength;
+    if (typeof rawByteLength !== "number" || rawByteLength < MIN_STT_PAYLOAD_BYTES) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
       pasteCoordinator.invalidate();
       recordingLifecycle.reset();
       restoreCapturedSelection(currentSeq);
@@ -699,7 +715,47 @@ function setupIpcHandlers() {
       return;
     }
 
-    const currentSeq = recordingLifecycle.snapshot().sequenceId;
+    if (rawByteLength > MAX_STT_PAYLOAD_BYTES) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection(currentSeq);
+      setState("error", "Recording payload too large");
+      return;
+    }
+
+    let arrayBuffer: ArrayBuffer;
+    try {
+      if (data instanceof ArrayBuffer) {
+        arrayBuffer = data;
+      } else if (ArrayBuffer.isView(data)) {
+        const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        arrayBuffer = new Uint8Array(view).buffer as ArrayBuffer;
+      } else {
+        throw new Error("Invalid payload type");
+      }
+    } catch {
+      logger.warn("Failed to convert recording payload to ArrayBuffer");
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection(currentSeq);
+      setState("error", "Invalid recording payload type");
+      return;
+    }
+
+    if (!isValidWebmHeader(arrayBuffer)) {
+      sendToCaptureWindow(IPC.CANCEL_RECORDING);
+      captureOrchestrator.markCaptureInactive(currentSeq);
+      pasteCoordinator.invalidate();
+      recordingLifecycle.reset();
+      restoreCapturedSelection(currentSeq);
+      setState("error", "Malformed recording payload (missing WebM header)");
+      return;
+    }
+
     const ackStop = recordingLifecycle.acknowledgeStop(currentSeq, true);
     if (!ackStop.accepted) {
       logger.warn("Received recording data for invalid lifecycle sequence");
@@ -710,7 +766,7 @@ function setupIpcHandlers() {
 
     try {
       setState("transcribing", "Transcribing...", { usedPaidKey: activeUsedPaidKey });
-      const { text, usedPaidKey, modelUsed } = await transcribeDetailed(data, {
+      const { text, usedPaidKey, modelUsed } = await transcribeDetailed(arrayBuffer, {
         provider: currentConfig.provider,
         geminiModel: currentConfig.geminiModel,
         dictationPreset: currentConfig.dictationPreset,
@@ -842,11 +898,32 @@ function setupIpcHandlers() {
     )) return;
   });
 
-  ipcMain.on(IPC.RECORDING_START_READY, (event, payload: { sequenceId: number }) => {
+  ipcMain.on(IPC.RECORDING_START_READY, async (event, payload: { sequenceId: number; deviceStatus?: string }) => {
     if (!validateIpcSender(event, IPC.RECORDING_START_READY)) return;
     const seq = payload?.sequenceId;
-    if (typeof seq === "number") {
-      dictationCoordinator.acknowledgeStart(seq, true);
+    const currentSnapshot = recordingLifecycle.snapshot();
+    if (!Number.isSafeInteger(seq) || seq !== currentSnapshot.sequenceId || (currentSnapshot.state !== "starting" && currentSnapshot.state !== "recording")) {
+      logger.warn({ seq, currentSnapshot }, "Received start-ready for invalid sequence or state");
+      return;
+    }
+
+    const deviceStatus = typeof payload?.deviceStatus === "string" && payload.deviceStatus.length > 0 && payload.deviceStatus.length < 256
+      ? payload.deviceStatus
+      : undefined;
+
+    if (deviceStatus) {
+      captureOrchestrator.setSequenceDeviceStatus(seq, deviceStatus);
+    }
+
+    if (currentSnapshot.state === "starting") {
+      await dictationCoordinator.acknowledgeStart(seq, true);
+    }
+
+    if (recordingLifecycle.snapshot().sequenceId === seq && currentState === "recording") {
+      const finalStatus = captureOrchestrator.getSequenceDeviceStatus(seq) || deviceStatus;
+      if (finalStatus) {
+        setState("recording", finalStatus);
+      }
     }
   });
 

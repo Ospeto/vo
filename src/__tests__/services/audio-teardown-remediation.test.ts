@@ -117,6 +117,10 @@ class FakeMediaRecorder {
   public startCount = 0;
   public stopCount = 0;
 
+  static isTypeSupported(_mime: string): boolean {
+    return true;
+  }
+
   constructor(_stream: any, _options?: any) {
     (FakeMediaRecorder as any).lastInstance = this;
   }

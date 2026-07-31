@@ -1,3 +1,58 @@
+export const MAX_RECORDING_DURATION_MS = 300_000;
+export const MAX_RECORDING_CHUNKS = 3_600;
+export const MAX_RECORDING_BYTE_SIZE = 15 * 1024 * 1024;
+export const MAX_STT_PAYLOAD_BYTES = 15 * 1024 * 1024;
+export const MIN_STT_PAYLOAD_BYTES = 1000;
+
+export const WEBM_EBML_MAGIC = [0x1a, 0x45, 0xdf, 0xa3] as const;
+
+export function isValidWebmHeader(buffer: unknown): boolean {
+  if (!buffer || typeof buffer !== "object") return false;
+  let bytes: Uint8Array;
+  if (buffer instanceof Uint8Array) {
+    bytes = buffer;
+  } else if (buffer instanceof ArrayBuffer) {
+    bytes = new Uint8Array(buffer);
+  } else if (ArrayBuffer.isView(buffer)) {
+    bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  } else {
+    return false;
+  }
+  if (bytes.byteLength < 4) return false;
+  return (
+    bytes[0] === WEBM_EBML_MAGIC[0] &&
+    bytes[1] === WEBM_EBML_MAGIC[1] &&
+    bytes[2] === WEBM_EBML_MAGIC[2] &&
+    bytes[3] === WEBM_EBML_MAGIC[3]
+  );
+}
+
+export const WEBM_OPUS_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+] as const;
+
+export function getBestSupportedMimeType(
+  isTypeSupportedFn?: (type: string) => boolean
+): string | null {
+  const checkFn =
+    isTypeSupportedFn ??
+    (typeof MediaRecorder !== "undefined" && typeof (MediaRecorder as any).isTypeSupported === "function"
+      ? (type: string) => (MediaRecorder as any).isTypeSupported(type)
+      : undefined);
+
+  if (!checkFn) return null;
+
+  for (const mime of WEBM_OPUS_MIME_CANDIDATES) {
+    try {
+      if (checkFn(mime)) {
+        return mime;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 /**
  * Pure audio utility functions (no DOM / Web Audio dependency).
  * Extracted for testability across main, renderer, and services.
