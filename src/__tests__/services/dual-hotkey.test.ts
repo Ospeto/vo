@@ -4,6 +4,15 @@ import { parseKeyBinding, formatKeyBinding, formatKeyDisplay } from "../../servi
 const registeredShortcuts = new Map<string, Function>();
 
 mock.module("electron", () => ({
+  app: { name: "vo", setName: () => {}, on: () => {}, whenReady: () => Promise.resolve(), requestSingleInstanceLock: () => true, dock: { hide: () => {} }, quit: () => {} },
+  BrowserWindow: class { webContents = { send: () => {}, on: () => {}, once: () => {} }; isDestroyed() { return false; } destroy() {} },
+  ipcMain: { on: () => {}, handle: () => {} },
+  clipboard: { readText: () => "", writeText: () => {}, readBuffer: () => Buffer.from(""), writeBuffer: () => true },
+  Tray: class { setToolTip() {} on() {} setImage() {} },
+  Menu: { buildFromTemplate: () => ({}) },
+  screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+  nativeImage: { createFromPath: () => ({ setTemplateImage: () => {} }) },
+  Notification: class { static isSupported() { return false; } show() {} },
   globalShortcut: {
     register: mock((shortcut: string, cb: Function) => {
       registeredShortcuts.set(shortcut, cb);

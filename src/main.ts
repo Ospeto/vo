@@ -5,6 +5,7 @@ import {
   getCaptureConfigPayload,
   applyWindowSecurityGuards,
 } from "./services/ipc-policy.js";
+import { RendererSession } from "./services/renderer-session.js";
 import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -25,6 +26,8 @@ import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
 import { DictationControlCoordinator } from "./services/dictation-control-coordinator.js";
+import { CaptureRendererController } from "./services/capture-renderer-controller.js";
+import { CaptureOrchestrator } from "./services/capture-orchestrator.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -42,7 +45,7 @@ const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const recordingLifecycle = new RecordingLifecycle();
-let dictationCoordinator: DictationControlCoordinator;
+export let dictationCoordinator: DictationControlCoordinator;
 
 dictationCoordinator = new DictationControlCoordinator(
   {
@@ -51,12 +54,11 @@ dictationCoordinator = new DictationControlCoordinator(
     isFnDown: () => hotkeyService?.isFnDown() ?? false,
     onStartRecording: async (mode) => {
       currentTriggerMode = mode;
-      await startRecordingFlow();
-      return true;
+      return await startRecordingFlow();
     },
     onStopRecording: async (ensureMinimumDuration) => {
       setState("stopping", "Stopping...");
-      captureWindow?.webContents.send(IPC.STOP_RECORDING, ensureMinimumDuration);
+      sendToCaptureWindow(IPC.STOP_RECORDING, ensureMinimumDuration);
       return true;
     },
     onCancelDictation: (reason) => {
@@ -74,11 +76,59 @@ const safePasteService = createMacSafePasteService(addon, clipboard as unknown a
 const pasteCoordinator = new PasteCoordinator((text, isCurrent, beforeWrite) => safePasteService.paste(text, isCurrent, beforeWrite));
 const selectionClipboardPort = getClipboardPort(createElectronClipboardAdapter(addon?.writeClipboardBuffer));
 
-let captureWindow: BrowserWindow | null = null;
+let isQuitting = false;
 let popoverWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let hotkeyService: HotkeyService | null = null;
 let currentConfig: PiVoiceConfig;
+
+export const captureOrchestrator = new CaptureOrchestrator<BrowserWindow, Electron.WebContents>(
+  {
+    createWindow: () => new BrowserWindow({
+      width: 200,
+      height: 200,
+      show: false,
+      focusable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
+        contextIsolation: true,
+        nodeIntegration: false,
+        backgroundThrottling: false,
+      },
+    }),
+    getWebContents: (win) => win.webContents,
+    isDestroyed: (win) => win.isDestroyed(),
+    destroyWindow: (win) => win.destroy(),
+    onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+    onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+    onClosed: (win, handler) => win.on("closed", handler),
+    sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+    setState: (state, msg, options) => setState(state, msg, options),
+    isQuitting: () => isQuitting,
+    applySecurityGuards: (win) => applyWindowSecurityGuards(win),
+    loadFile: (win) => win.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url))),
+    captureActiveSelection: (timeoutMs, options) => captureActiveSelection(timeoutMs, options),
+    capturePasteTarget: () => safePasteService.captureTarget(),
+    playStartChime: () => playStartChime(),
+    getInputGain: () => currentConfig?.inputGain ?? 1.0,
+    selectionClipboardPort,
+    getPopoverWindow: () => popoverWindow,
+    getHudWindow: () => hudWindow,
+    acknowledgeStart: (seqId, success) => dictationCoordinator.acknowledgeStart(seqId, success),
+  },
+  recordingLifecycle,
+  pasteCoordinator
+);
+
+export const captureController = captureOrchestrator.controller;
+export const captureRendererSession = captureOrchestrator.session;
+export function ensureCaptureWindow() {
+  return captureOrchestrator.ensureCaptureWindow();
+}
+export function sendToCaptureWindow(channel: string, ...args: any[]) {
+  return captureOrchestrator.sendToCaptureWindow(channel, ...args);
+}
 
 let currentState: AppState = "idle";
 let sequenceId = 0;
@@ -100,7 +150,6 @@ function isCurrentTranscription(sequenceId: number): boolean {
   return snapshot.sequenceId === sequenceId && snapshot.state === "transcribing";
 }
 
-let activeSTTAbortController: AbortController | null = null;
 let activeSelectionAbortController: AbortController | null = null;
 
 function abortSelectionCapture() {
@@ -108,9 +157,13 @@ function abortSelectionCapture() {
   activeSelectionAbortController = null;
 }
 
+export function abortActiveFlow(failedSender?: Electron.WebContents) {
+  captureOrchestrator.abortActiveFlow(failedSender);
+}
+
 function cancelDictation(reason: string = "Cancelled") {
-  abortSelectionCapture();
-  const currentSeq = recordingLifecycle.snapshot().sequenceId;
+  abortActiveFlow();
+
   if (currentState === "idle") {
     if (hudWindow && hudWindow.isVisible()) {
       hudWindow.hide();
@@ -120,16 +173,7 @@ function cancelDictation(reason: string = "Cancelled") {
 
   logger.info({ state: currentState, reason }, "Interrupting/cancelling active dictation flow");
 
-  if (activeSTTAbortController) {
-    activeSTTAbortController.abort();
-    activeSTTAbortController = null;
-  }
-
-  pasteCoordinator.invalidate();
-  recordingLifecycle.cancel();
-  restoreCapturedSelection(currentSeq);
-
-  captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
+  sendToCaptureWindow(IPC.CANCEL_RECORDING);
 
   playUndoChime();
   setState("idle", reason);
@@ -208,7 +252,7 @@ function setState(state: AppState, message?: string, options?: { usedPaidKey?: b
   }
 
   updateTrayIconForState(state);
-  captureWindow?.webContents.send(IPC.STATE_CHANGED, payload);
+  sendToCaptureWindow(IPC.STATE_CHANGED, payload);
   popoverWindow?.webContents.send(IPC.STATE_CHANGED, payload);
 }
 
@@ -281,23 +325,23 @@ function playSound(soundName?: string) {
 }
 
 function playStartChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundStart || "glass");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundStart || "glass");
 }
 
 function playToggleStopChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundEnd || "submarine");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundEnd || "submarine");
 }
 
 function playSuccessChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundEnd || "hero");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundEnd || "hero");
 }
 
 function playUndoChime() {
-  if (currentConfig.audioChimesEnabled === false) return;
-  playSound(currentConfig.chimeSoundEnd || "submarine");
+  if (currentConfig?.audioChimesEnabled === false) return;
+  playSound(currentConfig?.chimeSoundEnd || "submarine");
 }
 
 function isTerminalApp(appName: string): boolean {
@@ -395,35 +439,7 @@ function handleVoiceUndoCheck(text: string): boolean {
   return false;
 }
 
-function createCaptureWindow() {
-  captureWindow = new BrowserWindow({
-    width: 200,
-    height: 200,
-    show: false,
-    focusable: false,
-    skipTaskbar: true,
-    webPreferences: {
-      preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false,
-    },
-  });
 
-  applyWindowSecurityGuards(captureWindow);
-
-  captureWindow.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url)));
-
-  captureWindow.webContents.on("render-process-gone", (_event, details) => {
-    logger.error({ details }, "Capture renderer process crashed, auto-recovering...");
-    setState("idle", "Capture engine recovered");
-    createCaptureWindow();
-  });
-
-  captureWindow.on("closed", () => {
-    captureWindow = null;
-  });
-}
 
 function createPopoverWindow() {
   popoverWindow = new BrowserWindow({
@@ -637,12 +653,25 @@ function createTray() {
   });
 }
 
+
+
+export function enforceIpcSender(
+  event: IpcMainInvokeEvent | Electron.IpcMainEvent,
+  channel: string
+) {
+  const result = validateIpcSenderPolicy(event, channel, popoverWindow, captureController.getCaptureWindow(), hudWindow);
+  if (result.role === "capture" && !captureRendererSession.isAvailable(event.sender)) {
+    throw new Error(`Unauthorized IPC sender: capture session not available or stale for channel '${channel}'`);
+  }
+  return result;
+}
+
 function validateIpcSender(
   event: IpcMainInvokeEvent | Electron.IpcMainEvent,
   channel: string
 ): { role: RendererRole; window: BrowserWindow } | null {
   try {
-    return validateIpcSenderPolicy(event, channel, popoverWindow, captureWindow, hudWindow);
+    return enforceIpcSender(event, channel);
   } catch (err: any) {
     logger.warn({ channel, err: err?.message }, "Denied unauthorized IPC sender");
     return null;
@@ -677,8 +706,7 @@ function setupIpcHandlers() {
       return;
     }
 
-    const sttAbortController = new AbortController();
-    activeSTTAbortController = sttAbortController;
+    const sttAbortController = captureOrchestrator.createSTTAbortController();
 
     try {
       setState("transcribing", "Transcribing...", { usedPaidKey: activeUsedPaidKey });
@@ -788,8 +816,8 @@ function setupIpcHandlers() {
         }
       }, 6000);
     } finally {
-      if (activeSTTAbortController === sttAbortController) {
-        activeSTTAbortController = null;
+      if (captureOrchestrator.activeSTTAbortController === sttAbortController) {
+        captureOrchestrator.activeSTTAbortController = null;
       }
     }
   });
@@ -820,7 +848,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.GET_CONFIG, (event) => {
-    const sender = validateIpcSenderPolicy(event, IPC.GET_CONFIG, popoverWindow, captureWindow, hudWindow);
+    const sender = enforceIpcSender(event, IPC.GET_CONFIG);
     if (sender.role === "capture") {
       return getCaptureConfigPayload(currentConfig);
     }
@@ -828,7 +856,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.SAVE_CONFIG, async (event, patch) => {
-    validateIpcSenderPolicy(event, IPC.SAVE_CONFIG, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.SAVE_CONFIG);
     const validatedPatch = configPatchSchema.parse(patch);
     const previousDictationMode = currentConfig.dictationMode;
     const modeChanged = validatedPatch.dictationMode && validatedPatch.dictationMode !== previousDictationMode;
@@ -882,24 +910,24 @@ function setupIpcHandlers() {
       _resetGeminiClient();
     }
     if (validatedPatch.inputGain !== undefined) {
-      captureWindow?.webContents.send(IPC.GAIN_UPDATE, currentConfig.inputGain);
+      sendToCaptureWindow(IPC.GAIN_UPDATE, currentConfig.inputGain);
     }
     return getSanitizedSettingsConfig(currentConfig);
   });
 
   ipcMain.handle(IPC.GET_HISTORY, (event) => {
-    validateIpcSenderPolicy(event, IPC.GET_HISTORY, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.GET_HISTORY);
     return getHistoryEntries();
   });
 
   ipcMain.handle(IPC.CLEAR_HISTORY, (event) => {
-    validateIpcSenderPolicy(event, IPC.CLEAR_HISTORY, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.CLEAR_HISTORY);
     clearHistory();
     return [];
   });
 
   ipcMain.handle(IPC.TOGGLE_DICTATION, async (event) => {
-    validateIpcSenderPolicy(event, IPC.TOGGLE_DICTATION, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.TOGGLE_DICTATION);
     const res = await dictationCoordinator.handleUiCommand("toggle");
     if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
       setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
@@ -908,13 +936,13 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.PREVIEW_CHIME, (event, soundName: string) => {
-    validateIpcSenderPolicy(event, IPC.PREVIEW_CHIME, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.PREVIEW_CHIME);
     playSound(soundName);
     return { success: true };
   });
 
   ipcMain.handle(IPC.TEST_API_KEY, async (event, keyToTest?: string) => {
-    validateIpcSenderPolicy(event, IPC.TEST_API_KEY, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.TEST_API_KEY);
     const targetKey = keyToTest || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!targetKey) {
       return { success: false, error: "No API Key provided" };
@@ -943,7 +971,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.REGISTER_HOTKEY, async (event, newKeyStr: string) => {
-    validateIpcSenderPolicy(event, IPC.REGISTER_HOTKEY, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.REGISTER_HOTKEY);
     const registrationError = hotkeyRegistrationError();
     if (registrationError) return { success: false, error: registrationError };
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
@@ -969,7 +997,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle(IPC.REGISTER_EDIT_HOTKEY, async (event, newKeyStr: string) => {
-    validateIpcSenderPolicy(event, IPC.REGISTER_EDIT_HOTKEY, popoverWindow, captureWindow, hudWindow);
+    enforceIpcSender(event, IPC.REGISTER_EDIT_HOTKEY);
     const registrationError = hotkeyRegistrationError();
     if (registrationError) return { success: false, error: registrationError };
     if (!hotkeyService) return { success: false, error: "Hotkey service not initialized" };
@@ -1002,85 +1030,9 @@ function setupIpcHandlers() {
 let lastHotkeyDownTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
 
-async function startRecordingFlow() {
-  const reqRes = recordingLifecycle.snapshot();
-  if (reqRes.state !== "starting") {
-    logger.warn({ state: reqRes.state }, "Cannot start recording flow");
-    return;
-  }
-
-  pasteCoordinator.invalidate();
-  safePasteService.captureTarget();
-  setState("starting", "Starting...");
-  playStartChime();
-
-  // Start pre-roll audio capture immediately in starting state to prevent first-phoneme clipping
-  captureWindow?.webContents.send(IPC.START_RECORDING, "webm", currentConfig.inputGain, reqRes.sequenceId);
-
-  const selectionAbortController = new AbortController();
-  activeSelectionAbortController = selectionAbortController;
-  let selection: Awaited<ReturnType<typeof captureActiveSelection>>;
-  try {
-    selection = await captureActiveSelection(350, { signal: selectionAbortController.signal, port: selectionClipboardPort ?? undefined });
-  } catch (err: any) {
-    if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
-    const snapshot = recordingLifecycle.snapshot();
-    if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
-    pasteCoordinator.invalidate();
-    recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
-    selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-    captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
-    logger.error({ err: err?.message || String(err) }, "Selection capture failed");
-    setState("error", "Selection capture failed");
-    return;
-  }
-  if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
-  const lifecycleSnapshot = recordingLifecycle.snapshot();
-  if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
-    captureWindow?.webContents.send(IPC.CANCEL_RECORDING);
-    if (selection.hasSelection) {
-      const ownershipSnapshot = selectionClipboardPort
-        ? selectionClipboardPort.snapshot()
-        : { formats: [], text: selection.selectedText };
-      selectionOwnershipManager.setOwnership({
-        sequenceId: reqRes.sequenceId,
-        previousClipboard: selection.previousClipboard,
-        hasSelection: true,
-        selectedText: selection.selectedText,
-        ownershipSnapshot,
-      });
-      restoreCapturedSelection(reqRes.sequenceId);
-    } else {
-      selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-    }
-    return;
-  }
-
-  if (selection.hasSelection) {
-    const ownershipSnapshot = selectionClipboardPort
-      ? selectionClipboardPort.snapshot()
-      : { formats: [], text: selection.selectedText };
-    selectionOwnershipManager.setOwnership({
-      sequenceId: reqRes.sequenceId,
-      previousClipboard: selection.previousClipboard,
-      hasSelection: true,
-      selectedText: selection.selectedText,
-      ownershipSnapshot,
-    });
-  } else {
-    selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-  }
-
-  if (currentTriggerMode === "edit" && selection.hasSelection) {
-    activeSelectionText = selection.selectedText;
-  } else {
-    // Pure Dictation mode: clear activeSelectionText for STT prompt so Gemini does pure dictation (and overwrites selection)
-    activeSelectionText = "";
-  }
-
-  logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
-  setState("recording", "Recording...");
-  await dictationCoordinator.acknowledgeStart(reqRes.sequenceId, true);
+export async function startRecordingFlow(): Promise<boolean> {
+  captureOrchestrator.currentTriggerMode = currentTriggerMode;
+  return captureOrchestrator.startRecordingFlow();
 }
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
@@ -1164,6 +1116,7 @@ if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
 }
 
 app.whenReady().then(async () => {
+  if (process.env.NODE_ENV === "test") return;
   if (!gotSingleInstanceLock && !process.argv.includes("--headless")) return;
 
   if (process.argv.includes("--headless")) {
@@ -1212,7 +1165,7 @@ app.whenReady().then(async () => {
 
   dictationCoordinator.setDictationMode(currentConfig.dictationMode);
 
-  createCaptureWindow();
+  ensureCaptureWindow();
   createPopoverWindow();
   createHudWindow();
   createTray();
@@ -1247,5 +1200,6 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {});
 app.on("before-quit", () => {
+  isQuitting = true;
   if (gotSingleInstanceLock) gracefulShutdown();
 });
