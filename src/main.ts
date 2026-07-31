@@ -26,6 +26,7 @@ import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
 import { DictationControlCoordinator } from "./services/dictation-control-coordinator.js";
+import { CaptureRendererController } from "./services/capture-renderer-controller.js";
 import logger from "./services/logger.js";
 
 // Global process exception handlers
@@ -52,8 +53,7 @@ dictationCoordinator = new DictationControlCoordinator(
     isFnDown: () => hotkeyService?.isFnDown() ?? false,
     onStartRecording: async (mode) => {
       currentTriggerMode = mode;
-      await startRecordingFlow();
-      return true;
+      return await startRecordingFlow();
     },
     onStopRecording: async (ensureMinimumDuration) => {
       setState("stopping", "Stopping...");
@@ -75,14 +75,47 @@ const safePasteService = createMacSafePasteService(addon, clipboard as unknown a
 const pasteCoordinator = new PasteCoordinator((text, isCurrent, beforeWrite) => safePasteService.paste(text, isCurrent, beforeWrite));
 const selectionClipboardPort = getClipboardPort(createElectronClipboardAdapter(addon?.writeClipboardBuffer));
 
-export const captureRendererSession = new RendererSession<Electron.WebContents>();
-let captureWindow: BrowserWindow | null = null;
-let pendingCaptureWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let popoverWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let hotkeyService: HotkeyService | null = null;
 let currentConfig: PiVoiceConfig;
+
+export const captureController = new CaptureRendererController<Electron.WebContents, BrowserWindow>({
+  createWindow: () => new BrowserWindow({
+    width: 200,
+    height: 200,
+    show: false,
+    focusable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  }),
+  getWebContents: (win) => win.webContents,
+  isDestroyed: (win) => win.isDestroyed(),
+  destroyWindow: (win) => win.destroy(),
+  onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+  onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+  onClosed: (win, handler) => win.on("closed", handler),
+  sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+  abortActiveFlow: (sender) => abortActiveFlow(sender),
+  setState: (state, msg) => setState(state, msg),
+  isQuitting: () => isQuitting,
+  applySecurityGuards: (win) => applyWindowSecurityGuards(win),
+  loadFile: (win) => win.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url))),
+});
+
+export const captureRendererSession = captureController.session;
+export function ensureCaptureWindow() {
+  return captureController.ensureCaptureWindow();
+}
+export function sendToCaptureWindow(channel: string, ...args: any[]) {
+  return captureController.sendToCaptureWindow(channel, ...args);
+}
 
 let currentState: AppState = "idle";
 let sequenceId = 0;
@@ -408,78 +441,7 @@ function handleVoiceUndoCheck(text: string): boolean {
   return false;
 }
 
-function ensureCaptureWindow() {
-  if (captureWindow || pendingCaptureWindow || isQuitting) return;
 
-  const win = new BrowserWindow({
-    width: 200,
-    height: 200,
-    show: false,
-    focusable: false,
-    skipTaskbar: true,
-    webPreferences: {
-      preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false,
-    },
-  });
-
-  pendingCaptureWindow = win;
-  const sender = win.webContents;
-  const generation = captureRendererSession.attach(sender);
-
-  applyWindowSecurityGuards(win);
-
-  win.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url)));
-
-  sender.once("did-finish-load", () => {
-    if (win.isDestroyed()) return;
-    if (!captureRendererSession.acknowledgeReady(sender, generation)) return;
-    captureWindow = win;
-    pendingCaptureWindow = null;
-  });
-
-  sender.on("render-process-gone", (_event, details) => {
-    logger.error({ details }, "Capture renderer process crashed, auto-recovering...");
-
-    if (captureWindow === win) {
-      captureWindow = null;
-    }
-    if (pendingCaptureWindow === win) {
-      pendingCaptureWindow = null;
-    }
-
-    abortActiveFlow(sender);
-
-    if (!win.isDestroyed()) {
-      win.destroy();
-    }
-
-    if (!isQuitting) {
-      setState("idle", "Capture engine recovered");
-      ensureCaptureWindow();
-    }
-  });
-
-  win.on("closed", () => {
-    if (captureWindow !== win && pendingCaptureWindow !== win) return;
-
-    if (captureWindow === win) {
-      captureWindow = null;
-    }
-    if (pendingCaptureWindow === win) {
-      pendingCaptureWindow = null;
-    }
-
-    abortActiveFlow(sender);
-
-    if (!isQuitting) {
-      setState("idle", "Capture engine recovered");
-      ensureCaptureWindow();
-    }
-  });
-}
 
 function createPopoverWindow() {
   popoverWindow = new BrowserWindow({
@@ -693,17 +655,13 @@ function createTray() {
   });
 }
 
-function sendToCaptureWindow(channel: string, ...args: any[]) {
-  if (captureWindow && captureRendererSession.isAvailable(captureWindow.webContents)) {
-    captureWindow.webContents.send(channel, ...args);
-  }
-}
+
 
 function enforceIpcSender(
   event: IpcMainInvokeEvent | Electron.IpcMainEvent,
   channel: string
 ) {
-  const result = validateIpcSenderPolicy(event, channel, popoverWindow, captureWindow, hudWindow);
+  const result = validateIpcSenderPolicy(event, channel, popoverWindow, captureController.getCaptureWindow(), hudWindow);
   if (result.role === "capture" && !captureRendererSession.isAvailable(event.sender)) {
     throw new Error(`Unauthorized IPC sender: capture session not available or stale for channel '${channel}'`);
   }
@@ -1075,22 +1033,22 @@ function setupIpcHandlers() {
 let lastHotkeyDownTime = 0;
 let currentTriggerMode: "dictate" | "edit" = "dictate";
 
-async function startRecordingFlow() {
+async function startRecordingFlow(): Promise<boolean> {
   const reqRes = recordingLifecycle.snapshot();
   if (reqRes.state !== "starting") {
     logger.warn({ state: reqRes.state }, "Cannot start recording flow");
-    return;
+    return false;
   }
 
-  if (!captureWindow || !captureRendererSession.isAvailable(captureWindow.webContents)) {
+  if (!captureController.isReady()) {
     logger.warn("Cannot start recording: capture window is not ready");
     pasteCoordinator.invalidate();
     recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
     setState("idle", "Capture engine not ready");
-    return;
+    return false;
   }
 
-  const targetSender = captureWindow.webContents;
+  const targetSender = captureController.getCaptureWindow()?.webContents;
 
   pasteCoordinator.invalidate();
   safePasteService.captureTarget();
@@ -1108,28 +1066,28 @@ async function startRecordingFlow() {
   } catch (err: any) {
     if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
     const snapshot = recordingLifecycle.snapshot();
-    if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return;
+    if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return false;
     pasteCoordinator.invalidate();
     recordingLifecycle.acknowledgeStart(reqRes.sequenceId, false);
     selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
     if (
-      captureWindow &&
-      captureWindow.webContents === targetSender &&
+      captureController.getCaptureWindow() &&
+      captureController.getCaptureWindow()?.webContents === targetSender &&
       captureRendererSession.isAvailable(targetSender)
     ) {
       sendToCaptureWindow(IPC.CANCEL_RECORDING);
     }
     logger.error({ err: err?.message || String(err) }, "Selection capture failed");
     setState("error", "Selection capture failed");
-    return;
+    return false;
   }
   if (activeSelectionAbortController === selectionAbortController) activeSelectionAbortController = null;
   const lifecycleSnapshot = recordingLifecycle.snapshot();
   if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
     if (
       lifecycleSnapshot.sequenceId === reqRes.sequenceId &&
-      captureWindow &&
-      captureWindow.webContents === targetSender &&
+      captureController.getCaptureWindow() &&
+      captureController.getCaptureWindow()?.webContents === targetSender &&
       captureRendererSession.isAvailable(targetSender)
     ) {
       sendToCaptureWindow(IPC.CANCEL_RECORDING);
@@ -1149,7 +1107,7 @@ async function startRecordingFlow() {
     } else {
       selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
     }
-    return;
+    return false;
   }
 
   if (selection.hasSelection) {
@@ -1177,6 +1135,7 @@ async function startRecordingFlow() {
   logger.info({ triggerMode: currentTriggerMode, hasSelection: selection.hasSelection, selectionLength: activeSelectionText.length }, "STARTING recording flow");
   setState("recording", "Recording...");
   await dictationCoordinator.acknowledgeStart(reqRes.sequenceId, true);
+  return true;
 }
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {

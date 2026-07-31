@@ -1,6 +1,8 @@
 import { test, expect, describe, mock } from "bun:test";
+import { CaptureRendererController } from "../../services/capture-renderer-controller.js";
 import { RendererSession } from "../../services/renderer-session.js";
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
+import { selectionOwnershipManager } from "../../services/selection-service.js";
 import { IPC } from "../../shared/types.js";
 
 function createMockWebContents() {
@@ -51,263 +53,226 @@ function createMockWindow() {
   };
 }
 
-describe("Capture Recovery Orchestration & Production Session Rules", () => {
-  test("Closed-without-crash recovers capture window cleanly", () => {
+describe("CaptureRendererController & Production Recovery Suite", () => {
+  test("Closed-without-crash recovers capture window cleanly using CaptureRendererController", () => {
     const lifecycle = new RecordingLifecycle();
-    const session = new RendererSession<any>();
-
-    let captureWindow: any = null;
-    let pendingCaptureWindow: any = null;
     let createdCount = 0;
-    let isQuitting = false;
+    let abortCount = 0;
+    let stateHistory: Array<{ state: string; msg?: string }> = [];
 
-    function abortActiveFlow(sender: any) {
-      lifecycle.cancel();
-      if (sender) {
-        session.detach(sender);
-      }
-    }
-
-    function ensureCaptureWindow() {
-      if (captureWindow || pendingCaptureWindow || isQuitting) return;
-      createdCount++;
-      const win = createMockWindow();
-      pendingCaptureWindow = win;
-
-      const sender = win.webContents;
-      const gen = session.attach(sender);
-
-      sender.once("did-finish-load", () => {
-        if (win.isDestroyed()) return;
-        if (!session.acknowledgeReady(sender, gen)) return;
-        captureWindow = win;
-        pendingCaptureWindow = null;
-      });
-
-      sender.on("render-process-gone", () => {
-        if (captureWindow === win) captureWindow = null;
-        if (pendingCaptureWindow === win) pendingCaptureWindow = null;
-        abortActiveFlow(sender);
-        if (!win.isDestroyed()) win.destroy();
-        if (!isQuitting) ensureCaptureWindow();
-      });
-
-      win.on("closed", () => {
-        if (captureWindow !== win && pendingCaptureWindow !== win) return;
-        if (captureWindow === win) captureWindow = null;
-        if (pendingCaptureWindow === win) pendingCaptureWindow = null;
-        abortActiveFlow(sender);
-        if (!isQuitting) ensureCaptureWindow();
-      });
-    }
+    const controller = new CaptureRendererController({
+      createWindow: () => {
+        createdCount++;
+        return createMockWindow();
+      },
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      abortActiveFlow: (sender) => {
+        abortCount++;
+        lifecycle.cancel();
+        if (sender) controller.session.detach(sender);
+      },
+      setState: (state, msg) => stateHistory.push({ state, msg }),
+      isQuitting: () => false,
+    });
 
     // 1. Initial creation
-    ensureCaptureWindow();
+    controller.ensureCaptureWindow();
     expect(createdCount).toBe(1);
-    expect(pendingCaptureWindow).not.toBeNull();
-    expect(captureWindow).toBeNull();
+    expect(controller.getPendingCaptureWindow()).not.toBeNull();
+    expect(controller.getCaptureWindow()).toBeNull();
+    expect(controller.isReady()).toBe(false);
 
     // Acknowledge ready
-    pendingCaptureWindow.webContents.emit("did-finish-load");
-    expect(captureWindow).not.toBeNull();
-    expect(pendingCaptureWindow).toBeNull();
-    const firstSender = captureWindow.webContents;
-    expect(session.isAvailable(firstSender)).toBe(true);
+    const win1 = controller.getPendingCaptureWindow()!;
+    win1.webContents.emit("did-finish-load");
+    expect(controller.getCaptureWindow()).toBe(win1);
+    expect(controller.getPendingCaptureWindow()).toBeNull();
+    expect(controller.isReady()).toBe(true);
 
     // 2. Start recording
     lifecycle.requestStart();
     expect(lifecycle.snapshot().state).toBe("starting");
 
-    // 3. Emit closed WITHOUT render-process-gone
-    const winToClose = captureWindow;
-    winToClose.emit("closed");
+    // 3. Emit closed WITHOUT render-process-gone on win1
+    win1.emit("closed");
 
-    // Lifecycle cancelled, old session detached
+    // Verify recovery triggered
+    expect(abortCount).toBe(1);
     expect(lifecycle.snapshot().state).toBe("idle");
-    expect(session.isAvailable(firstSender)).toBe(false);
-
-    // Replacement created
+    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(true);
     expect(createdCount).toBe(2);
-    expect(pendingCaptureWindow).not.toBeNull();
 
-    // Replacement becomes ready
-    const replacementWin = pendingCaptureWindow;
-    replacementWin.webContents.emit("did-finish-load");
-    expect(captureWindow).toBe(replacementWin);
-    expect(session.isAvailable(replacementWin.webContents)).toBe(true);
+    // New window ready
+    const win2 = controller.getPendingCaptureWindow()!;
+    win2.webContents.emit("did-finish-load");
+    expect(controller.getCaptureWindow()).toBe(win2);
+    expect(controller.isReady()).toBe(true);
   });
 
-  test("Stale closed event does not clear replacement window or trigger double-recovery", () => {
-    const session = new RendererSession<any>();
-    let captureWindow: any = null;
-    let pendingCaptureWindow: any = null;
+  test("Identity gate prevents duplicate/stale loss events from affecting newer lifecycle or clipboard", () => {
+    const lifecycle = new RecordingLifecycle();
     let createdCount = 0;
+    let abortCount = 0;
 
-    function ensureCaptureWindow() {
-      if (captureWindow || pendingCaptureWindow) return;
-      createdCount++;
-      const win = createMockWindow();
-      pendingCaptureWindow = win;
-      const sender = win.webContents;
-      const gen = session.attach(sender);
+    const controller = new CaptureRendererController({
+      createWindow: () => {
+        createdCount++;
+        return createMockWindow();
+      },
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      abortActiveFlow: (sender) => {
+        abortCount++;
+        lifecycle.cancel();
+        if (sender) controller.session.detach(sender);
+      },
+      setState: () => {},
+      isQuitting: () => false,
+    });
 
-      sender.once("did-finish-load", () => {
-        if (win.isDestroyed()) return;
-        if (!session.acknowledgeReady(sender, gen)) return;
-        captureWindow = win;
-        pendingCaptureWindow = null;
-      });
+    controller.ensureCaptureWindow();
+    const win1 = controller.getPendingCaptureWindow()!;
+    win1.webContents.emit("did-finish-load");
+    expect(controller.getCaptureWindow()).toBe(win1);
 
-      sender.on("render-process-gone", () => {
-        if (captureWindow === win) captureWindow = null;
-        if (pendingCaptureWindow === win) pendingCaptureWindow = null;
-        session.detach(sender);
-        if (!win.isDestroyed()) win.destroy();
-        ensureCaptureWindow();
-      });
-
-      win.on("closed", () => {
-        if (captureWindow !== win && pendingCaptureWindow !== win) return;
-        if (captureWindow === win) captureWindow = null;
-        if (pendingCaptureWindow === win) pendingCaptureWindow = null;
-        session.detach(sender);
-        ensureCaptureWindow();
-      });
-    }
-
-    ensureCaptureWindow();
-    const oldWin = pendingCaptureWindow;
-    oldWin.webContents.emit("did-finish-load");
-    expect(captureWindow).toBe(oldWin);
-
-    // Old window crashes -> process-gone triggers recovery
-    oldWin.webContents.emit("render-process-gone");
+    // Crash win1 -> recovers win2
+    win1.webContents.emit("render-process-gone", {}, { reason: "crashed" });
+    expect(abortCount).toBe(1);
     expect(createdCount).toBe(2);
-    const replacementWin = pendingCaptureWindow;
-    replacementWin.webContents.emit("did-finish-load");
-    expect(captureWindow).toBe(replacementWin);
 
-    // Now old window emits closed delayed
-    oldWin.emit("closed");
+    const win2 = controller.getPendingCaptureWindow()!;
+    win2.webContents.emit("did-finish-load");
+    expect(controller.getCaptureWindow()).toBe(win2);
+    expect(controller.isReady()).toBe(true);
 
-    // Exact instance check prevents clearing replacement window
-    expect(captureWindow).toBe(replacementWin);
-    expect(createdCount).toBe(2);
-  });
-
-  test("Stale cancellation race protection prevents cancelling newer session on replacement window", async () => {
-    const lifecycle = new RecordingLifecycle();
-    const session = new RendererSession<any>();
-
-    let captureWindow: any = null;
-
-    function sendToCaptureWindow(channel: string, ...args: any[]) {
-      if (captureWindow && session.isAvailable(captureWindow.webContents)) {
-        captureWindow.webContents.send(channel, ...args);
-      }
-    }
-
-    // Win 1
-    const win1 = createMockWindow();
-    session.attach(win1.webContents);
-    session.acknowledgeReady(win1.webContents, 1);
-    captureWindow = win1;
-
-    // Start flow for sequence 1
-    const start1 = lifecycle.requestStart();
-    const seq1 = start1.sequenceId;
-    let targetSender1 = captureWindow.webContents;
-
-    // Win 1 crashes during async selection capture
-    session.detach(win1.webContents);
-
-    // Replacement Win 2 is attached and ready
-    const win2 = createMockWindow();
-    const gen2 = session.attach(win2.webContents);
-    session.acknowledgeReady(win2.webContents, gen2);
-    captureWindow = win2;
-
-    // Sequence 2 starts on win 2
-    lifecycle.cancel(); // seq 1 cancelled/reset
-    const start2 = lifecycle.requestStart();
-    const seq2 = start2.sequenceId;
-    sendToCaptureWindow(IPC.START_RECORDING, "webm", 1.0, seq2);
-
-    // Now async selection capture for seq 1 finishes (stale)
-    const lifecycleSnapshot = lifecycle.snapshot();
-    if (
-      lifecycleSnapshot.sequenceId === seq1 &&
-      captureWindow &&
-      captureWindow.webContents === targetSender1 &&
-      session.isAvailable(targetSender1)
-    ) {
-      sendToCaptureWindow(IPC.CANCEL_RECORDING);
-    }
-
-    // Win 2 should NOT receive CANCEL_RECORDING from seq 1!
-    const win2Messages = win2.webContents.sentMessages;
-    expect(win2Messages.some((m) => m.channel === IPC.CANCEL_RECORDING)).toBe(false);
-    expect(win2Messages.some((m) => m.channel === IPC.START_RECORDING && m.args[2] === seq2)).toBe(true);
-  });
-
-  test("Session-bound IPC routing rejects sends when sender is unavailable", () => {
-    const session = new RendererSession<any>();
-    let captureWindow: any = null;
-    const sent: Array<{ channel: string; args: any[] }> = [];
-
-    function sendToCaptureWindow(channel: string, ...args: any[]) {
-      if (captureWindow && session.isAvailable(captureWindow.webContents)) {
-        captureWindow.webContents.send(channel, ...args);
-        sent.push({ channel, args });
-      }
-    }
-
-    const win = createMockWindow();
-    captureWindow = win;
-
-    // Attached but not acknowledged ready
-    session.attach(win.webContents);
-    sendToCaptureWindow(IPC.STATE_CHANGED, { state: "recording" });
-    sendToCaptureWindow(IPC.GAIN_UPDATE, 1.5);
-    expect(sent.length).toBe(0);
-
-    // Acknowledged ready
-    session.acknowledgeReady(win.webContents, 1);
-    sendToCaptureWindow(IPC.STATE_CHANGED, { state: "recording" });
-    sendToCaptureWindow(IPC.GAIN_UPDATE, 1.5);
-    expect(sent.length).toBe(2);
-
-    // Detached
-    session.detach(win.webContents);
-    sendToCaptureWindow(IPC.CANCEL_RECORDING);
-    expect(sent.length).toBe(2); // no new message sent
-  });
-
-  test("Next-start success after capture recovery", () => {
-    const lifecycle = new RecordingLifecycle();
-    const session = new RendererSession<any>();
-    let captureWindow: any = null;
-
-    const win = createMockWindow();
-    session.attach(win.webContents);
-    session.acknowledgeReady(win.webContents, 1);
-    captureWindow = win;
-
-    // Fail attempt 1 due to crash
+    // Sequence 2 starts on win2
     lifecycle.requestStart();
-    session.detach(win.webContents);
-    lifecycle.cancel();
-
-    // Recover with win2
-    const win2 = createMockWindow();
-    const gen2 = session.attach(win2.webContents);
-    session.acknowledgeReady(win2.webContents, gen2);
-    captureWindow = win2;
-
-    // Attempt 2 succeeds
-    const start2 = lifecycle.requestStart();
-    expect(start2.accepted).toBe(true);
     expect(lifecycle.snapshot().state).toBe("starting");
-    expect(session.isAvailable(captureWindow.webContents)).toBe(true);
+
+    // NOW late duplicate render-process-gone AND closed events arrive for win1
+    win1.webContents.emit("render-process-gone", {}, { reason: "crashed" });
+    win1.emit("closed");
+
+    // Identity check blocked global cleanup, preserved sequence 2, and did not create win3
+    expect(abortCount).toBe(1); // abortCount stayed 1!
+    expect(createdCount).toBe(2); // createdCount stayed 2!
+    expect(controller.getCaptureWindow()).toBe(win2);
+    expect(lifecycle.snapshot().state).toBe("starting");
+    expect(controller.isReady()).toBe(true);
+  });
+
+  test("Pre-readiness start returns failure when no ready capture renderer exists", () => {
+    const lifecycle = new RecordingLifecycle();
+    let stateChanged = false;
+
+    const controller = new CaptureRendererController({
+      createWindow: () => createMockWindow(),
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      abortActiveFlow: () => {},
+      setState: (state) => {
+        if (state === "idle") stateChanged = true;
+      },
+      isQuitting: () => false,
+    });
+
+    // Window created but NOT acknowledged ready yet
+    controller.ensureCaptureWindow();
+    expect(controller.isReady()).toBe(false);
+
+    // Simulate start flow
+    const reqRes = lifecycle.requestStart();
+    expect(reqRes.accepted).toBe(true);
+
+    function startFlowSimulation(): boolean {
+      if (!controller.isReady()) {
+        lifecycle.acknowledgeStart(reqRes.sequenceId, false);
+        stateChanged = true;
+        return false;
+      }
+      return true;
+    }
+
+    const res = startFlowSimulation();
+    expect(res).toBe(false);
+    expect(stateChanged).toBe(true);
+    expect(lifecycle.snapshot().state).toBe("error");
+  });
+
+  test("Destroyed-window send handling guards against IPC emission", () => {
+    const controller = new CaptureRendererController({
+      createWindow: () => createMockWindow(),
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      abortActiveFlow: () => {},
+      setState: () => {},
+      isQuitting: () => false,
+    });
+
+    controller.ensureCaptureWindow();
+    const win = controller.getPendingCaptureWindow()!;
+    win.webContents.emit("did-finish-load");
+    expect(controller.isReady()).toBe(true);
+
+    // Now win is destroyed
+    win.destroy();
+
+    // Sending IPC should return false cleanly without throwing
+    const sendRes = controller.sendToCaptureWindow(IPC.STATE_CHANGED, { state: "recording" });
+    expect(sendRes).toBe(false);
+  });
+
+  test("Non-cooperative STT error and clipboard ownership remediation", () => {
+    const seqId = 999;
+    const testText = "Original Clipboard Contents";
+
+    // Set ownership
+    selectionOwnershipManager.setOwnership({
+      sequenceId: seqId,
+      previousClipboard: testText,
+      hasSelection: true,
+      selectedText: "Selected Text",
+      ownershipSnapshot: { formats: [{ format: "text/plain", data: Buffer.from(testText) }], text: testText },
+    });
+
+    // Mock clipboard port
+    let restoredText = "";
+    const mockPort = {
+      writeText: (t: string) => {
+        restoredText = t;
+      },
+      snapshot: () => ({ formats: [{ format: "text/plain", data: Buffer.from(testText) }], text: testText }),
+    };
+
+    // Non-cooperative STT failure happens -> restore selection
+    const restored = selectionOwnershipManager.restoreCapturedSelection(seqId, mockPort as any);
+
+    expect(restored).toBe(true);
+    expect(restoredText).toBe(testText);
+
+    // Ownership cleared
+    selectionOwnershipManager.clearOwnership(seqId);
+    expect(selectionOwnershipManager.restoreCapturedSelection(seqId, mockPort as any)).toBe(false);
   });
 });
