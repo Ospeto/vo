@@ -43,8 +43,8 @@ const {
 
 const cleanupDirs: string[] = [];
 
-afterEach(() => {
-  stopDaemonServer();
+afterEach(async () => {
+  await stopDaemonServer();
   for (const dir of cleanupDirs) {
     try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
@@ -52,13 +52,13 @@ afterEach(() => {
 });
 
 describe("daemon-ipc", () => {
-  test("startDaemonServer returns socket path", () => {
+  test("startDaemonServer returns socket path", async () => {
     const dir = makeTestDir();
     cleanupDirs.push(dir);
     currentTestSocketPath = join(dir, "daemon.sock");
 
     const handler = () => ({ ok: true });
-    const socketPath = startDaemonServer(handler);
+    const socketPath = await startDaemonServer(handler);
     expect(socketPath).toContain("daemon.sock");
   });
 
@@ -74,7 +74,7 @@ describe("daemon-ipc", () => {
       return { ok: false, error: "unknown" };
     };
 
-    const socketPath = startDaemonServer(handler);
+    const socketPath = await startDaemonServer(handler);
 
     // Wait for the server to be ready
     await new Promise((r) => setTimeout(r, 100));
@@ -94,7 +94,7 @@ describe("daemon-ipc", () => {
       return { ok: false, error: `Unknown: ${cmd}` };
     };
 
-    const socketPath = startDaemonServer(handler);
+    const socketPath = await startDaemonServer(handler);
     await new Promise((r) => setTimeout(r, 100));
 
     const res = await sendCommand("stop", socketPath);
@@ -116,7 +116,7 @@ describe("daemon-ipc", () => {
     currentTestSocketPath = join(dir, "daemon.sock");
 
     const handler = () => ({ ok: true });
-    const socketPath = startDaemonServer(handler);
+    const socketPath = await startDaemonServer(handler);
     await new Promise((r) => setTimeout(r, 100));
 
     stopDaemonServer();
@@ -125,7 +125,7 @@ describe("daemon-ipc", () => {
     expect(existsSync(socketPath)).toBe(false);
   });
 
-  test("startDaemonServer handles stale socket file", () => {
+  test("startDaemonServer handles stale socket file", async () => {
     const dir = makeTestDir();
     cleanupDirs.push(dir);
     const sockPath = join(dir, "daemon.sock");
@@ -135,7 +135,7 @@ describe("daemon-ipc", () => {
     writeFileSync(sockPath, "stale");
 
     const handler = () => ({ ok: true });
-    const resultPath = startDaemonServer(handler);
+    const resultPath = await startDaemonServer(handler);
     expect(resultPath).toBe(sockPath);
   });
 
@@ -148,7 +148,7 @@ describe("daemon-ipc", () => {
       throw new Error("handler failed");
     };
 
-    const socketPath = startDaemonServer(handler);
+    const socketPath = await startDaemonServer(handler);
     await new Promise((r) => setTimeout(r, 100));
 
     const res = await sendCommand("status", socketPath);
@@ -166,7 +166,7 @@ describe("daemon-ipc", () => {
       return { ok: true, command: cmd };
     };
 
-    const socketPath = startDaemonServer(handler);
+    const socketPath = await startDaemonServer(handler);
     await new Promise((r) => setTimeout(r, 100));
 
     const res = await sendCommand("status", socketPath);

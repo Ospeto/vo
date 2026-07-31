@@ -1,4 +1,5 @@
 import { RendererSession } from "./renderer-session.js";
+import { IPC } from "../shared/types.js";
 import logger from "./logger.js";
 
 export interface CaptureRendererControllerOptions<TSender, TWindow> {
@@ -150,16 +151,35 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
 
   async teardownCaptureWindow(_timeoutMs: number = 2000): Promise<void> {
     const win = this.captureWindow;
+    const pendingWin = this.pendingCaptureWindow;
+
     if (win && !this.options.isDestroyed(win)) {
-      if (this.session.isAvailable(win.webContents)) {
-        try {
-          this.options.sendIpc(win.webContents, IPC.CANCEL_RECORDING);
-        } catch {}
-        try {
-          this.session.teardown(win.webContents);
-        } catch {}
-      }
+      try {
+        const contents = this.options.getWebContents(win);
+        if (contents) {
+          if (this.session.isAvailable(contents)) {
+            try {
+              this.options.sendIpc(contents, IPC.CANCEL_RECORDING);
+            } catch {}
+          }
+          try {
+            this.session.detach(contents);
+          } catch {}
+        }
+      } catch {}
     }
+
+    if (pendingWin && pendingWin !== win && !this.options.isDestroyed(pendingWin)) {
+      try {
+        const pendingContents = this.options.getWebContents(pendingWin);
+        if (pendingContents) {
+          try {
+            this.session.detach(pendingContents);
+          } catch {}
+        }
+      } catch {}
+    }
+
     this.destroyCaptureWindow();
   }
 }

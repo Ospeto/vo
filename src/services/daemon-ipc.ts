@@ -40,7 +40,7 @@ let server: Server | null = null;
  * Start the daemon IPC server on a Unix domain socket.
  * Returns the socket path being listened on.
  */
-export function startDaemonServer(handler: CommandHandler): string {
+export function startDaemonServer(handler: CommandHandler): Promise<string> {
   const socketPath = getSocketPath();
 
   // Clean up stale socket file
@@ -78,16 +78,23 @@ export function startDaemonServer(handler: CommandHandler): string {
     });
   });
 
-  server.listen(socketPath);
-  logger.info({ socketPath }, "DaemonIPC listening");
-  return socketPath;
+  return new Promise<string>((resolve, reject) => {
+    server!.once("listening", () => {
+      logger.info({ socketPath }, "DaemonIPC listening");
+      resolve(socketPath);
+    });
+    server!.once("error", (err) => {
+      reject(err);
+    });
+    server!.listen(socketPath);
+  });
 }
 
 /**
  * Stop the daemon IPC server and remove the socket file.
  * Unlinks the socket file immediately and returns a bounded promise for server close.
  */
-export function stopDaemonServer(timeoutMs: number = 1000): Promise<void> | void {
+export function stopDaemonServer(timeoutMs: number = 1000): Promise<void> {
   const activeServer = server;
   server = null;
 
@@ -100,29 +107,31 @@ export function stopDaemonServer(timeoutMs: number = 1000): Promise<void> | void
     }
   }
 
-  if (activeServer) {
-    const closePromise = new Promise<void>((resolve) => {
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      let closed = false;
-      const done = () => {
-        if (closed) return;
-        closed = true;
-        if (timer) clearTimeout(timer);
-        resolve();
-      };
-
-      timer = setTimeout(done, timeoutMs);
-      try {
-        activeServer.close(() => done());
-      } catch {
-        done();
-      }
-    });
+  if (!activeServer) {
     logger.info("DaemonIPC server stopped");
-    return closePromise;
+    return Promise.resolve();
   }
 
+  const closePromise = new Promise<void>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+    const done = () => {
+      if (closed) return;
+      closed = true;
+      if (timer) clearTimeout(timer);
+      resolve();
+    };
+
+    timer = setTimeout(done, timeoutMs);
+    try {
+      activeServer.close(() => done());
+    } catch {
+      done();
+    }
+  });
+
   logger.info("DaemonIPC server stopped");
+  return closePromise;
 }
 
 // ── Client (CLI side) ────────────────────────────────────────────────
