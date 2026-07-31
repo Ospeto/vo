@@ -174,6 +174,7 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
 
       // PROOF 3: Queued pending stop is executed by dictationCoordinator.acknowledgeStart
       dictationCoordinator.getLifecycle().reset();
+      captureOrchestrator.markCaptureInactive();
 
       // Trigger start command, queue an explicit stop during "starting" phase
       const reqStart = dictationCoordinator.getLifecycle().requestStart();

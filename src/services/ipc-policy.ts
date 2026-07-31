@@ -6,6 +6,9 @@ import logger from "./logger.js";
 export const CHANNEL_ROLE_ALLOWLIST: Record<string, RendererRole[]> = {
   [IPC.RECORDING_DATA]: ["capture"],
   [IPC.RECORDING_ERROR]: ["capture"],
+  [IPC.RECORDING_START_READY]: ["capture"],
+  [IPC.RECORDING_START_FAILED]: ["capture"],
+  [IPC.RECORDING_STOPPED]: ["capture"],
   [IPC.AUDIO_LEVEL_UPDATE]: ["capture"],
   [IPC.CANCEL_DICTATION]: ["settings", "hud"],
   [IPC.GET_CONFIG]: ["settings", "capture"],

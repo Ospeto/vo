@@ -39,6 +39,8 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
   public activeSelectionText = "";
   public currentTriggerMode: "dictate" | "edit" = "dictate";
   private options: CaptureOrchestratorOptions<TWindow, TSender>;
+  private captureActive = false;
+  private activeCaptureSequenceId: number | null = null;
 
   constructor(
     options: CaptureOrchestratorOptions<TWindow, TSender>,
@@ -94,6 +96,32 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     }
   }
 
+  public markCaptureActive(sequenceId: number): void {
+    this.activeCaptureSequenceId = sequenceId;
+    this.captureActive = true;
+  }
+
+  public markCaptureInactive(sequenceId?: number): void {
+    if (sequenceId === undefined || sequenceId === this.activeCaptureSequenceId) {
+      this.captureActive = false;
+      this.activeCaptureSequenceId = null;
+    }
+  }
+
+  public isCaptureActive(newSequenceId?: number): boolean {
+    if (!this.captureActive) return false;
+    const currentState = this.lifecycle.snapshot().state;
+    if (currentState === "idle" || currentState === "error") {
+      this.captureActive = false;
+      this.activeCaptureSequenceId = null;
+      return false;
+    }
+    if (this.activeCaptureSequenceId !== null && this.activeCaptureSequenceId !== newSequenceId) {
+      return true;
+    }
+    return false;
+  }
+
   public abortSelectionCapture(): void {
     this.activeSelectionAbortController?.abort();
     this.activeSelectionAbortController = null;
@@ -117,8 +145,10 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     this.abortSelectionCapture();
     this.abortSTT();
     const currentSeq = this.lifecycle.snapshot().sequenceId;
+    this.markCaptureInactive(currentSeq);
     this.pasteCoordinator.invalidate();
     this.lifecycle.cancel();
+    this.markCaptureInactive();
     this.restoreCapturedSelection(currentSeq);
     if (failedSender) {
       this.session.detach(failedSender);
@@ -151,6 +181,14 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
       return false;
     }
 
+    if (this.isCaptureActive(reqRes.sequenceId)) {
+      logger.warn("Cannot start recording: prior capture is active or tearing down");
+      this.pasteCoordinator.invalidate();
+      this.lifecycle.acknowledgeStart(reqRes.sequenceId, false);
+      this.options.setState("idle", "Prior capture engine active");
+      return false;
+    }
+
     if (!this.isReady()) {
       logger.warn("Cannot start recording: capture window is not ready");
       this.pasteCoordinator.invalidate();
@@ -166,11 +204,14 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     const sent = this.sendToCaptureWindow(IPC.START_RECORDING, "webm", inputGain, reqRes.sequenceId);
     if (!sent) {
       logger.warn("Failed to send START_RECORDING to capture window");
+      this.markCaptureInactive(reqRes.sequenceId);
       this.pasteCoordinator.invalidate();
       this.lifecycle.acknowledgeStart(reqRes.sequenceId, false);
       this.options.setState("idle", "Capture engine not ready");
       return false;
     }
+
+    this.markCaptureActive(reqRes.sequenceId);
 
     // Side effects execute ONLY after send succeeds!
     this.pasteCoordinator.invalidate();
@@ -189,6 +230,7 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     } catch (err: any) {
       if (this.activeSelectionAbortController === selectionAbortController) this.activeSelectionAbortController = null;
       const snapshot = this.lifecycle.snapshot();
+      this.markCaptureInactive(reqRes.sequenceId);
       if (snapshot.sequenceId !== reqRes.sequenceId || snapshot.state !== "starting") return false;
       this.pasteCoordinator.invalidate();
       this.lifecycle.acknowledgeStart(reqRes.sequenceId, false);
@@ -206,7 +248,7 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     }
     if (this.activeSelectionAbortController === selectionAbortController) this.activeSelectionAbortController = null;
     const lifecycleSnapshot = this.lifecycle.snapshot();
-    if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || lifecycleSnapshot.state !== "starting") {
+    if (lifecycleSnapshot.sequenceId !== reqRes.sequenceId || !["starting", "recording"].includes(lifecycleSnapshot.state)) {
       if (
         lifecycleSnapshot.sequenceId === reqRes.sequenceId &&
         this.controller.getCaptureWindow() &&

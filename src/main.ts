@@ -829,6 +829,7 @@ function setupIpcHandlers() {
 
   ipcMain.on(IPC.RECORDING_ERROR, (event, payload: RecordingErrorPayload) => {
     if (!validateIpcSender(event, IPC.RECORDING_ERROR)) return;
+    captureOrchestrator.markCaptureInactive((payload as any)?.sequenceId);
     if (handleRecordingError(
       payload,
       recordingLifecycle,
@@ -839,6 +840,38 @@ function setupIpcHandlers() {
         setState("error", message);
       },
     )) return;
+  });
+
+  ipcMain.on(IPC.RECORDING_START_READY, (event, payload: { sequenceId: number }) => {
+    if (!validateIpcSender(event, IPC.RECORDING_START_READY)) return;
+    const seq = payload?.sequenceId;
+    if (typeof seq === "number") {
+      dictationCoordinator.acknowledgeStart(seq, true);
+    }
+  });
+
+  ipcMain.on(IPC.RECORDING_START_FAILED, (event, payload: { sequenceId: number; error: string }) => {
+    if (!validateIpcSender(event, IPC.RECORDING_START_FAILED)) return;
+    const seq = payload?.sequenceId;
+    captureOrchestrator.markCaptureInactive(seq);
+    if (typeof seq === "number") {
+      dictationCoordinator.acknowledgeStart(seq, false);
+      handleRecordingError(
+        payload,
+        recordingLifecycle,
+        () => pasteCoordinator.invalidate(),
+        restoreCapturedSelection,
+        (message) => {
+          logger.warn({ error: message }, "Recording start failed");
+          setState("error", message);
+        }
+      );
+    }
+  });
+
+  ipcMain.on(IPC.RECORDING_STOPPED, (event, payload: { sequenceId: number }) => {
+    if (!validateIpcSender(event, IPC.RECORDING_STOPPED)) return;
+    captureOrchestrator.markCaptureInactive(payload?.sequenceId);
   });
 
   ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
