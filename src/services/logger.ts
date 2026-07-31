@@ -52,23 +52,40 @@ function rotateLogIfNeeded(logFile: string): void {
   } catch {}
 }
 
-const logPath = resolveLogPath();
-rotateLogIfNeeded(logPath);
+let fileLoggingActive = false;
 
-const logger = pino(
-  {
-    level: "debug",
-  },
-  pino.multistream([
-    // Console output (human-readable via stdout)
-    { level: "debug", stream: process.stdout },
-    // Synchronous File output to prevent sonic-boom initialization race conditions on process exit
-    {
-      level: "debug",
-      stream: pino.destination({ dest: logPath, mkdir: true, sync: true }),
-    },
-  ]),
-);
+function createPinoLogger(): pino.Logger {
+  const logPath = resolveLogPath();
+  rotateLogIfNeeded(logPath);
+
+  let fileStream: pino.DestinationStream | null = null;
+  try {
+    fileStream = pino.destination({ dest: logPath, mkdir: true, sync: true });
+    fileLoggingActive = true;
+  } catch (err: any) {
+    fileLoggingActive = false;
+    try {
+      process.stderr.write(
+        `[logger] Warning: Failed to initialize file logger at "${logPath}": ${err?.message || String(err)}. Falling back to stderr logging.\n`
+      );
+    } catch {
+      // Ignore stderr write errors
+    }
+  }
+
+  const streams: pino.StreamEntry[] = fileLoggingActive && fileStream
+    ? [
+        { level: "debug", stream: process.stdout },
+        { level: "debug", stream: fileStream },
+      ]
+    : [
+        { level: "debug", stream: process.stderr },
+      ];
+
+  return pino({ level: "debug" }, pino.multistream(streams));
+}
+
+const logger = createPinoLogger();
 
 export default logger;
 
@@ -76,5 +93,12 @@ export default logger;
  * Return the resolved log file path (useful for status/diagnostics).
  */
 export function getLogPath(): string {
-  return logPath;
+  return resolveLogPath();
+}
+
+/**
+ * Return whether file logging successfully initialized.
+ */
+export function isFileLoggingActive(): boolean {
+  return fileLoggingActive;
 }

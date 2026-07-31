@@ -1,4 +1,5 @@
 import { RendererSession } from "./renderer-session.js";
+import { IPC } from "../shared/types.js";
 import logger from "./logger.js";
 
 export interface CaptureRendererControllerOptions<TSender, TWindow> {
@@ -129,5 +130,82 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
   reset(): void {
     this.captureWindow = null;
     this.pendingCaptureWindow = null;
+  }
+
+  destroyCaptureWindow(): void {
+    const win = this.captureWindow;
+    const pendingWin = this.pendingCaptureWindow;
+    this.captureWindow = null;
+    this.pendingCaptureWindow = null;
+    if (win && !this.options.isDestroyed(win)) {
+      try {
+        this.options.destroyWindow(win);
+      } catch {}
+    }
+    if (pendingWin && pendingWin !== win && !this.options.isDestroyed(pendingWin)) {
+      try {
+        this.options.destroyWindow(pendingWin);
+      } catch {}
+    }
+  }
+
+  async teardownCaptureWindow(timeoutMs: number = 2000): Promise<void> {
+    const win = this.captureWindow;
+    const pendingWin = this.pendingCaptureWindow;
+
+    // Unconditionally and safely detach sessions for active and pending windows FIRST
+    if (win) {
+      try {
+        const contents = this.options.getWebContents(win);
+        if (contents) {
+          if (this.session.isAvailable(contents)) {
+            try {
+              this.options.sendIpc(contents, IPC.CANCEL_RECORDING);
+            } catch {}
+          }
+          try {
+            this.session.detach(contents);
+          } catch {}
+        }
+      } catch {}
+    }
+
+    if (pendingWin && pendingWin !== win) {
+      try {
+        const pendingContents = this.options.getWebContents(pendingWin);
+        if (pendingContents) {
+          try {
+            this.session.detach(pendingContents);
+          } catch {}
+        }
+      } catch {}
+    }
+
+    let closedPromise: Promise<void> | null = null;
+    if (win && !this.options.isDestroyed(win)) {
+      closedPromise = new Promise<void>((resolve) => {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let done = false;
+        const cleanup = () => {
+          if (done) return;
+          done = true;
+          if (timer) clearTimeout(timer);
+          resolve();
+        };
+
+        timer = setTimeout(cleanup, Math.min(timeoutMs, 2000));
+        try {
+          this.options.onClosed(win, cleanup);
+        } catch {
+          cleanup();
+        }
+      });
+    }
+
+    this.destroyCaptureWindow();
+
+    if (closedPromise) {
+      await closedPromise;
+    }
   }
 }

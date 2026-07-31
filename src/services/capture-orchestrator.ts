@@ -85,6 +85,14 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
     return this.controller.isReady();
   }
 
+  public destroyCaptureWindow(): void {
+    this.controller.destroyCaptureWindow();
+  }
+
+  public async teardownCaptureWindow(timeoutMs: number = 2000): Promise<void> {
+    await this.controller.teardownCaptureWindow(timeoutMs);
+  }
+
   public restoreCapturedSelection(sequenceId?: number): boolean {
     try {
       const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, this.options.selectionClipboardPort);
