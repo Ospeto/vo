@@ -83,9 +83,15 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
   }
 
   public restoreCapturedSelection(sequenceId?: number): boolean {
-    const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, this.options.selectionClipboardPort);
-    this.activeSelectionText = "";
-    return restored;
+    try {
+      const restored = selectionOwnershipManager.restoreCapturedSelection(sequenceId, this.options.selectionClipboardPort);
+      this.activeSelectionText = "";
+      return restored;
+    } catch (err: any) {
+      logger.warn({ err: err?.message || String(err) }, "Failed to restore captured selection");
+      this.activeSelectionText = "";
+      return false;
+    }
   }
 
   public abortSelectionCapture(): void {

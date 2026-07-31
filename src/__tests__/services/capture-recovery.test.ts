@@ -1,11 +1,4 @@
-import { test, expect, describe, mock } from "bun:test";
-import { CaptureOrchestrator } from "../../services/capture-orchestrator.js";
-import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
-import { selectionOwnershipManager } from "../../services/selection-service.js";
-import { DictationControlCoordinator } from "../../services/dictation-control-coordinator.js";
-import { PasteCoordinator } from "../../services/paste-flow.js";
-import { type SafePasteResult } from "../../services/safe-paste.js";
-import { IPC, type AppState } from "../../shared/types.js";
+import { test, expect, describe, beforeEach, mock } from "bun:test";
 
 function createMockWebContents() {
   const handlers: Record<string, Function[]> = {};
@@ -26,6 +19,7 @@ function createMockWebContents() {
     emit: (event: string, ...args: any[]) => {
       handlers[event]?.forEach((h) => h(...args));
     },
+    setWindowOpenHandler: mock(() => {}),
     isDestroyed: () => false,
     sentMessages,
   };
@@ -48,6 +42,7 @@ function createMockWindow(role: "capture" | "settings" | "hud" = "capture") {
     destroy: () => {
       destroyed = true;
     },
+    loadFile: mock(() => Promise.resolve()),
     on: mock((event: string, handler: Function) => {
       if (!handlers[event]) handlers[event] = [];
       handlers[event].push(handler);
@@ -62,7 +57,91 @@ function createMockWindow(role: "capture" | "settings" | "hud" = "capture") {
   };
 }
 
+mock.module("uiohook-napi", () => ({
+  uIOhook: {
+    on: () => {},
+    off: () => {},
+    start: () => {},
+    stop: () => {},
+  },
+  UiohookKey: {
+    A: 30, a: 30, B: 48, b: 48, C: 46, c: 46, D: 32, d: 32, E: 18, e: 18, F: 33, f: 33, G: 34, g: 34, H: 35, h: 35,
+    I: 23, i: 23, J: 36, j: 36, K: 37, k: 37, L: 38, l: 38, M: 50, m: 50, N: 49, n: 49, O: 24, o: 24, P: 25, p: 25,
+    Q: 16, q: 16, R: 19, r: 19, S: 31, s: 31, T: 20, t: 20, U: 22, u: 22, V: 47, v: 47, W: 17, w: 17, X: 45, x: 45,
+    Y: 21, y: 21, Z: 44, z: 44,
+    Space: 57, space: 57, Enter: 28, enter: 28, Escape: 1, escape: 1, Tab: 15, tab: 15,
+  },
+}));
+
+mock.module("electron", () => ({
+  app: {
+    name: "vo",
+    setName: () => {},
+    on: () => {},
+    whenReady: () => Promise.resolve(),
+    requestSingleInstanceLock: () => true,
+    dock: { hide: () => {} },
+    quit: () => {},
+  },
+  BrowserWindow: createMockWindow as any,
+  ipcMain: {
+    on: () => {},
+    handle: () => {},
+  },
+  Tray: class { setToolTip() {} on() {} setImage() {} },
+  Menu: { buildFromTemplate: () => ({}) },
+  screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+  nativeImage: { createFromPath: () => ({ setTemplateImage: () => {} }) },
+  clipboard: { readText: () => "", writeText: () => {}, readBuffer: () => Buffer.from(""), writeBuffer: () => true },
+  Notification: class { static isSupported() { return false; } show() {} },
+  systemPreferences: { isTrustedAccessibilityClient: () => true },
+  globalShortcut: { register: () => true, unregisterAll: () => {} },
+}));
+
+import { CaptureOrchestrator } from "../../services/capture-orchestrator.js";
+import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
+import { selectionOwnershipManager } from "../../services/selection-service.js";
+import { DictationControlCoordinator } from "../../services/dictation-control-coordinator.js";
+import { PasteCoordinator } from "../../services/paste-flow.js";
+import { validateIpcSenderPolicy } from "../../services/ipc-policy.js";
+import { type SafePasteResult } from "../../services/safe-paste.js";
+import { IPC, type AppState } from "../../shared/types.js";
+
 describe("CaptureOrchestrator & Production Recovery Suite", () => {
+  beforeEach(() => {
+    selectionOwnershipManager.clearOwnership();
+  });
+  test("Production composition path: CaptureOrchestrator unifies STT controller ownership and aborts active STT on cleanup", () => {
+    const orchestrator = new CaptureOrchestrator({
+      createWindow: () => createMockWindow("capture"),
+      getWebContents: (win) => win.webContents,
+      isDestroyed: (win) => win.isDestroyed(),
+      destroyWindow: (win) => win.destroy(),
+      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onClosed: (win, handler) => win.on("closed", handler),
+      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+      setState: () => {},
+      isQuitting: () => false,
+      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
+      capturePasteTarget: () => {},
+      playStartChime: () => {},
+      getInputGain: () => 1.0,
+    });
+
+    // Create STT abort controller via production orchestrator factory
+    const sttController = orchestrator.createSTTAbortController();
+    expect(orchestrator.activeSTTAbortController).toBe(sttController);
+    expect(sttController.signal.aborted).toBe(false);
+
+    // Call orchestrator abortActiveFlow (as called by main.ts abortActiveFlow)
+    orchestrator.abortActiveFlow();
+
+    // Assert: STT controller created for production fetch was aborted and cleared
+    expect(sttController.signal.aborted).toBe(true);
+    expect(orchestrator.activeSTTAbortController).toBeNull();
+  });
+
   test("Real deferred STT promise test: proves no paste, no history entry, no chime, and clipboard restored on production cleanup", async () => {
     let pasteExecuted = false;
     let historyAdded = false;

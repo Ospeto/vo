@@ -157,7 +157,7 @@ function abortSelectionCapture() {
   activeSelectionAbortController = null;
 }
 
-function abortActiveFlow(failedSender?: Electron.WebContents) {
+export function abortActiveFlow(failedSender?: Electron.WebContents) {
   captureOrchestrator.abortActiveFlow(failedSender);
 }
 
@@ -1116,6 +1116,7 @@ if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
 }
 
 app.whenReady().then(async () => {
+  if (process.env.NODE_ENV === "test") return;
   if (!gotSingleInstanceLock && !process.argv.includes("--headless")) return;
 
   if (process.argv.includes("--headless")) {

@@ -4,6 +4,9 @@ import { parseKeyBinding, formatKeyBinding, formatKeyDisplay } from "../../servi
 const registeredShortcuts = new Map<string, Function>();
 
 mock.module("electron", () => ({
+  app: { name: "vo", setName: () => {}, on: () => {}, whenReady: () => Promise.resolve(), requestSingleInstanceLock: () => true, dock: { hide: () => {} }, quit: () => {} },
+  BrowserWindow: class { webContents = { send: () => {}, on: () => {}, once: () => {} }; isDestroyed() { return false; } destroy() {} },
+  ipcMain: { on: () => {}, handle: () => {} },
   globalShortcut: {
     register: mock((shortcut: string, cb: Function) => {
       registeredShortcuts.set(shortcut, cb);

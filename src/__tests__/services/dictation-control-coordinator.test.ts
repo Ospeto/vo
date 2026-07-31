@@ -18,6 +18,9 @@ mock.module("../../services/logger.js", () => ({
 
 // Mock electron
 mock.module("electron", () => ({
+  app: { name: "vo", setName: () => {}, on: () => {}, whenReady: () => Promise.resolve(), requestSingleInstanceLock: () => true, dock: { hide: () => {} }, quit: () => {} },
+  BrowserWindow: class { webContents = { send: () => {}, on: () => {}, once: () => {} }; isDestroyed() { return false; } destroy() {} },
+  ipcMain: { on: () => {}, handle: () => {} },
   systemPreferences: {
     isTrustedAccessibilityClient: () => isTrustedAccessibilityMock,
   },

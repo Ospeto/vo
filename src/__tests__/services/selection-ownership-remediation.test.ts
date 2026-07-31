@@ -4,6 +4,10 @@ let exposedCaptureApi: any;
 let sentIpc: unknown[] = [];
 
 const mockElectronObj = {
+  app: { name: "vo", setName: () => {}, on: () => {}, whenReady: () => Promise.resolve(), requestSingleInstanceLock: () => true, dock: { hide: () => {} }, quit: () => {} },
+  BrowserWindow: class { webContents = { send: () => {}, on: () => {}, once: () => {} }; isDestroyed() { return false; } destroy() {} },
+  ipcMain: { on: () => {}, handle: () => {} },
+  clipboard: { readText: () => "", writeText: () => {}, readBuffer: () => Buffer.from(""), writeBuffer: () => true },
   contextBridge: { exposeInMainWorld: (_name: string, api: unknown) => { exposedCaptureApi = api; } },
   ipcRenderer: {
     send: (_channel: string, payload: unknown) => { sentIpc.push(payload); },
