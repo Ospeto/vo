@@ -284,6 +284,11 @@ export class SelectionOwnershipManager {
     }
   }
 
+  resetForTests(): void {
+    this.activeOwnership = null;
+    this.latestSequenceId = 0;
+  }
+
   restoreCapturedSelection(
     sequenceId?: number,
     portOverride?: ClipboardPort<any> | ClipboardAdapter<any> | null

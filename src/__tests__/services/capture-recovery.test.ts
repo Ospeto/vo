@@ -120,7 +120,7 @@ beforeAll(async () => {
 
 describe("CaptureOrchestrator & Production Recovery Suite", () => {
   beforeEach(() => {
-    selectionOwnershipManager.clearOwnership();
+    selectionOwnershipManager.resetForTests();
   });
   test("Exported production main.ts captureOrchestrator composition path: renderer-crash on captureWindow triggers abortActiveFlow and aborts active STT controller", () => {
     expect(captureOrchestrator).toBeDefined();
@@ -150,17 +150,48 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     win.webContents.emit("did-finish-load");
     expect(captureOrchestrator.isReady()).toBe(true);
 
-    const startRes = await dictationCoordinator.handleUiCommand("start");
-    expect(startRes.accepted).toBe(true);
+    // Spy sentinel verifying main.ts:118 callback invocation specifically
+    const originalAck = dictationCoordinator.acknowledgeStart.bind(dictationCoordinator);
+    let ackCallbackSpyPayload: { seqId: number; success: boolean } | null = null;
+    dictationCoordinator.acknowledgeStart = mock(async (seqId: number, success: boolean) => {
+      ackCallbackSpyPayload = { seqId, success };
+      return await originalAck(seqId, success);
+    });
 
-    // CRITICAL: Lifecycle state is now "recording" (NOT stuck in "starting") via main.ts:118 wiring
-    expect(dictationCoordinator.snapshot().state).toBe("recording");
-    expect(captureOrchestrator.lifecycle.snapshot().state).toBe("recording");
+    try {
+      const startRes = await dictationCoordinator.handleUiCommand("start");
+      expect(startRes.accepted).toBe(true);
 
-    // Normal stop request is now accepted cleanly
-    const stopRes = dictationCoordinator.getLifecycle().requestStop();
-    expect(stopRes.accepted).toBe(true);
-    expect(dictationCoordinator.snapshot().state).toBe("stopping");
+      // PROOF 1: Spy sentinel confirms main.ts:118 acknowledgeStart callback was invoked with (seqId, true)
+      const currentSeq = dictationCoordinator.snapshot().sequenceId;
+      expect(ackCallbackSpyPayload).not.toBeNull();
+      expect((ackCallbackSpyPayload as any)?.seqId).toBe(currentSeq);
+      expect((ackCallbackSpyPayload as any)?.success).toBe(true);
+
+      // PROOF 2: Lifecycle state is "recording" (NOT stuck in "starting") via main.ts:118 wiring
+      expect(dictationCoordinator.snapshot().state).toBe("recording");
+      expect(captureOrchestrator.lifecycle.snapshot().state).toBe("recording");
+
+      // PROOF 3: Queued pending stop is executed by dictationCoordinator.acknowledgeStart
+      dictationCoordinator.getLifecycle().reset();
+
+      // Trigger start command, queue an explicit stop during "starting" phase
+      const reqStart = dictationCoordinator.getLifecycle().requestStart();
+      expect(reqStart.accepted).toBe(true);
+      const stopResult = await dictationCoordinator.handleUiCommand("stop");
+      expect(stopResult.action).toBe("queued_stop");
+      expect(dictationCoordinator.isPendingStop()).toBe(true);
+
+      // Execute startRecordingFlow, which calls main.ts:118 acknowledgeStart callback
+      await captureOrchestrator.startRecordingFlow();
+
+      // Pending stop was processed by main.ts:118 acknowledgeStart callback, clearing pendingStop and executing stop
+      expect(dictationCoordinator.isPendingStop()).toBe(false);
+      expect(dictationCoordinator.snapshot().state).toBe("stopping");
+    } finally {
+      dictationCoordinator.acknowledgeStart = originalAck;
+      dictationCoordinator.getLifecycle().reset();
+    }
   });
 
   test("Real deferred STT promise test: proves no paste, no history entry, no chime, and clipboard restored on production cleanup", async () => {
