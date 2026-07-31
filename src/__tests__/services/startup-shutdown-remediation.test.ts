@@ -329,6 +329,30 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       await captureOrchestrator.teardownCaptureWindow(1000);
       expect(captureOrchestrator.session.isAvailable(activeContents)).toBe(false);
     });
+
+    test("teardownCaptureWindow resolves within configured bounded timeout even if closed event never fires", async () => {
+      const activeWin = captureOrchestrator.ensureCaptureWindow();
+      expect(activeWin).not.toBeNull();
+      (captureOrchestrator as any).controller.captureWindow = activeWin;
+      const contents = (captureOrchestrator as any).controller.options.getWebContents(activeWin);
+
+      // Attach & acknowledge session ready
+      const gen = captureOrchestrator.session.attach(contents);
+      captureOrchestrator.session.acknowledgeReady(contents, gen);
+
+      // Override destroy to NOT trigger closedHandler (simulating a window where closed event never fires)
+      (activeWin as any).destroy = () => {};
+
+      const start = Date.now();
+      // Request teardown with 50ms timeout bound
+      await captureOrchestrator.teardownCaptureWindow(50);
+      const elapsed = Date.now() - start;
+
+      // Must resolve within bounded timeout window (<500ms) without hanging
+      expect(elapsed).toBeLessThan(500);
+      expect(captureOrchestrator.session.isAvailable(contents)).toBe(false);
+      expect(captureOrchestrator.isReady()).toBe(false);
+    });
   });
 
   describe("4. Deterministic Startup Sequence & Fault Injection", () => {
@@ -373,6 +397,30 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       } finally {
         mockElectronObj.app.exit = origExit;
         setRuntimeStateDirectoryForTests(null);
+        await gracefulShutdown();
+      }
+    });
+
+    test("runStartupSequence handles rejected startup-service promise, triggers cleanup and app.exit(1), and returns false", async () => {
+      let exitCalledWith: number | null = null;
+      const origExit = mockElectronObj.app.exit;
+      mockElectronObj.app.exit = ((code: number) => {
+        exitCalledWith = code;
+      }) as any;
+
+      const { HotkeyService } = await import("../../services/hotkey-service.js");
+      const origStart = HotkeyService.prototype.start;
+      HotkeyService.prototype.start = () => Promise.reject(new Error("Hotkey service start rejection"));
+
+      try {
+        const ok = await runStartupSequence(testStateDir);
+        expect(ok).toBe(false);
+        expect(exitCalledWith as number | null).toBe(1);
+        expect(captureOrchestrator.isReady()).toBe(false);
+        expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(false);
+      } finally {
+        HotkeyService.prototype.start = origStart;
+        mockElectronObj.app.exit = origExit;
         await gracefulShutdown();
       }
     });
