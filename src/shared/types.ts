@@ -73,6 +73,9 @@ export const IPC = {
   CANCEL_DICTATION: "cancel-dictation",
   RECORDING_DATA: "recording-data",
   RECORDING_ERROR: "recording-error",
+  RECORDING_START_READY: "recording-start-ready",
+  RECORDING_START_FAILED: "recording-start-failed",
+  RECORDING_STOPPED: "recording-stopped",
   PLAYBACK_DONE: "playback-done",
   GET_CONFIG: "get-config",
   SAVE_CONFIG: "save-config",
@@ -169,6 +172,9 @@ export interface CaptureElectronAPI {
   getConfig: () => Promise<CaptureConfigPayload>;
   sendRecordingData: (data: ArrayBuffer) => void;
   sendRecordingError: (error: string, sequenceId: number) => void;
+  sendRecordingStartReady?: (sequenceId: number) => void;
+  sendRecordingStartFailed?: (sequenceId: number, error: string) => void;
+  sendRecordingStopped?: (sequenceId: number) => void;
   sendAudioLevelUpdate: (payload: any) => void;
   onStartRecording: (callback: (format: RecordingFormat, inputGain: number, sequenceId: number) => void) => () => void;
   onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => () => void;

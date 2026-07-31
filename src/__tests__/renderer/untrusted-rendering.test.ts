@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -185,6 +185,10 @@ let historyData: Array<{ text: string; timestamp: number; activeApp?: string }> 
 let savedConfigCalls: Array<any> = [];
 let lastCopiedText = "";
 
+const originalWindow = (globalThis as any).window;
+const originalDocument = (globalThis as any).document;
+const originalNavigator = (globalThis as any).navigator;
+
 // Setup global mock environment before module imports
 (globalThis as any).document = {
   createElement: (tagName: string) => {
@@ -239,6 +243,11 @@ const {
 } = await import("../../renderer/renderer.js");
 
 describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
+  afterAll(() => {
+    (globalThis as any).window = originalWindow;
+    (globalThis as any).document = originalDocument;
+    (globalThis as any).navigator = originalNavigator;
+  });
   beforeEach(() => {
     elementsStore.clear();
     savedConfigCalls = [];
