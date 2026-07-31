@@ -153,6 +153,34 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     const win = this.captureWindow;
     const pendingWin = this.pendingCaptureWindow;
 
+    // Unconditionally and safely detach sessions for active and pending windows FIRST
+    if (win) {
+      try {
+        const contents = this.options.getWebContents(win);
+        if (contents) {
+          if (this.session.isAvailable(contents)) {
+            try {
+              this.options.sendIpc(contents, IPC.CANCEL_RECORDING);
+            } catch {}
+          }
+          try {
+            this.session.detach(contents);
+          } catch {}
+        }
+      } catch {}
+    }
+
+    if (pendingWin && pendingWin !== win) {
+      try {
+        const pendingContents = this.options.getWebContents(pendingWin);
+        if (pendingContents) {
+          try {
+            this.session.detach(pendingContents);
+          } catch {}
+        }
+      } catch {}
+    }
+
     let closedPromise: Promise<void> | null = null;
     if (win && !this.options.isDestroyed(win)) {
       closedPromise = new Promise<void>((resolve) => {
@@ -172,31 +200,6 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
           cleanup();
         }
       });
-
-      try {
-        const contents = this.options.getWebContents(win);
-        if (contents) {
-          if (this.session.isAvailable(contents)) {
-            try {
-              this.options.sendIpc(contents, IPC.CANCEL_RECORDING);
-            } catch {}
-          }
-          try {
-            this.session.detach(contents);
-          } catch {}
-        }
-      } catch {}
-    }
-
-    if (pendingWin && pendingWin !== win && !this.options.isDestroyed(pendingWin)) {
-      try {
-        const pendingContents = this.options.getWebContents(pendingWin);
-        if (pendingContents) {
-          try {
-            this.session.detach(pendingContents);
-          } catch {}
-        }
-      } catch {}
     }
 
     this.destroyCaptureWindow();

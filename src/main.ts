@@ -1409,9 +1409,7 @@ export async function runStartupSequence(cwd: string = workingCwd): Promise<bool
   } catch (err: any) {
     logger.error({ err: err?.message || String(err) }, "Fatal error during application startup; cleaning up and exiting");
     await gracefulShutdown();
-    if (process.env.NODE_ENV !== "test") {
-      app.exit(1);
-    }
+    app.exit(1);
     return false;
   }
 }

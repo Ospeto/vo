@@ -305,6 +305,30 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       expect(destroyCalled).toBe(true);
       expect(captureOrchestrator.isReady()).toBe(false);
     });
+
+    test("teardownCaptureWindow detaches session even if window is already destroyed or pending", async () => {
+      // 1. Pending window teardown
+      const pendingWin = captureOrchestrator.ensureCaptureWindow();
+      expect(pendingWin).not.toBeNull();
+      const pendingContents = (captureOrchestrator as any).controller.options.getWebContents(pendingWin);
+      captureOrchestrator.session.attach(pendingContents);
+
+      await captureOrchestrator.teardownCaptureWindow(1000);
+      expect(captureOrchestrator.session.isAvailable(pendingContents)).toBe(false);
+
+      // 2. Already-destroyed window teardown
+      const activeWin = captureOrchestrator.ensureCaptureWindow();
+      const activeContents = (captureOrchestrator as any).controller.options.getWebContents(activeWin);
+      const gen = captureOrchestrator.session.attach(activeContents);
+      captureOrchestrator.session.acknowledgeReady(activeContents, gen);
+      expect(captureOrchestrator.session.isAvailable(activeContents)).toBe(true);
+
+      // Simulate window destroyed prior to teardown
+      (activeWin as any).isDestroyed = () => true;
+
+      await captureOrchestrator.teardownCaptureWindow(1000);
+      expect(captureOrchestrator.session.isAvailable(activeContents)).toBe(false);
+    });
   });
 
   describe("4. Deterministic Startup Sequence & Fault Injection", () => {
@@ -332,7 +356,7 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       }
     });
 
-    test("runStartupSequence handles mandatory service fault, runs gracefulShutdown and returns false without partial UI", async () => {
+    test("runStartupSequence handles mandatory service fault, runs gracefulShutdown, calls app.exit(1) and returns false without partial UI", async () => {
       setRuntimeStateDirectoryForTests("/dev/null/invalid_state_directory");
       let exitCalledWith: number | null = null;
       const origExit = mockElectronObj.app.exit;
@@ -343,6 +367,7 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       try {
         const ok = await runStartupSequence(testStateDir);
         expect(ok).toBe(false);
+        expect(exitCalledWith as number | null).toBe(1);
         expect(captureOrchestrator.isReady()).toBe(false);
         expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(false);
       } finally {

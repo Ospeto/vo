@@ -151,20 +151,8 @@ export function removeRuntimeState(expectedPid: number = process.pid): boolean {
     const file = getStateFile();
     if (!existsSync(file)) return false;
 
-    // Preliminary check
-    try {
-      const raw = readFileSync(file, "utf-8");
-      const state: RuntimeState = JSON.parse(raw);
-      if (state && typeof state.pid === "number" && state.pid !== expectedPid) {
-        return false;
-      }
-    } catch {
-      // Corrupt file without expected PID match; do not unlink
-      return false;
-    }
-
-    // Atomic isolation via rename
-    const tmpPath = `${file}.tmp.del.${expectedPid}.${Date.now()}`;
+    // Atomic isolation via unique temp path
+    const tmpPath = `${file}.tmp.del.${expectedPid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
     try {
       renameSync(file, tmpPath);
     } catch {
