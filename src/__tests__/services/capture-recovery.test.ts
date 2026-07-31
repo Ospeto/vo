@@ -122,18 +122,24 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
   beforeEach(() => {
     selectionOwnershipManager.clearOwnership();
   });
-  test("Exported production main.ts composition path: STT controller created via captureOrchestrator is aborted on abortActiveFlow", () => {
+  test("Exported production main.ts captureOrchestrator composition path: renderer-crash on captureWindow triggers abortActiveFlow and aborts active STT controller", () => {
     expect(captureOrchestrator).toBeDefined();
 
-    // Create STT abort controller on production captureOrchestrator
+    // 1. Ensure capture window on production captureOrchestrator from main.ts
+    captureOrchestrator.ensureCaptureWindow();
+    const win = captureOrchestrator.controller.getPendingCaptureWindow()!;
+    win.webContents.emit("did-finish-load");
+    expect(captureOrchestrator.isReady()).toBe(true);
+
+    // 2. Create STT abort controller on production captureOrchestrator (as created by RECORDING_DATA handler in main.ts)
     const sttController = captureOrchestrator.createSTTAbortController();
     expect(captureOrchestrator.activeSTTAbortController).toBe(sttController);
     expect(sttController.signal.aborted).toBe(false);
 
-    // Trigger production abortActiveFlow exported from main.ts
-    abortActiveFlow();
+    // 3. Trigger actual renderer process crash on the production capture window's webContents
+    win.webContents.emit("render-process-gone", {}, { reason: "crashed" });
 
-    // Assert STT controller was aborted and cleared on production captureOrchestrator
+    // 4. Assert: render-process-gone event reached abortActiveFlow on production captureOrchestrator, aborting STT controller and clearing activeSTTAbortController
     expect(sttController.signal.aborted).toBe(true);
     expect(captureOrchestrator.activeSTTAbortController).toBeNull();
   });
