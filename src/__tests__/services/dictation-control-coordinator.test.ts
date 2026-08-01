@@ -481,7 +481,7 @@ describe("VO Hold Mode Fixes Regression Suite", () => {
     const upRes = await coordinator.handlePhysicalUp();
     expect(upRes.accepted).toBe(true);
     expect(upRes.action).toBe("stopped");
-    expect(stopCalledWithMinDuration).toBe(false);
+    expect(stopCalledWithMinDuration as boolean | null).toBe(false);
     expect(cancelCalled).toBe(false);
     expect(coordinator.snapshot().state).toBe("stopping");
   });
@@ -528,7 +528,7 @@ describe("VO Hold Mode Fixes Regression Suite", () => {
 
     // 4. Timer should execute stop after remaining delay (~450ms)
     await new Promise((r) => setTimeout(r, 550));
-    expect(stopCalledWithMinDuration).toBe(true);
+    expect(stopCalledWithMinDuration as boolean | null).toBe(true);
     expect(cancelCalled).toBe(false);
     expect(coordinator.snapshot().state).toBe("stopping");
   });
@@ -608,7 +608,7 @@ describe("VO Hold Mode Fixes Regression Suite", () => {
 
     // Wait for full short tap duration
     await new Promise((r) => setTimeout(r, 2000));
-    expect(stopCalledWithMinDuration).toBe(true);
+    expect(stopCalledWithMinDuration as boolean | null).toBe(true);
     expect(coordinator.snapshot().state).toBe("stopping");
   });
 });

@@ -105,29 +105,43 @@ export class DictationControlCoordinator {
   /** Physical key-up handler from FnHook */
   public async handlePhysicalUp(): Promise<CoordinatorActionResult> {
     if (this.mode !== "hold") {
-      return { accepted: true, action: "ignored", reason: "Key up ignored in toggle mode" };
+      return { accepted: false, action: "ignored", reason: "Key up ignored in toggle mode" };
     }
 
-    const pressDuration = Date.now() - this.keyHoldPressStartTime;
-    this.lastHoldPressDuration = pressDuration;
-    const state = this.lifecycle.snapshot().state;
+    if (this.keyHoldPressStartTime > 0) {
+      this.lastHoldPressDuration = Date.now() - this.keyHoldPressStartTime;
+      this.keyHoldPressStartTime = 0;
+    }
+    const pressDuration = this.lastHoldPressDuration;
+    const snap = this.lifecycle.snapshot();
+    const state = snap.state;
+
+    if (state === "idle" || state === "error" || state === "stopping" || state === "transcribing") {
+      return { accepted: false, action: "ignored", reason: `Key up ignored in state ${state}` };
+    }
 
     if (state === "starting") {
+      if (this.pendingStopOrigin === "physical") {
+        return { accepted: false, action: "ignored", reason: "Physical stop already pending during starting state" };
+      }
       this.pendingStopOrigin = "physical";
       return { accepted: true, action: "queued_stop", reason: "Key Up during starting state: queued pending stop" };
     } else if (state === "recording") {
+      if (this.shortTapTimer) {
+        return { accepted: false, action: "ignored", reason: "Short tap stop timer already active" };
+      }
       const elapsed = this.recordingStartTime > 0 ? Date.now() - this.recordingStartTime : pressDuration;
       const liveFnDown = this.isFnDownFn();
       const minDuration = getHoldModeMinimumDuration(pressDuration, liveFnDown);
       const remainingDelay = minDuration - elapsed;
 
       if (pressDuration < SHORT_TAP_THRESHOLD_MS && !liveFnDown && remainingDelay > 0) {
-        const recordingSeqId = this.lifecycle.snapshot().sequenceId;
+        const recordingSeqId = snap.sequenceId;
         if (this.shortTapTimer) clearTimeout(this.shortTapTimer);
         this.shortTapTimer = setTimeout(async () => {
           this.shortTapTimer = null;
-          const snap = this.lifecycle.snapshot();
-          if (snap.sequenceId === recordingSeqId && snap.state === "recording") {
+          const currentSnap = this.lifecycle.snapshot();
+          if (currentSnap.sequenceId === recordingSeqId && currentSnap.state === "recording") {
             await this.executeStop(true);
           }
         }, remainingDelay);
