@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig, updateConfig } from "../../services/config.js";
 import { resolveEffectivePreset, getPresetPromptInstructions, transcribeDetailed } from "../../services/stt.js";
-import { _resetGeminiClient } from "../../services/gemini-client.js";
+import { _resetGeminiClient, setGeminiClientForTests } from "../../services/gemini-client.js";
 
 describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   let tempDir: string;
@@ -108,23 +108,14 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
       updateConfig(tempDir, { translateEnabled: false, targetLanguage: "Japanese" });
 
       let capturedSystemInstruction = "";
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
-        try {
-          let bodyStr = "";
-          if (typeof init?.body === "string") bodyStr = init.body;
-          else if (init?.body && Buffer.isBuffer(init.body)) bodyStr = (init.body as Buffer).toString("utf-8");
-          else if (init?.body && init.body instanceof ArrayBuffer) bodyStr = Buffer.from(init.body).toString("utf-8");
-          else if (init?.body && ArrayBuffer.isView(init.body)) bodyStr = Buffer.from(init.body.buffer, init.body.byteOffset, init.body.byteLength).toString("utf-8");
-          if (bodyStr) {
-            const body = JSON.parse(bodyStr);
-            capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
-          }
-        } catch {}
-        return new Response(JSON.stringify({
-          candidates: [{ content: { parts: [{ text: "The database is ready." }], role: "model" }, finishReason: "STOP" }],
-        }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }) as any;
+      setGeminiClientForTests({
+        models: {
+          generateContent: async (params: any) => {
+            capturedSystemInstruction = params.config?.systemInstruction || "";
+            return { text: "The database is ready." };
+          },
+        },
+      });
 
       try {
         const res = await transcribeDetailed(new Float32Array(16000).buffer, {
@@ -139,7 +130,7 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
         expect(capturedSystemInstruction).toContain("original spoken language");
         expect(capturedSystemInstruction).not.toContain("into fluent, natural Burmese written prose");
       } finally {
-        globalThis.fetch = originalFetch;
+        setGeminiClientForTests(null);
       }
     });
   });
