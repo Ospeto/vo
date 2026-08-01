@@ -74,9 +74,6 @@ export class DictationControlCoordinator {
 
   /** Physical key-down handler from FnHook */
   public async handlePhysicalDown(triggerMode: DictationTriggerMode = "dictate"): Promise<CoordinatorActionResult> {
-    const now = Date.now();
-    this.keyHoldPressStartTime = now;
-
     if (this.mode === "hold") {
       if (!this.isNativeKeyUpAvailableFn()) {
         return {
@@ -88,14 +85,19 @@ export class DictationControlCoordinator {
       }
       const state = this.lifecycle.snapshot().state;
       if (state === "idle" || state === "error") {
+        this.keyHoldPressStartTime = Date.now();
         return this.startRecording(triggerMode);
       }
-      if (state === "transcribing" || state === "stopping" || state === "starting") {
+      if (state === "starting" || state === "recording") {
+        return { accepted: false, action: "ignored", reason: state === "starting" ? "Keydown ignored during starting state" : "Already recording" };
+      }
+      if (state === "transcribing" || state === "stopping") {
         this.onCancelDictationFn("Cancelled via hotkey");
         return { accepted: true, action: "cancelled", reason: "Hotkey down during active state cancelled dictation" };
       }
-      return { accepted: false, action: "ignored", reason: "Already recording" };
+      return { accepted: false, action: "ignored", reason: `Keydown ignored in state ${state}` };
     } else {
+      this.keyHoldPressStartTime = Date.now();
       return this.handleToggleCommand("physical", triggerMode);
     }
   }
@@ -103,29 +105,43 @@ export class DictationControlCoordinator {
   /** Physical key-up handler from FnHook */
   public async handlePhysicalUp(): Promise<CoordinatorActionResult> {
     if (this.mode !== "hold") {
-      return { accepted: true, action: "ignored", reason: "Key up ignored in toggle mode" };
+      return { accepted: false, action: "ignored", reason: "Key up ignored in toggle mode" };
     }
 
-    const pressDuration = Date.now() - this.keyHoldPressStartTime;
-    this.lastHoldPressDuration = pressDuration;
-    const state = this.lifecycle.snapshot().state;
+    if (this.keyHoldPressStartTime > 0) {
+      this.lastHoldPressDuration = Date.now() - this.keyHoldPressStartTime;
+      this.keyHoldPressStartTime = 0;
+    }
+    const pressDuration = this.lastHoldPressDuration;
+    const snap = this.lifecycle.snapshot();
+    const state = snap.state;
+
+    if (state === "idle" || state === "error" || state === "stopping" || state === "transcribing") {
+      return { accepted: false, action: "ignored", reason: `Key up ignored in state ${state}` };
+    }
 
     if (state === "starting") {
+      if (this.pendingStopOrigin === "physical") {
+        return { accepted: false, action: "ignored", reason: "Physical stop already pending during starting state" };
+      }
       this.pendingStopOrigin = "physical";
       return { accepted: true, action: "queued_stop", reason: "Key Up during starting state: queued pending stop" };
     } else if (state === "recording") {
+      if (this.shortTapTimer) {
+        return { accepted: false, action: "ignored", reason: "Short tap stop timer already active" };
+      }
       const elapsed = this.recordingStartTime > 0 ? Date.now() - this.recordingStartTime : pressDuration;
       const liveFnDown = this.isFnDownFn();
       const minDuration = getHoldModeMinimumDuration(pressDuration, liveFnDown);
       const remainingDelay = minDuration - elapsed;
 
       if (pressDuration < SHORT_TAP_THRESHOLD_MS && !liveFnDown && remainingDelay > 0) {
-        const recordingSeqId = this.lifecycle.snapshot().sequenceId;
+        const recordingSeqId = snap.sequenceId;
         if (this.shortTapTimer) clearTimeout(this.shortTapTimer);
         this.shortTapTimer = setTimeout(async () => {
           this.shortTapTimer = null;
-          const snap = this.lifecycle.snapshot();
-          if (snap.sequenceId === recordingSeqId && snap.state === "recording") {
+          const currentSnap = this.lifecycle.snapshot();
+          if (currentSnap.sequenceId === recordingSeqId && currentSnap.state === "recording") {
             await this.executeStop(true);
           }
         }, remainingDelay);
@@ -239,11 +255,25 @@ export class DictationControlCoordinator {
           // Live key is still down, clear pending stop
           return { accepted: true, action: "started", reason: "Live Fn key still down upon recording start" };
         }
-        const elapsed = Date.now() - this.recordingStartTime;
-        const minDuration = getHoldModeMinimumDuration(this.lastHoldPressDuration, false);
-        const delay = Math.max(0, minDuration - elapsed);
-        if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
+        const pressDuration = this.lastHoldPressDuration;
+        const elapsed = this.recordingStartTime > 0 ? Date.now() - this.recordingStartTime : 0;
+        const ensureMinimumDuration = shouldEnsureMinimumDuration(pressDuration, elapsed);
+        const minDuration = getHoldModeMinimumDuration(pressDuration, false);
+        const remainingDelay = minDuration - elapsed;
+
+        if (remainingDelay > 0) {
+          const recordingSeqId = this.lifecycle.snapshot().sequenceId;
+          if (this.shortTapTimer) clearTimeout(this.shortTapTimer);
+          this.shortTapTimer = setTimeout(async () => {
+            this.shortTapTimer = null;
+            const snap = this.lifecycle.snapshot();
+            if (snap.sequenceId === recordingSeqId && snap.state === "recording") {
+              await this.executeStop(ensureMinimumDuration);
+            }
+          }, remainingDelay);
+          return { accepted: true, action: "queued_stop", reason: "Pending physical stop delayed for minimum duration" };
+        } else {
+          return this.executeStop(ensureMinimumDuration);
         }
       }
       return this.executeStop(false);

@@ -18,7 +18,7 @@ import { IPC, type AppState, type StatePayload, type RendererRole } from "./shar
 import { MAX_STT_PAYLOAD_BYTES, MIN_STT_PAYLOAD_BYTES, isValidWebmHeader } from "./shared/audio-utils.js";
 import { saveRuntimeState, removeRuntimeState } from "./services/runtime-state.js";
 import { startDaemonServer, stopDaemonServer, type DaemonCommand, type DaemonResponse } from "./services/daemon-ipc.js";
-import { HotkeyService } from "./services/hotkey-service.js";
+import { HotkeyService, type HotkeyCallbacks } from "./services/hotkey-service.js";
 import { captureActiveSelection, createElectronClipboardAdapter, getClipboardPort, selectionOwnershipManager } from "./services/selection-service.js";
 import { calculatePopoverPosition } from "./services/popover-position.js";
 import { loadNativePasteAddon, resolveNativePastePath } from "./services/native-paste-addon.js";
@@ -26,7 +26,7 @@ import { createMacSafePasteService, type ClipboardAdapter } from "./services/saf
 import { PasteCoordinator } from "./services/paste-flow.js";
 import { RecordingLifecycle } from "./services/recording-lifecycle.js";
 import { handleRecordingError, type RecordingErrorPayload } from "./services/recording-error.js";
-import { DictationControlCoordinator } from "./services/dictation-control-coordinator.js";
+import { DictationControlCoordinator, type CoordinatorActionResult } from "./services/dictation-control-coordinator.js";
 import { CaptureRendererController } from "./services/capture-renderer-controller.js";
 import { CaptureOrchestrator } from "./services/capture-orchestrator.js";
 import logger from "./services/logger.js";
@@ -1209,33 +1209,54 @@ export async function startRecordingFlow(): Promise<boolean> {
   return captureOrchestrator.startRecordingFlow();
 }
 
-function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
+export function handleHotkeyDown(mode: "dictate" | "edit" = "dictate"): Promise<CoordinatorActionResult> {
   const now = Date.now();
-  if (now - lastHotkeyDownTime < 350) {
+  const dictMode = dictationCoordinator.getDictationMode();
+  const currentState = dictationCoordinator.snapshot().state;
+  const isHoldModeInitial = dictMode === "hold" && (currentState === "idle" || currentState === "error");
+
+  if (!isHoldModeInitial && now - lastHotkeyDownTime < 350) {
     logger.warn({ deltaMs: now - lastHotkeyDownTime }, "Debounced duplicate hotkey down trigger");
-    return;
+    return Promise.resolve({ accepted: false, action: "ignored", reason: "Debounced duplicate keydown" });
   }
   lastHotkeyDownTime = now;
 
   prewarmConnection();
 
-  dictationCoordinator.handlePhysicalDown(mode).then((res) => {
+  return dictationCoordinator.handlePhysicalDown(mode).then((res) => {
     if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
       setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
     }
+    return res;
   });
 }
 
-function handleHotkeyUp() {
-  dictationCoordinator.handlePhysicalUp();
+export function handleHotkeyUp(): Promise<CoordinatorActionResult> {
+  return dictationCoordinator.handlePhysicalUp();
 }
 
-function toggleRecordingState() {
-  dictationCoordinator.handleUiCommand("toggle").then((res) => {
+export function toggleRecordingState(): Promise<CoordinatorActionResult> {
+  return dictationCoordinator.handleUiCommand("toggle").then((res) => {
     if (!res.accepted && res.errorCode === "INPUT_MONITORING_REQUIRED") {
       setState("error", "Accessibility/Input Monitoring permissions required for Hold Mode");
     }
+    return res;
   });
+}
+
+export function setDictationCoordinatorForTests(coordinator: DictationControlCoordinator): void {
+  dictationCoordinator = coordinator;
+}
+
+export function createMainHotkeyCallbacks(): HotkeyCallbacks {
+  return {
+    onDown: (mode) => {
+      handleHotkeyDown(mode);
+    },
+    onUp: () => {
+      handleHotkeyUp();
+    },
+  };
 }
 
 function handleDaemonCommand(command: DaemonCommand): DaemonResponse {

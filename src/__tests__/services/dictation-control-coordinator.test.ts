@@ -428,3 +428,187 @@ describe("PR-07 Dictation Control Coordinator & Hotkey Remediation Suite", () =>
     expect(result.error).toContain("Accessibility/Input Monitoring permissions required for Hold Mode");
   });
 });
+
+describe("VO Hold Mode Fixes Regression Suite", () => {
+  let lifecycle: InstanceType<typeof RecordingLifecycle>;
+
+  beforeEach(() => {
+    lifecycle = new RecordingLifecycle();
+  });
+
+  test("Keydown starting hold mode, sustained recording while held, and release stopping & transcribing", async () => {
+    let startCalled = false;
+    let stopCalledWithMinDuration: boolean | null = null;
+    let cancelCalled = false;
+
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => true,
+        isFnDown: () => false,
+        onStartRecording: () => {
+          startCalled = true;
+          return true;
+        },
+        onStopRecording: (ensureMin) => {
+          stopCalledWithMinDuration = ensureMin;
+          return true;
+        },
+        onCancelDictation: () => {
+          cancelCalled = true;
+        },
+      },
+      lifecycle
+    );
+
+    // Initial keydown starts hold mode
+    const downRes = await coordinator.handlePhysicalDown("dictate");
+    expect(downRes.accepted).toBe(true);
+    expect(downRes.action).toBe("started");
+    expect(startCalled).toBe(true);
+    expect(coordinator.snapshot().state).toBe("starting");
+
+    const seqId = coordinator.snapshot().sequenceId;
+    const ackRes = await coordinator.acknowledgeStart(seqId, true);
+    expect(ackRes.accepted).toBe(true);
+    expect(ackRes.action).toBe("started");
+    expect(coordinator.snapshot().state).toBe("recording");
+
+    // Sustained recording while held (e.g., 900ms hold duration)
+    await new Promise((r) => setTimeout(r, 900));
+
+    // Key release stops recording
+    const upRes = await coordinator.handlePhysicalUp();
+    expect(upRes.accepted).toBe(true);
+    expect(upRes.action).toBe("stopped");
+    expect(stopCalledWithMinDuration as boolean | null).toBe(false);
+    expect(cancelCalled).toBe(false);
+    expect(coordinator.snapshot().state).toBe("stopping");
+  });
+
+  test("Keyup during 'starting' state with pressDuration = 300ms ensures minimum duration and ensureMinimumDuration = true", async () => {
+    let stopCalledWithMinDuration: boolean | null = null;
+    let cancelCalled = false;
+
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => true,
+        isFnDown: () => false,
+        onStartRecording: () => true,
+        onStopRecording: (ensureMin) => {
+          stopCalledWithMinDuration = ensureMin;
+          return true;
+        },
+        onCancelDictation: () => {
+          cancelCalled = true;
+        },
+      },
+      lifecycle
+    );
+
+    // 1. Key down at t=0ms
+    await coordinator.handlePhysicalDown("dictate");
+    expect(coordinator.snapshot().state).toBe("starting");
+    const seqId = coordinator.snapshot().sequenceId;
+
+    // 2. Key up at t=300ms while still in 'starting' state
+    await new Promise((r) => setTimeout(r, 300));
+    const upRes = await coordinator.handlePhysicalUp();
+    expect(upRes.accepted).toBe(true);
+    expect(upRes.action).toBe("queued_stop");
+    expect(cancelCalled).toBe(false);
+
+    // 3. Selection capture completes at t=350ms, acknowledgeStart runs
+    await new Promise((r) => setTimeout(r, 50));
+    const ackRes = await coordinator.acknowledgeStart(seqId, true);
+    expect(ackRes.accepted).toBe(true);
+    expect(ackRes.action).toBe("queued_stop");
+    expect(coordinator.snapshot().state).toBe("recording");
+
+    // 4. Timer should execute stop after remaining delay (~450ms)
+    await new Promise((r) => setTimeout(r, 550));
+    expect(stopCalledWithMinDuration as boolean | null).toBe(true);
+    expect(cancelCalled).toBe(false);
+    expect(coordinator.snapshot().state).toBe("stopping");
+  });
+
+  test("Extra physical keydown during 'starting' or 'recording' in Hold Mode is IGNORED (not cancelling)", async () => {
+    let cancelCalled = false;
+
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => true,
+        isFnDown: () => false,
+        onStartRecording: () => true,
+        onStopRecording: () => true,
+        onCancelDictation: () => {
+          cancelCalled = true;
+        },
+      },
+      lifecycle
+    );
+
+    // Start hold mode -> 'starting'
+    await coordinator.handlePhysicalDown("dictate");
+    expect(coordinator.snapshot().state).toBe("starting");
+
+    // Extra keydown during 'starting'
+    const repeatStarting = await coordinator.handlePhysicalDown("dictate");
+    expect(repeatStarting.accepted).toBe(false);
+    expect(repeatStarting.action).toBe("ignored");
+    expect(cancelCalled).toBe(false);
+
+    // Transition to 'recording'
+    const seqId = coordinator.snapshot().sequenceId;
+    await coordinator.acknowledgeStart(seqId, true);
+    expect(coordinator.snapshot().state).toBe("recording");
+
+    // Extra keydown during 'recording'
+    const repeatRecording = await coordinator.handlePhysicalDown("dictate");
+    expect(repeatRecording.accepted).toBe(false);
+    expect(repeatRecording.action).toBe("ignored");
+    expect(cancelCalled).toBe(false);
+  });
+
+  test("Short tap (<250ms) in Hold Mode schedules minimum duration timer", async () => {
+    let stopCalledWithMinDuration: boolean | null = null;
+
+    const coordinator = new DictationControlCoordinator(
+      {
+        dictationMode: "hold",
+        isNativeKeyUpAvailable: () => true,
+        isFnDown: () => false,
+        onStartRecording: () => true,
+        onStopRecording: (ensureMin) => {
+          stopCalledWithMinDuration = ensureMin;
+          return true;
+        },
+        onCancelDictation: () => {},
+      },
+      lifecycle
+    );
+
+    // Keydown at t=0ms
+    await coordinator.handlePhysicalDown("dictate");
+    // Quick release at t=100ms
+    await new Promise((r) => setTimeout(r, 100));
+    await coordinator.handlePhysicalUp();
+
+    // Acknowledge start at t=150ms
+    await new Promise((r) => setTimeout(r, 50));
+    const seqId = coordinator.snapshot().sequenceId;
+    const ackRes = await coordinator.acknowledgeStart(seqId, true);
+    expect(ackRes.action).toBe("queued_stop");
+
+    // Before timer (2500ms total for short tap) completes, stop not called
+    await new Promise((r) => setTimeout(r, 500));
+    expect(stopCalledWithMinDuration).toBeNull();
+
+    // Wait for full short tap duration
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(stopCalledWithMinDuration as boolean | null).toBe(true);
+    expect(coordinator.snapshot().state).toBe("stopping");
+  });
+});
