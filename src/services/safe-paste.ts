@@ -1,4 +1,4 @@
-import type { NativePasteAddon } from "./native-paste-addon.js";
+import type { NativePasteAddon, NativePasteAddonReadiness } from "./native-paste-addon.js";
 
 export type TargetIdentity = { bundleId: string; appName: string; pid: number; windowId: number; windowTitle?: string };
 export type TargetFailureReason = "target_unavailable" | "target_malformed" | "target_mismatch" | "native_unavailable";
@@ -318,7 +318,8 @@ export function createClipboardPort<TImage extends ClipboardImage>(clipboard: Cl
   };
 }
 
-export function createMacSafePasteService<TImage extends ClipboardImage>(addon: NativePasteAddon | null, clipboard: ClipboardAdapter<TImage>): SafePasteService {
+export function createMacSafePasteService<TImage extends ClipboardImage>(addonOrReadiness: NativePasteAddon | NativePasteAddonReadiness | null, clipboard: ClipboardAdapter<TImage>): SafePasteService {
+  const addon: NativePasteAddon | null = addonOrReadiness === null ? null : "ok" in addonOrReadiness ? (addonOrReadiness.ok ? addonOrReadiness.addon : null) : addonOrReadiness;
   const readTarget = (): TargetReadResult => {
     if (!addon) return { target: null, reason: "native_unavailable" };
     try {
