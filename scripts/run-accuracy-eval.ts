@@ -16,7 +16,7 @@ function runReport(): void {
     }
   }
 
-  console.log(`=== VO Transcription Accuracy Evaluation Round 6 ===`);
+  console.log(`=== VO Transcript Post-processing Accuracy Evaluation Round 6 ===`);
   console.log(`Loading fixture: ${fixturePath}`);
 
   const suite = loadAccuracyFixtureSuite(fixturePath);
@@ -51,7 +51,7 @@ function runReport(): void {
     console.error(`\nAccuracy Evaluation Failed with ${report.failedCases} failure(s).`);
     process.exit(1);
   } else {
-    console.log(`\nAll accuracy evaluation cases passed successfully!`);
+    console.log(`\nAll transcript post-processing evaluation cases passed successfully!`);
   }
 }
 

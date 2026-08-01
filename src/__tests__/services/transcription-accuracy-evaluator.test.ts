@@ -12,7 +12,7 @@ import {
   type AccuracyFixtureSuite,
 } from "../../services/transcription-accuracy-evaluator.js";
 
-describe("VO Transcription Accuracy Evaluator & Metrics Suite (Round 6)", () => {
+describe("VO Transcript Post-processing Accuracy Evaluator & Metrics Suite (Round 6)", () => {
   describe("1. Tokenization & Text Segmentation", () => {
     test("handles empty or whitespace-only strings gracefully", () => {
       expect(tokenizeText("")).toEqual([]);
@@ -121,6 +121,22 @@ describe("VO Transcription Accuracy Evaluator & Metrics Suite (Round 6)", () => 
       expect(report.wordErrorRate).toBeGreaterThan(0);
       expect(report.expectedWordCount).toBe(4);
       expect(report.actualWordCount).toBe(5);
+    });
+
+    test("rejects casing, punctuation, and protected-token regressions hidden by normalized WER", () => {
+      const casing = evaluateAccuracyCase({
+        id: "case", category: "technical_terms", description: "case", input: "api_key", expected: "API_KEY",
+      });
+      const punctuation = evaluateAccuracyCase({
+        id: "punctuation", category: "punctuation", description: "punctuation", input: "hello world", expected: "Hello, world",
+      });
+
+      expect(casing.report.wordErrorRate).toBe(0);
+      expect(casing.report.protectedTokensMatch).toBe(false);
+      expect(casing.passed).toBe(false);
+      expect(punctuation.report.wordErrorRate).toBe(0);
+      expect(punctuation.report.punctuationMatch).toBe(false);
+      expect(punctuation.passed).toBe(false);
     });
   });
 

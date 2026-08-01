@@ -29,6 +29,10 @@ export interface AccuracyReport {
   deletions: number;
   wordErrorRate: number;
   accuracy: number;
+  exactMatch: boolean;
+  casingMatch: boolean;
+  punctuationMatch: boolean;
+  protectedTokensMatch: boolean;
   diffOps: AccuracyDiffOp[];
   substitutionDetails: Array<{ expected: string; actual: string; expectedIndex: number; actualIndex: number }>;
   insertionDetails: Array<{ actual: string; actualIndex: number }>;
@@ -117,6 +121,21 @@ export interface AccuracySuiteReport {
   totalDuplicatedFragments: number;
   categorySummaries: Record<string, CategorySummary>;
   caseResults: CaseEvalResult[];
+}
+
+const PUNCTUATION_REGEX = /[.,?!:;"'“”‘’()[\]{}\-–—/\\`။၊]/gu;
+
+function punctuationSequence(text: string): string[] {
+  return text.match(PUNCTUATION_REGEX) ?? [];
+}
+
+function protectedTokens(text: string): string[] {
+  return text.split(/\s+/).filter(token =>
+    /^(?:https?:\/\/|git@|@|--|\/)/i.test(token)
+    || /[_`]/.test(token)
+    || /\p{Ll}\p{Lu}/u.test(token)
+    || /^(?=.*\p{Lu})[\p{Lu}\d_.-]+$/u.test(token)
+  );
 }
 
 export interface EvalOptions {
@@ -372,6 +391,7 @@ export function evaluateTranscriptPair(expectedText: string, actualText: string)
 
   const alignment = alignWords(expectedTokens, actualTokens);
   const duplicatedFragments = detectDuplicatedFragments(actualText);
+  const casingMatch = alignment.diffOps.every(op => op.type !== "match" || op.expected === op.actual);
 
   return {
     expectedText,
@@ -384,6 +404,10 @@ export function evaluateTranscriptPair(expectedText: string, actualText: string)
     deletions: alignment.deletions,
     wordErrorRate: alignment.wordErrorRate,
     accuracy: alignment.accuracy,
+    exactMatch: expectedText === actualText,
+    casingMatch,
+    punctuationMatch: punctuationSequence(expectedText).join("") === punctuationSequence(actualText).join(""),
+    protectedTokensMatch: protectedTokens(expectedText).join("\n") === protectedTokens(actualText).join("\n"),
     diffOps: alignment.diffOps,
     substitutionDetails: alignment.substitutionDetails,
     insertionDetails: alignment.insertionDetails,
@@ -416,15 +440,19 @@ export function evaluateAccuracyCase(caseItem: AccuracyTestCase): CaseEvalResult
       caseItem.input,
       ctx?.activeApp,
       ctx?.preset,
-      ctx?.dictionaryEntries,
+      ctx?.dictionaryEntries ?? [],
       ctx?.translateEnabled,
       ctx?.targetLanguage
     );
   }
 
   const report = evaluateTranscriptPair(caseItem.expected, actualOutput);
-  const werThreshold = caseItem.maxWerThreshold ?? 0.0; // default 0.0 WER (100% exact match requirement unless specified)
-  const passed = report.wordErrorRate <= werThreshold;
+  const passed = caseItem.maxWerThreshold === undefined
+    ? report.exactMatch
+    : report.wordErrorRate <= caseItem.maxWerThreshold
+      && report.casingMatch
+      && report.punctuationMatch
+      && report.protectedTokensMatch;
 
   return {
     caseId: caseItem.id,
@@ -455,7 +483,10 @@ export function evaluateAccuracySuite(suite: AccuracyFixtureSuite, options?: Eva
   for (const caseItem of suite.cases) {
     const evalRes = evaluateAccuracyCase(caseItem);
     if (options?.maxAllowedWer !== undefined) {
-      evalRes.passed = evalRes.report.wordErrorRate <= options.maxAllowedWer;
+      evalRes.passed = evalRes.report.wordErrorRate <= options.maxAllowedWer
+        && evalRes.report.casingMatch
+        && evalRes.report.punctuationMatch
+        && evalRes.report.protectedTokensMatch;
     }
 
     if (evalRes.passed) passedCases++;

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "VO Round 6 Local Synthetic Evaluation Fixture Suite",
+  "description": "VO Round 6 Local Synthetic Transcript Post-processing Fixture Suite",
   "cases": [
     {
       "id": "name-01",
