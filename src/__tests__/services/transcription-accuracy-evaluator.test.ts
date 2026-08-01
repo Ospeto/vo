@@ -159,6 +159,12 @@ describe("VO Transcript Post-processing Accuracy Evaluator & Metrics Suite (Roun
       expect(report.wordErrorRate).toBe(0.5);
       expect(report.punctuationMatch).toBe(true);
     });
+
+    test("detects non-sentence punctuation regressions", () => {
+      const report = evaluateTranscriptPair("Use (`src/main.ts`).", "Use src/main.ts.");
+      expect(report.wordErrorRate).toBe(0);
+      expect(report.punctuationMatch).toBe(false);
+    });
   });
 
   describe("4. Fixture Loading & Captain Case Extensibility", () => {

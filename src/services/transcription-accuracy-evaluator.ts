@@ -125,7 +125,7 @@ export interface AccuracySuiteReport {
 }
 
 function tokenPunctuation(text: string): string[] {
-  return text.trim() ? text.trim().split(/\s+/).map(token => (token.match(/[.,?!:;"'“”‘’။၊]/gu) ?? []).join("")) : [];
+  return text.trim() ? text.trim().split(/\s+/).map(token => (token.match(/[.,?!:;"'“”‘’()[\]{}\-–—/\\`။၊]/gu) ?? []).join("")) : [];
 }
 
 export interface EvalOptions {
