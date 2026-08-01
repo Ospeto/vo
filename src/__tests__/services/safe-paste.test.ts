@@ -53,8 +53,8 @@ describe("SafePasteService", () => {
 
   test("native build provisions exact Electron headers without private cache assumptions", async () => {
     const buildSource = await Bun.file(new URL("../../../scripts/build-native-paste-addon.ts", import.meta.url)).text();
-    expect(buildSource).toContain("https://artifacts.electronjs.org/headers/dist/v40.2.1/node-v40.2.1-headers.tar.gz");
-    expect(buildSource).toContain("35476b9cfe8a71494e64bbad221d42f7ed1cc8c3dee7a39a1db0bd4cbac27afe");
+    expect(buildSource).toContain("https://artifacts.electronjs.org/headers/dist/v40.8.5/node-v40.8.5-headers.tar.gz");
+    expect(buildSource).toContain("932782802be7f6a2277a2b6d48f1c0fc3b20a1cbdadf767ae110763463cd3f9a");
     expect(buildSource).toContain("--nodedir");
     expect(buildSource).toContain("electronPackage.version");
     expect(buildSource).toContain("ELECTRON_HEADERS");
@@ -64,7 +64,7 @@ describe("SafePasteService", () => {
 
   test("executes exact header metadata validation for valid, missing, malformed, duplicate, conflicting, and commented declarations", () => {
     const validConfig = "{\n 'built_with_electron': 1,\n 'using_electron_config_gypi': 1,\n 'node_module_version': 143,\n}";
-    const validVersion = "#define NODE_MAJOR_VERSION 24\n#define NODE_MINOR_VERSION 11\n#define NODE_PATCH_VERSION 1\n";
+    const validVersion = "#define NODE_MAJOR_VERSION 24\n#define NODE_MINOR_VERSION 14\n#define NODE_PATCH_VERSION 0\n";
     expect(parseGypAssignment(validConfig, "built_with_electron")).toBe(1);
     expect(parseDefine(validVersion, "NODE_MAJOR_VERSION")).toBe(24);
     expect(validateElectronHeaderMetadata(validConfig, validVersion)).toBe(true);
@@ -81,7 +81,7 @@ describe("SafePasteService", () => {
 
   test("pins the Electron ABI and declares node-gyp directly", async () => {
     const packageJson = await Bun.file(new URL("../../../package.json", import.meta.url)).json() as { devDependencies: Record<string, string> };
-    expect(packageJson.devDependencies.electron).toBe("40.2.1");
+    expect(packageJson.devDependencies.electron).toBe("40.8.5");
     expect(packageJson.devDependencies["node-gyp"]).toBe("12.4.0");
   });
 

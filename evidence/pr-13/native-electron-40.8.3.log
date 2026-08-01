@@ -1,0 +1,36 @@
+$ bun scripts/build-native-paste-addon.ts --self-check
+gyp info it worked if it ends with ok
+gyp info using node-gyp@12.4.0
+gyp info using node@22.22.3 | darwin | arm64
+gyp info chdir /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-5M0s3y
+gyp info find Python using Python version 3.14.6 found at "/opt/homebrew/opt/python@3.14/bin/python3.14"
+gyp info spawn /opt/homebrew/opt/python@3.14/bin/python3.14
+gyp info spawn args [
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp/gyp/gyp_main.py',
+gyp info spawn args 'binding.gyp',
+gyp info spawn args '-f',
+gyp info spawn args 'make',
+gyp info spawn args '-I',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-5M0s3y/build/config.gypi',
+gyp info spawn args '-I',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp/addon.gypi',
+gyp info spawn args '-I',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3/include/node/common.gypi',
+gyp info spawn args '-Dlibrary=shared_library',
+gyp info spawn args '-Dvisibility=default',
+gyp info spawn args '-Dnode_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3',
+gyp info spawn args '-Dnode_gyp_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp',
+gyp info spawn args '-Dnode_lib_file=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3/$(Configuration)/node.lib',
+gyp info spawn args '-Dmodule_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-5M0s3y',
+gyp info spawn args '-Dnode_engine=v8',
+gyp info spawn args '--depth=.',
+gyp info spawn args '--no-parallel',
+gyp info spawn args '--generator-output',
+gyp info spawn args 'build',
+gyp info spawn args '-Goutput_dir=.'
+gyp info spawn args ]
+gyp info ok 
+Built /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/native/pi-paste.node
+pi-paste addon self-check ok
+native_electron_exit=0
+native/pi-paste.node: Mach-O 64-bit dynamically linked shared library arm64

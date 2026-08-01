@@ -1,0 +1,6 @@
+hdiutil: verify: checksum of "dist/vo-1.5.0-arm64.dmg" is VALID
+hdiutil_exit=0
+zip_test_exit=0
+macOS artifact smoke test passed: /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/dist/mac-arm64/vo.app
+packaged_smoke_exit=0
+pipeline_exit=0

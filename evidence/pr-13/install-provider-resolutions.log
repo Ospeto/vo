@@ -1,0 +1,7 @@
+bun install v1.3.14 (0d9b296a)
+error: lockfile had changes, but lockfile is frozen
+note: try re-running without --frozen-lockfile and commit the updated lockfile
+bun install v1.3.14 (0d9b296a)
+
+8 packages installed [159.00ms]
+install_provider_frozen_exit=0

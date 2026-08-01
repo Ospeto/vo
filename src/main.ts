@@ -1358,7 +1358,7 @@ export function _resetShutdownStateForTests(): void {
   isQuitting = false;
 }
 
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
+const gotSingleInstanceLock = process.argv.includes("--headless") || app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
   logger.info("Another instance of vo is already running, quitting second instance");
   app.quit();
@@ -1436,11 +1436,12 @@ app.whenReady().then(async () => {
     const isOk = addon !== null && typeof addon.selfCheck === "function" && addon.selfCheck() === true;
     if (isOk) {
       console.log("native paste addon self-check ok");
-      process.exit(0);
-    } else {
-      console.error("native paste addon self-check failed");
-      process.exit(1);
+      app.exit(0);
+      return;
     }
+    console.error("native paste addon self-check failed");
+    app.exit(1);
+    return;
   }
 
   app.name = "vo";

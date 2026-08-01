@@ -1,0 +1,748 @@
+--- final verification after packaged-launch fix ---
+bun test v1.3.14 (0d9b296a)
+
+scripts/dependency-remediation.test.ts:
+(pass) PR-13 dependency remediation > pins the supported Electron ABI and reachable provider resolutions [0.88ms]
+(pass) PR-13 dependency remediation > proves provider advisories were removed without treating the total as a vulnerability count [0.56ms]
+(pass) PR-13 dependency remediation > packaged headless launch exits after the native addon self-check [0.43ms]
+
+scripts/assert-known-baseline.test.ts:
+(pass) compares diagnostics as counted multisets [1.04ms]
+(pass) preserves TS diagnostic details [0.38ms]
+(pass) reports failure-shaped output that was not parsed [0.05ms]
+(pass) rejects unsupported test runner output: panic: runtime exploded [0.02ms]
+(pass) rejects unsupported test runner output: fatal: worker exited unexpectedly
+(pass) rejects unsupported test runner output: runner crashed before producing a summary
+(pass) rejects unrecognized residual output [0.04ms]
+
+src/__tests__/preload-artifacts.test.ts:
+(pass) Packaged Preload Artifact Integrity & Sandboxed Self-Containment > all required preload entrypoints exist and no generated shared chunk files exist [0.25ms]
+(pass) Packaged Preload Artifact Integrity & Sandboxed Self-Containment > no entrypoint contains runtime relative require of generated chunks [1.00ms]
+(pass) Packaged Preload Artifact Integrity & Sandboxed Self-Containment > each preload entrypoint exposes its role-scoped bridge without module loading errors [1.90ms]
+
+src/__tests__/cli-readiness.test.ts:
+(pass) CLI daemon readiness > matches status only when the IPC PID matches state [1.03ms]
+(pass) CLI daemon readiness > times out within the configured bound [29.03ms]
+(pass) CLI daemon readiness > reports child exit and error before readiness [22.81ms]
+(pass) CLI daemon readiness > fails immediately on malformed readiness response [0.33ms]
+(pass) CLI daemon readiness > accepts a complete validated status response [0.10ms]
+(pass) CLI daemon readiness > cleans up the owned child and fails on timeout, exit, error, and malformed response [34.72ms]
+(pass) CLI status and stop ownership flows > status preserves state when IPC fails [0.31ms]
+(pass) CLI status and stop ownership flows > stop does not shut down or signal on IPC failure [0.25ms]
+(pass) CLI status and stop ownership flows > stop does not shut down or signal when status PID mismatches [0.08ms]
+(pass) CLI status and stop ownership flows > stop shuts down only after status PID matches state PID [0.07ms]
+(pass) CLI status and stop ownership flows > CLI shutdown returns success when daemon protocol accepts shutdown command [0.14ms]
+
+src/__tests__/renderer/untrusted-rendering.test.ts:
+(pass) PR-01 Untrusted Rendering & CSP Security Remediation > 1. Person names rendering converts hostile HTML/markup into literal text nodes without executable elements [0.92ms]
+(pass) PR-01 Untrusted Rendering & CSP Security Remediation > 2. Person name remove button removes entry and triggers config save [0.52ms]
+(pass) PR-01 Untrusted Rendering & CSP Security Remediation > 3. Preset vocabulary tags render hostile markup as literal text without executable elements [0.29ms]
+(pass) PR-01 Untrusted Rendering & CSP Security Remediation > 4. Preset vocabulary tag remove button removes term and saves config [0.21ms]
+(pass) PR-01 Untrusted Rendering & CSP Security Remediation > 5. History rendering converts hostile activeApp and text into literal text and safe clipboard actions [2.64ms]
+(pass) PR-01 Untrusted Rendering & CSP Security Remediation > 6. Build/Package CSP assertion: all renderer HTML pages carry required Content Security Policy meta headers [0.85ms]
+
+src/__tests__/shared/types.test.ts:
+(pass) IPC constants > contains all expected channel names [0.03ms]
+(pass) IPC constants > all values are unique strings [0.06ms]
+(pass) PiVoiceConfigPatch type coverage > allows all patch fields without type errors [0.03ms]
+
+src/__tests__/shared/audio-utils.test.ts:
+(pass) analyzePcmFrame > returns zero metrics for empty buffer [0.36ms]
+(pass) analyzePcmFrame > calculates RMS and identifies speech frame [0.26ms]
+(pass) analyzePcmFrame > identifies clipped frame [0.04ms]
+(pass) SpeechEndpointDetector > does not endpoint without detected speech [0.12ms]
+(pass) SpeechEndpointDetector > detects speech and endpoints on confirmed silence [0.03ms]
+(pass) SpeechEndpointDetector > resets state cleanly [0.04ms]
+(pass) diagnoseAudioStats > diagnoses short recording [0.04ms]
+(pass) diagnoseAudioStats > diagnoses near-silence input [0.02ms]
+(pass) diagnoseAudioStats > accepts valid audio when maxRms >= 0.001 even without speech detection flag [0.01ms]
+(pass) diagnoseAudioStats > diagnoses clipped audio [0.02ms]
+(pass) diagnoseAudioStats > accepts valid speech [0.01ms]
+(pass) downsample > returns same buffer when sample rates match [0.08ms]
+(pass) downsample > downsamples 48kHz to 16kHz (3:1 ratio) [0.03ms]
+(pass) downsample > upsamples 16kHz to 48kHz (1:3 ratio) [0.02ms]
+(pass) downsample > handles empty buffer [0.02ms]
+(pass) downsample > handles single sample [0.03ms]
+(pass) downsample > preserves signal characteristics roughly [0.06ms]
+(pass) convertToMono > returns original buffer for mono input [0.04ms]
+(pass) convertToMono > averages stereo channels correctly [0.02ms]
+(pass) analyzeAudioQuality > detects unavailable microphone [0.08ms]
+(pass) analyzeAudioQuality > detects disconnected microphone on track ended or empty buffer [0.05ms]
+(pass) analyzeAudioQuality > detects extremely quiet / near-silence input [0.26ms]
+(pass) analyzeAudioQuality > preserves valid quiet speech and normal dictation [0.31ms]
+(pass) analyzeAudioQuality > detects clipped input when amplitude saturates [0.15ms]
+
+src/__tests__/services/language-stability.test.ts:
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 1. Explicit Language & Dictation Preset Persistence > preserves explicit dictation preset without overriding with auto-detection [1.77ms]
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 1. Explicit Language & Dictation Preset Persistence > auto preset dynamically resolves preset based on active window and app mappings [0.40ms]
+{"level":30,"time":1785543257186,"pid":38544,"hostname":"Ospetos-M4-Air.local","vocabPath":"/Users/macbookair/.config/pi-voice/vocabulary.json","msg":"Persisted custom vocabulary dictionary cleanly"}
+{"level":30,"time":1785543257198,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-FUDQuJ/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"burmese_written","dictationMode":"toggle","translateEnabled":true,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257220,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-FUDQuJ/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"burmese_written","dictationMode":"toggle","translateEnabled":true,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257244,"pid":38544,"hostname":"Ospetos-M4-Air.local","vocabPath":"/Users/macbookair/.config/pi-voice/vocabulary.json","msg":"Persisted custom vocabulary dictionary cleanly"}
+{"level":30,"time":1785543257252,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-FUDQuJ/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.5,"dictationPreset":"burmese_written","dictationMode":"toggle","translateEnabled":true,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 1. Explicit Language & Dictation Preset Persistence > persists explicit dictationPreset, translateEnabled, and targetLanguage losslessly across updates and restarts [99.35ms]
+{"level":30,"time":1785543257274,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-gy6fcN/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"careful","dictationMode":"toggle","translateEnabled":true,"targetLanguage":"French","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 1. Explicit Language & Dictation Preset Persistence > migrates legacy 'translate' preset to 'careful' preset + translateEnabled: true without losing targetLanguage [22.26ms]
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 2. Strict Mode Separation (Detect Mode vs Translation Mode) > provides tailored prompt instructions for all dictation presets [0.41ms]
+{"level":30,"time":1785543257299,"pid":38544,"hostname":"Ospetos-M4-Air.local","vocabPath":"/Users/macbookair/.config/pi-voice/vocabulary.json","msg":"Persisted custom vocabulary dictionary cleanly"}
+{"level":30,"time":1785543257306,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-RzMG0i/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"careful","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257549,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257550,"pid":38544,"hostname":"Ospetos-M4-Air.local","keyCount":1,"msg":"Initializing Gemini client(s) (Multi-Key Round-Robin Active)"}
+{"level":30,"time":1785543257570,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257596,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257617,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257639,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257645,"pid":38544,"hostname":"Ospetos-M4-Air.local","model":"gemini-3.1-flash-lite","preferredModel":"gemini-3.1-flash-lite","activeApp":"ghostty","customTermsCount":63,"dictationPreset":"burmese_written","text":"The database is ready.","byteLength":64000,"usedPaidKey":false,"msg":"Gemini STT transcribed successfully"}
+{"level":30,"time":1785543257667,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.pi/pi-voice.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Japanese","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257671,"pid":38544,"hostname":"Ospetos-M4-Air.local","provider":"gemini","geminiModel":"gemini-3.1-flash-lite","dictationPreset":"burmese_written","effectivePreset":"burmese_written","activeApp":"ghostty","rawText":"The database is ready.","sanitized":"The database is ready","usedPaidKey":false,"msg":"Transcribed detailed and sanitized"}
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 2. Strict Mode Separation (Detect Mode vs Translation Mode) > explicit translateEnabled: false disables translation mode even when targetLanguage is set [395.83ms]
+{"level":30,"time":1785543257694,"pid":38544,"hostname":"Ospetos-M4-Air.local","vocabPath":"/Users/macbookair/.config/pi-voice/vocabulary.json","msg":"Persisted custom vocabulary dictionary cleanly"}
+{"level":30,"time":1785543257702,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-CFBAlu/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"burmese_written","dictationMode":"toggle","translateEnabled":true,"targetLanguage":"German","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 3. Separation of Transcription Language and Translation Target Language > explicitly passed targetLanguage is preserved and separated from dictation language [31.96ms]
+{"level":30,"time":1785543257726,"pid":38544,"hostname":"Ospetos-M4-Air.local","vocabPath":"/Users/macbookair/.config/pi-voice/vocabulary.json","msg":"Persisted custom vocabulary dictionary cleanly"}
+{"level":30,"time":1785543257733,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-HElQZx/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"English","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+{"level":30,"time":1785543257755,"pid":38544,"hostname":"Ospetos-M4-Air.local","vocabPath":"/Users/macbookair/.config/pi-voice/vocabulary.json","msg":"Persisted custom vocabulary dictionary cleanly"}
+{"level":30,"time":1785543257762,"pid":38544,"hostname":"Ospetos-M4-Air.local","configPath":"/var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-lang-stability-HElQZx/global-config/pi-voice/config.json","keyBinding":"ctrl+cmd+option+v","editKeyBinding":"option+e","provider":"gemini","geminiModel":"gemini-3.5-flash-lite","inputGain":1.25,"dictationPreset":"code_comment","dictationMode":"toggle","translateEnabled":false,"targetLanguage":"Spanish","audioChimesEnabled":true,"symbolScannerEnabled":true,"vocabularyCount":46,"msg":"Loaded config"}
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 3. Separation of Transcription Language and Translation Target Language > changing targetLanguage does not alter active dictationPreset [60.14ms]
+(pass) VO Language Stability & Mode Separation Suite (Round 4) > 4. Cancellation & Stale Response Protection > aborted STT signal rejects request immediately before API execution [9.77ms]
+
+src/__tests__/services/pi-session.test.ts:
+(pass) pi-session > setSessionCwd > does not throw [0.07ms]
+(pass) pi-session > getOrCreateSession > creates a session on first call [0.41ms]
+(pass) pi-session > getOrCreateSession > returns cached session on subsequent calls [0.11ms]
+(pass) pi-session > getOrCreateSession > passes cwd to createAgentSession [0.08ms]
+(pass) pi-session > getOrCreateSession > uses in-memory session manager [0.04ms]
+(pass) pi-session > prompt > calls session.prompt with the text [0.16ms]
+(pass) pi-session > prompt > subscribes before prompting and unsubscribes after [0.08ms]
+(pass) pi-session > prompt > unsubscribes even if prompt throws [0.14ms]
+(pass) pi-session > prompt > calls onTextEnd callback for text_end events [0.19ms]
+(pass) pi-session > prompt > skips empty content in text_end events [0.09ms]
+(pass) pi-session > prompt > ignores non-text_end events [0.06ms]
+(pass) pi-session > dispose > disposes the session [0.05ms]
+(pass) pi-session > dispose > does nothing when no session exists [0.03ms]
+(pass) pi-session > dispose > allows creating new session after dispose [0.04ms]
+
+src/__tests__/services/hold-mode-protections.test.ts:
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 1. Hold mode minimum capture window protection > queues pending stop when key up occurs during starting state and enforces 800ms minimum capture duration [0.20ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 1. Hold mode minimum capture window protection > hold mode hotkey release shortly after press during recording state passes ensureMinimumDuration = true [0.05ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 1. Hold mode minimum capture window protection > hold mode hotkey release after 800ms duration passes ensureMinimumDuration = false [0.02ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 1. Hold mode minimum capture window protection > isFnDown === true cancels pendingStopOnStart and keeps recording active when entering recording state [0.04ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 1. Hold mode minimum capture window protection > getHoldModeMinimumDuration extends minimum recording duration to 2500ms for short tap (<250ms) when isFnDown is false [0.04ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 2. Auto-endpointing disabled across dictation modes > autoEndpointEnabled is set to false for both 'hold' and 'toggle' modes [0.02ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 2. Auto-endpointing disabled across dictation modes > auto-endpoint trigger is bypassed when autoEndpointEnabled is false even if SpeechEndpointDetector endpoints [0.07ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 3. Mid-utterance pauses during hold mode > SpeechEndpointDetector does not endpoint on brief mid-utterance pauses (100-300ms) under standard threshold [0.05ms]
+(pass) Hold Mode Recording Protections & Auto-Endpointing Guard Suite > 3. Mid-utterance pauses during hold mode > Audio warmup guard ignores initial metering frames during first 200ms of recording [0.06ms]
+
+src/__tests__/services/paste-flow.test.ts:
+(pass) PasteCoordinator > awaits successful paste and resets mutex [0.44ms]
+(pass) PasteCoordinator > resets mutex after denial [0.09ms]
+(pass) PasteCoordinator > resets mutex after an exception [0.16ms]
+(pass) PasteCoordinator > blocks a second toggle while paste is pending [0.12ms]
+(pass) PasteCoordinator > ignores stale completion after lifecycle invalidation [0.11ms]
+(pass) PasteCoordinator > keeps transcription pending, rejects toggles, and suppresses stale completion effects [0.17ms]
+(pass) PasteCoordinator > dedupe text and timestamp commit on successful submission only [0.13ms]
+(pass) PasteCoordinator > accepts recording lifecycle sequence and predicate without minting validity at call time [0.13ms]
+
+src/__tests__/services/translation-state-fix.test.ts:
+(pass) VO Translation Mode State & Target Language Preservation Suite > 1. Target Language Preservation: Explicitly passed 'English' targetLanguage is NOT overridden by disk config [170.26ms]
+(pass) VO Translation Mode State & Target Language Preservation Suite > 2. Intentional Target Language: Explicitly passed 'Burmese' targetLanguage works when requested [177.03ms]
+(pass) VO Translation Mode State & Target Language Preservation Suite > 3. Detect Mode Preservation: When translateEnabled is false, ordinary detect mode runs without forcing translation [173.44ms]
+(pass) VO Translation Mode State & Target Language Preservation Suite > 4. Legacy Config Migration: Migrates legacy 'translate' preset to 'careful' preset + translateEnabled: true [23.97ms]
+(pass) VO Translation Mode State & Target Language Preservation Suite > 5. Persistence across mode updates: Preserves targetLanguage choice when updating preset or gain [70.58ms]
+(pass) VO Translation Mode State & Target Language Preservation Suite > 6. Persistence migration: Updating a legacy translate config keeps translation enabled [40.35ms]
+(pass) VO Translation Mode State & Target Language Preservation Suite > 7. Cancellation & Abort Safety: Aborted STT request fails fast and does not process response [8.55ms]
+
+src/__tests__/services/microphone-input-quality.test.ts:
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 1. Audio Format Conversion & Downsampling Contracts > downsamples 48kHz stereo/mono audio to 16kHz Float32 PCM faithfully [0.22ms]
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 1. Audio Format Conversion & Downsampling Contracts > converts stereo input to mono before processing [0.06ms]
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 2. Quality Detection & Threshold Calibration > preserves valid quiet speech without false rejection [0.23ms]
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 2. Quality Detection & Threshold Calibration > detects extremely quiet / dead microphone input before STT [0.21ms]
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 2. Quality Detection & Threshold Calibration > detects severely clipped microphone input [0.25ms]
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 2. Quality Detection & Threshold Calibration > detects unavailable or disconnected microphone [0.10ms]
+(pass) Microphone Input Quality & Diagnostics Pass Suite > 3. Recording State Machine Recovery on Subsequent Attempt > recovers cleanly from an input error state on the next recording [0.14ms]
+
+src/__tests__/services/vocabulary-consolidation.test.ts:
+(pass) VO Vocabulary Consolidation Suite > migrates customVocabulary as person_name and presetVocabulary as technical entries losslessly without preset scope [0.55ms]
+(pass) VO Vocabulary Consolidation Suite > dictionary entries apply deterministic local replacement unconditionally [0.34ms]
+(pass) VO Vocabulary Consolidation Suite > conflict validation detects conflicts across all enabled entries [0.07ms]
+(pass) VO Vocabulary Consolidation Suite > category model supports exactly three categories: general, person_name, technical [0.15ms]
+(pass) VO Vocabulary Consolidation Suite > person names support canonical phrase and alias mapping like other entries [0.10ms]
+(pass) VO Vocabulary Consolidation Suite > confirms absence of PREVIEW_DICTIONARY IPC channel and live preview plumbing [0.01ms]
+
+src/__tests__/services/fn-hook.test.ts:
+(pass) FnHook > starts uiohook on start() [0.28ms]
+(pass) FnHook > does not double-start [0.05ms]
+(pass) FnHook > calls onFnDown when key combo matches [0.15ms]
+(pass) FnHook > does not call onFnDown when modifiers don't match [0.05ms]
+(pass) FnHook > calls onFnUp when release key matches [0.11ms]
+(pass) FnHook > calls onFnUp when modifier key is released [0.06ms]
+(pass) FnHook > does not fire onFnUp when unrelated key released [0.06ms]
+(pass) FnHook > ignores repeat keydowns while active [0.04ms]
+(pass) FnHook > does not call onFnUp when not active [0.03ms]
+(pass) FnHook > stop() stops uiohook and detaches retired listeners [0.12ms]
+(pass) FnHook > stop() is no-op when not started [0.03ms]
+(pass) FnHook > isFnDown tracks active state [0.06ms]
+(pass) FnHook > handles meta+shift+i binding (default) [0.05ms]
+
+src/__tests__/services/dictation-control-coordinator.test.ts:
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 1. Native hold down/start/up stops once and transcribes [262.99ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 2. Tray/UI stop in hold mode works [0.37ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 3. Down-only hold rejects before start when native key-up is unavailable [0.13ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 4. Toggle second command during starting queues exactly one stop and never calls cancel; minimum duration still runs [0.31ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 5. Explicit startup stop overrides a still-held physical key [0.16ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 8. Re-registering while a hold is starting is rejected without losing the release edge [614.16ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 9. Re-registering while recording is rejected and the current binding still stops [613.82ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 10. Starting a new binding retires the old native shortcut listener [0.32ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 6. False fallback registration reports failure in HotkeyService [0.37ms]
+(pass) PR-07 Dictation Control Coordinator & Hotkey Remediation Suite > 7. Hold mode rejects down-only fallback when native key-up fails to start in HotkeyService [0.10ms]
+
+src/__tests__/services/safe-paste.test.ts:
+(pass) SafePasteService > uses only the direct synchronous native paste contract [0.24ms]
+(pass) SafePasteService > production paste sources use a direct synchronous native contract [0.30ms]
+(pass) SafePasteService > packaged Electron smoke requires capture, authorization, mismatch rejection, and dry-run success [0.08ms]
+(pass) SafePasteService > production addon has no compile-time smoke fixture exports [0.46ms]
+(pass) SafePasteService > packaged smoke selects a distinct test-only addon artifact [0.23ms]
+(pass) SafePasteService > native build provisions exact Electron headers without private cache assumptions [0.10ms]
+(pass) SafePasteService > executes exact header metadata validation for valid, missing, malformed, duplicate, conflicting, and commented declarations [0.60ms]
+(pass) SafePasteService > pins the Electron ABI and declares node-gyp directly [0.13ms]
+(pass) SafePasteService > smoke authorization and smoke results use native matching, not hard-coded JS values [0.16ms]
+(pass) SafePasteService > packaged smoke requires native capture and exact native failure reasons [0.07ms]
+(pass) SafePasteService > normal addon service operation has no child-process invocation boundary [253.23ms]
+(pass) SafePasteService > dry-run injection is non-invasive and reports a request without posting [0.08ms]
+(pass) SafePasteService > uses the in-process addon in authorization and injection order [251.31ms]
+(pass) SafePasteService > reports guarded addon load failure without touching clipboard [0.30ms]
+(pass) SafePasteService > guards a missing addon load without throwing during import [0.02ms]
+(pass) SafePasteService > calls native injection directly and restores after an actual native failure [0.58ms]
+(pass) SafePasteService > holds the written transcript readable until the clipboard is restored [0.35ms]
+(pass) SafePasteService > restores immediately without a hold when injection fails [0.18ms]
+(pass) SafePasteService > returns clipboard_restore_failed when restoration throws [251.90ms]
+(pass) SafePasteService > preserves target/app/PID/window-only matching [0.27ms]
+(pass) SafePasteService > restores the clipboard when cancellation happens after writing but before injection [0.37ms]
+(pass) SafePasteService > parses optional non-authoritative title without widening target policy [0.19ms]
+(pass) SafePasteService > restores standard clipboard data through the adapter [0.10ms]
+(pass) SafePasteService > fails closed when custom formats cannot be restored exactly [0.50ms]
+(pass) SafePasteService > Controllable lifecycle barriers in SafePasteService.paste > invalidation at authorization barrier prevents snapshot, write, and injection [0.18ms]
+(pass) SafePasteService > Controllable lifecycle barriers in SafePasteService.paste > invalidation at snapshot barrier prevents write and injection [0.13ms]
+(pass) SafePasteService > Controllable lifecycle barriers in SafePasteService.paste > invalidation at clipboard write barrier prevents write and injection [0.11ms]
+(pass) SafePasteService > Controllable lifecycle barriers in SafePasteService.paste > invalidation at native injection barrier prevents injection and restores clipboard [0.13ms]
+
+src/__tests__/services/history-service.test.ts:
+(pass) history-service cost audit > calculateDictationCost computes accurate token costs for 3.1 Flash Lite [0.44ms]
+(pass) history-service cost audit > calculateDictationCost handles 3.6 Flash pricing tier correctly [0.20ms]
+(pass) history-service cost audit > calculateDictationCost uses Burmese token ratio (0.65) when isEnglishOutput is false [0.16ms]
+(pass) history-service cost audit > addHistoryEntry detects Burmese script in output text and computes Burmese cost ratio [1.11ms]
+(pass) history-service cost audit > getMonthlyTotalCost sums monthly entries and records in cost-ledger.json [0.92ms]
+(pass) history-service cost audit > deduplicates identical cost entries submitted within 3000ms window [0.55ms]
+
+src/__tests__/services/safe-transcript-corrections.test.ts:
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 1. Spoken Command & Punctuation Boundary Safety > does NOT match spoken 'comma' inside words like 'command' or 'commerce' [9.80ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 1. Spoken Command & Punctuation Boundary Safety > does NOT match spoken 'bullet' inside words like 'bulletin' [4.52ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 1. Spoken Command & Punctuation Boundary Safety > corrects standalone spoken punctuation commands cleanly [29.91ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 1. Spoken Command & Punctuation Boundary Safety > corrects spoken Burmese punctuation commands accurately [20.66ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 2. Deduplication of Spoken Stutters & Duplicated Fragments > removes consecutive duplicate English function words [16.74ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 2. Deduplication of Spoken Stutters & Duplicated Fragments > preserves valid English duplicate word constructs (that that, had had) [8.72ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 2. Deduplication of Spoken Stutters & Duplicated Fragments > removes multi-word exact duplicate fragments (2-5 words) [12.45ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 2. Deduplication of Spoken Stutters & Duplicated Fragments > preserves repeated lines and code regions [16.75ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 2. Deduplication of Spoken Stutters & Duplicated Fragments > preserves redoubled Burmese words without spaces (e.g. ကောင်းကောင်း, မြန်မြန်) [10.30ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 3. Punctuation Formatting & Spacing Normalization > strips spaces before punctuation and fixes Burmese punctuation spacing [13.64ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 3. Punctuation Formatting & Spacing Normalization > collapses redundant consecutive punctuation marks [17.63ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 4. Preservation of Intentional Output & Domain Boundaries > preserves technical identifiers, URLs, and code blocks unchanged [12.56ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 4. Preservation of Intentional Output & Domain Boundaries > preserves mixed-language dictation flow without forced translation or corruption [4.26ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 4. Preservation of Intentional Output & Domain Boundaries > respects terminal / CLI window environment formatting rules [8.02ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 5. Trusted Dictionary Determinism & Provider-Agnostic Contract > applies trusted dictionary entries exact, bounded, and non-recursively [0.16ms]
+(pass) VO Transcription-Accuracy Improvement Round 5: Safe Deterministic Post-Transcription Correction Layer > 5. Trusted Dictionary Determinism & Provider-Agnostic Contract > preserves original text when no exact dictionary match applies [0.05ms]
+
+src/__tests__/services/audio-teardown-remediation.test.ts:
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 1. Delayed permission after cancel: local stream is cleaned up, no globals set, no recording started [2.62ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 2. Setup failure at each stage: cleans up local resources, emits error, and remains retryable [2.09ms]
+
+=== TEST 3 RESULT: startReadySeq=[301,302], sentErrors=[], startFailed=[] ===
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 3. Cancel/restart exactly one recorder: stops generation 1, starts generation 2 cleanly [2.74ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 4. Duplicate teardown (idempotency): calling teardownAudio multiple times closes resources exactly once [1.33ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 5. onerror handling: MediaRecorder error triggers generation-tagged error and teardown [1.40ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 6. onended track end handling: microphone disconnect stops tracks and triggers teardown [1.43ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 7. unload (beforeunload): dispatches window event and cleans up WebAudio, MediaRecorder, and tracks [1.47ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 8. Stale errors: delayed error from old generation is ignored during new generation [2.67ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 9. Stats start: meter diagnostics and audio stats are reset and gated by active generation [1.34ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 10. Finalize post-roll: clears postRollTimer and performs single data or error emission [702.97ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 11. Mic release: all MediaStreamTracks have .stop() called on teardown [1.49ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 12. Integration: START_RECORDING_READY received during deferred selection capture succeeds without abort [0.78ms]
+(pass) VO Remediation PR-10: Audio Teardown and Acknowledgements Suite > 13. Integration: isCaptureActive gates new recording start when prior capture is active [0.14ms]
+
+src/__tests__/services/whisper-model.test.ts:
+(pass) whisper-model > uses WHISPER_MODEL_PATH when set and file exists [0.67ms]
+(pass) whisper-model > throws when WHISPER_MODEL_PATH is set but file does not exist [0.21ms]
+(pass) whisper-model > returns cached path when model already downloaded [0.62ms]
+(pass) whisper-model > respects WHISPER_MODEL env var for model name [0.57ms]
+(pass) whisper-model > attempts download when model is not cached [5.64ms]
+(pass) whisper-model > throws on HTTP error during download [0.52ms]
+
+src/__tests__/services/hud-capture-stall-fix.test.ts:
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 1. Hidden Capture Window Background Throttling Prevention > captureWindow webPreferences explicitly sets backgroundThrottling: false [0.04ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 2. Stop Timeout Explicit HUD Reset & Immediate Hiding > stoppingSafetyTimer explicitly cancels timer, hides hudWindow if visible, and resets state machine [0.04ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 2. Stop Timeout Explicit HUD Reset & Immediate Hiding > valid normal transcription flow retains HUD during transcribing before idle 1500ms auto-hide [0.03ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 3. Renderer HUD Meter Reset on Non-Recording Transitions > hud.ts resets meter bars inline height on any non-recording state update [0.02ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 4. Capture Engine Single Completion & Resource Safety > sendRecordingErrorOnce guarantees single error emission and timer cleanup [0.01ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 4. Capture Engine Single Completion & Resource Safety > stopRecording handles inactive recorder without hanging when startup completes or fails [0.02ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 4. Capture Engine Single Completion & Resource Safety > renderer retains only the active recording sequence [0.03ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 4. Capture Engine Single Completion & Resource Safety > window beforeunload listener cleans up WebAudio, MediaRecorder, and timers [0.01ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 4. Capture Engine Single Completion & Resource Safety > quiet and empty capture policy emits typed recording error and purges audio chunks [0.02ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 5. Lifecycle Recovery & Multi-Attempt Continuity > subsequent dictation attempt can start cleanly after a stop timeout / lifecycle reset [0.04ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 5. Lifecycle Recovery & Multi-Attempt Continuity > subsequent dictation attempt can start cleanly after recording error [0.02ms]
+(pass) PR-03 HUD & Capture Window Stall Fix Regression Suite > 5. Lifecycle Recovery & Multi-Attempt Continuity > subsequent dictation attempt can start cleanly after cancellation [0.02ms]
+
+src/__tests__/services/gemini-client.test.ts:
+(pass) gemini-client > creates Vertex AI client when GOOGLE_CLOUD_PROJECT is set [18.37ms]
+(pass) gemini-client > defaults to us-central1 when location not set [17.50ms]
+(pass) gemini-client > creates API key client when GEMINI_API_KEY is set [18.44ms]
+(pass) gemini-client > idle client setup does not schedule or issue model inference heartbeat [20.06ms]
+(pass) gemini-client > creates API key client when GOOGLE_API_KEY is set [17.84ms]
+(pass) gemini-client > prefers GEMINI_API_KEY over GOOGLE_API_KEY [18.14ms]
+(pass) gemini-client > forces API key mode with GOOGLE_GENAI_USE_VERTEXAI=false [16.22ms]
+(pass) gemini-client > throws when no credentials are set [161.41ms]
+(pass) gemini-client > returns cached client on subsequent calls [17.92ms]
+(pass) gemini-client > _resetGeminiClient clears the cache [33.36ms]
+(pass) gemini-client > rotates multiple API keys in round-robin order [18.53ms]
+(pass) gemini-client > initializes fallback client when fallback key is configured [18.62ms]
+
+src/__tests__/services/ipc-policy.test.ts:
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 1. Role × Channel Authorization Matrix > enumerates every renderer role × IPC channel, passing intended pairs and failing all others [0.97ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 2. Subframes, Destroyed Windows, and Path Validation > rejects calls from subframes (non-main frame senders) [0.06ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 2. Subframes, Destroyed Windows, and Path Validation > rejects calls from stale or destroyed windows [0.05ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 2. Subframes, Destroyed Windows, and Path Validation > rejects calls when window path does not match expected page for role [0.05ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 2. Subframes, Destroyed Windows, and Path Validation > rejects calls originating from remote http/https URLs [0.07ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 3. Window Navigation, Popups, and Webview Hardening > denies unexpected window creation via setWindowOpenHandler [0.10ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 3. Window Navigation, Popups, and Webview Hardening > denies unexpected navigation and webview attachment [0.08ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 4. Non-Secret Payload & Secret Stripping Policy > getSanitizedSettingsConfig strips decrypted secret keys and provides hasKey boolean flags [0.07ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 4. Non-Secret Payload & Secret Stripping Policy > getCaptureConfigPayload returns only audio/recording fields without secret or settings fields [0.04ms]
+(pass) PR-02 IPC Role Allowlist & Security Policy Suite > 4. Non-Secret Payload & Secret Stripping Policy > asserts built preloads do not expose secret-fetching or unauthorized IPC calls to capture or HUD [0.18ms]
+
+src/__tests__/services/audio-payload-and-fallback-remediation.test.ts:
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > WebM Magic Header & MIME Utility Functions > isValidWebmHeader recognizes EBML magic bytes [0x1A, 0x45, 0xDF, 0xA3] across input types and offsets [0.53ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > WebM Magic Header & MIME Utility Functions > getBestSupportedMimeType requires explicit isTypeSupported function and returns null if unavailable [0.07ms]
+Target audio device 'non-existent-mic' unavailable (Requested device not found), falling back to system default.
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-03 Exact-Device Acquisition & Fallback Policy > falls back to system default only for NotFoundError and OverconstrainedError and emits generic status [0.58ms]
+Target audio device 'overconstrained-mic' unavailable (Constraints impossible to satisfy), falling back to system default.
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-03 Exact-Device Acquisition & Fallback Policy > falls back cleanly on OverconstrainedError [0.11ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-03 Exact-Device Acquisition & Fallback Policy > DOES NOT fall back for NotAllowedError (permission denied) and reports start failed [0.09ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-03 Exact-Device Acquisition & Fallback Policy > DOES NOT fall back for SecurityError, AbortError, or NotReadableError (hardware failure) [0.14ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 MIME Type Selection & MediaRecorder Pre-Check > fails visibly before mic acquisition when no WebM/Opus MIME is supported [0.06ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 Payload Bounds, Empty Chunks, and Header Verification > ignores empty chunks with size 0 [702.12ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 Payload Bounds, Empty Chunks, and Header Verification > rejects malformed recording payload missing WebM EBML header [702.28ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 Payload Bounds, Empty Chunks, and Header Verification > rejects oversized recording payloads exceeding MAX_RECORDING_BYTE_SIZE in renderer [3.23ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 Payload Bounds, Empty Chunks, and Header Verification > rejects excessive chunk counts exceeding MAX_RECORDING_CHUNKS in renderer [0.89ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 Payload Bounds, Empty Chunks, and Header Verification > enforces controlled time/real duration termination exceeding MAX_RECORDING_DURATION_MS [351.98ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > AUD-05 Payload Bounds, Empty Chunks, and Header Verification > accepts valid post-roll WebM recording and emits arrayBuffer data [703.21ms]
+(pass) VO Remediation PR-11: Device Fallback and Recording Payload Remediation Suite > Capture Orchestrator Fallback Device Status Retention > preserves fallback device status on orchestrator when start recording flow completes [0.51ms]
+
+src/__tests__/services/capture-recovery.test.ts:
+(pass) CaptureOrchestrator & Production Recovery Suite > Exported production main.ts captureOrchestrator composition path: renderer-crash on captureWindow triggers abortActiveFlow and aborts active STT controller [0.50ms]
+(pass) CaptureOrchestrator & Production Recovery Suite > Exported production main.ts composition path: startRecordingFlow calls dictationCoordinator.acknowledgeStart via main.ts:118 options wiring [294.37ms]
+(pass) CaptureOrchestrator & Production Recovery Suite > Real deferred STT promise test: proves no paste, no history entry, no chime, and clipboard restored on production cleanup [1.00ms]
+(pass) CaptureOrchestrator & Production Recovery Suite > START_RECORDING send placed BEFORE captureTarget, starting state, and chime to prevent send race side-effects [0.26ms]
+(pass) CaptureOrchestrator & Production Recovery Suite > Actual production-wiring adapter flow: DictationControlCoordinator callback, send failure, and enforceIpcSender [0.48ms]
+(pass) CaptureOrchestrator & Production Recovery Suite > Production BrowserWindow adapter: listener registration order, security guards, loadFile, and exact-once destroy [0.23ms]
+(pass) CaptureOrchestrator & Production Recovery Suite > Deferred 'Capture engine recovered' notification publishes ONLY after replacement renderer is ready [0.14ms]
+
+src/__tests__/services/stt.test.ts:
+(pass) transcribe > transcribes with gemini provider [261.20ms]
+(pass) transcribe > aborts a paid fallback when the model timeout wins [64.13ms]
+(pass) transcribe > transcribes with openai provider [17.11ms]
+(pass) transcribe > transcribes with elevenlabs provider [16.82ms]
+(pass) transcribe > transcribes with local provider [16.70ms]
+(pass) transcribe > defaults to gemini provider when not specified [48.27ms]
+(pass) transcribe > gemini provider sends base64 audio data [47.08ms]
+(pass) transcribe > returns empty string from gemini when text is null [47.09ms]
+(pass) transcribe > trims whitespace from transcription [44.78ms]
+(pass) transcribe > converts spoken bullet point phrases to bulleted lists [0.36ms]
+(pass) transcribe > preserves Burmese script for code_comment preset when translate toggle is off [0.25ms]
+(pass) transcribe > preserves Burmese script when preset is auto and activeApp is VS Code and translate toggle is off [0.23ms]
+(pass) transcribe > strips Burmese and English hesitation fillers (nd-sat, like, you know, ဟိုဟာလေ) [0.33ms]
+(pass) transcribe > purges standalone hesitation sounds (အာ..., ဟာ, အင်း) while preserving valid Burmese words (အကြောင်း, အဆင်ပြေ) [0.23ms]
+(pass) transcribe > returns careful proofreading prompt instructions and includes 3.6-flash in fallback chain [0.08ms]
+(pass) transcribe > resolves custom appPresetMappings in resolveEffectivePreset [0.08ms]
+(pass) transcribe > uses fallback client when primary gemini key rejects fast and sets usedPaidKey to true [46.61ms]
+(pass) transcribe > returns usedPaidKey true for openai and elevenlabs providers [33.35ms]
+(pass) transcribe > does not invoke fallback client when primary gemini key succeeds fast [48.64ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > preserves Burmese translation output during editing mode without executing English text translation fallback [47.95ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > preserves Burmese dictation in code preset when translation is not enabled [47.80ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > executes English text translation fallback in non-editing code preset when translation is enabled and Burmese text returned [48.82ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > skips secondary text translation fallback when abortSignal is aborted [49.56ms]
+
+src/__tests__/services/menu-bar-gui.test.ts:
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 1. Configuration Persistence & Bounds Contracts > validates and accepts gemini-2.5-flash model selection [0.89ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 1. Configuration Persistence & Bounds Contracts > fallback to gemini-3.1-flash-lite when given invalid model name [0.03ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 1. Configuration Persistence & Bounds Contracts > clamps input gain level within [0.0, 2.0] bounds [0.04ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 1. Configuration Persistence & Bounds Contracts > normalizes hotkey string input [0.02ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 2. Status Badge & Visual Indicator Contracts > maps 'idle' state to emerald green ready badge [0.05ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 2. Status Badge & Visual Indicator Contracts > maps 'recording' state to ruby red pulsing badge [0.02ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 2. Status Badge & Visual Indicator Contracts > maps 'transcribing' state to amber processing badge [0.02ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 2. Status Badge & Visual Indicator Contracts > maps 'error' state to warning red alert badge [0.01ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 3. Web Audio RMS Intensity & Gain DSP Contracts > returns 0% intensity and isSilent=true for empty sample array [0.10ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 3. Web Audio RMS Intensity & Gain DSP Contracts > calculates correct intensity percentage for sine wave audio at 1.0x gain [0.08ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 3. Web Audio RMS Intensity & Gain DSP Contracts > amplifies audio intensity when input gain is increased (2.0x gain) [0.05ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 4. Popover Geometry Math Contracts > centers popover window horizontally under tray icon [0.05ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 5. Hotkey & Security Validation Contracts > accepts valid global shortcut combination [0.13ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 5. Hotkey & Security Validation Contracts > rejects reserved macOS system shortcut (Cmd+Q) [0.03ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 6. Dictation Presets & Custom Vocabulary Contracts > accepts translate dictation preset in config and resolves prompt [0.09ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 6. Dictation Presets & Custom Vocabulary Contracts > returns correct prompt instructions and temperature for each dictation preset [0.04ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 6. Dictation Presets & Custom Vocabulary Contracts > excludes gemini-3.6-flash from fallback chain to protect free tier rate limits [0.03ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 6. Dictation Presets & Custom Vocabulary Contracts > dynamically resolves effective preset when auto mode is selected [0.06ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 6. Dictation Presets & Custom Vocabulary Contracts > supports preset-dependent vocabulary list resolution [0.02ms]
+(pass) macOS Menu Bar GUI - Production Contract Test Suite > 6. Dictation Presets & Custom Vocabulary Contracts > maintains ring buffer bounds and clear history functionality [2.22ms]
+
+src/__tests__/services/dictionary-engine.test.ts:
+(pass) DictionaryEngine > matches identifiers safely and preserves exact canonical spelling [0.29ms]
+(pass) DictionaryEngine > uses longest alias first and never cascades replacements [0.13ms]
+(pass) DictionaryEngine > matches Burmese aliases inside unspaced Burmese text [0.06ms]
+(pass) DictionaryEngine > preserves legacy whitespace matching while honoring enabled state [0.73ms]
+(pass) DictionaryEngine > surfaces conflicts with legacy whitespace variants [0.16ms]
+(pass) DictionaryEngine > disabled entries do nothing and conflicts are surfaced [0.14ms]
+(pass) DictionaryEngine > replaces alias 'loveish' with phrase 'lavish' case-insensitively [0.08ms]
+
+src/__tests__/services/contextual-transcription-hints.test.ts:
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 1. Hint Construction & Soft Formatting: Formats enabled trusted terms and aliases as soft recognition hints [0.25ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 2. OpenAI Hint Formatting: Formats entries into a concise comma-separated prompt string bounded to 30 terms [0.10ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 3. Disabled Entries Exclusion: Excludes entries with enabled: false from hint payload completely [0.12ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 4. Conflicting Aliases Handling: Excludes conflicting aliases mapping to multiple distinct canonical phrases [0.19ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 5. Bounding & Capping: Bounds hint list size to MAX_HINT_ENTRIES (50) to prevent prompt bloat [1.32ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 5b. Bounding & Capping: Bounds aliases as well as canonical entries [5.22ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 6. Category Handling: Preserves general, person_name, and technical categories seamlessly [0.26ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 7. Privacy Boundaries: Uses safe active window process name without sending clipboard or document contents [0.04ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 8. Deterministic Local Replacement: Keeps applyDictionary authoritative, non-fuzzy, non-recursive, boundary-safe, and provider-agnostic [0.28ms]
+(pass) VO Contextual Transcription Hints & Correction Safety Suite > 9. Measurable Evaluation Fixture: Representative names and technical terms end-to-end evaluation [0.37ms]
+
+src/__tests__/services/tts.test.ts:
+(pass) TTS constants > has expected audio format constants [0.02ms]
+(pass) synthesizeStream > throws for local provider (use speakLocal instead) [0.60ms]
+(pass) synthesizeStream > streams gemini TTS as Buffer chunks [0.83ms]
+(pass) synthesizeStream > streams openai TTS as Buffer chunks [0.29ms]
+(pass) synthesizeStream > streams elevenlabs TTS as Buffer chunks [0.72ms]
+(pass) synthesizeStream > defaults to gemini when no provider specified [0.12ms]
+(pass) speakLocal > rejects on non-darwin platform [0.18ms]
+(pass) speakLocal > passes text as argument to say command [0.07ms]
+(pass) speakLocal > uses SAY_VOICE env var when set [0.07ms]
+(pass) speakLocal > rejects when say command exits with non-zero code [0.05ms]
+(pass) speakLocal > rejects when spawn fails [0.05ms]
+
+src/__tests__/services/transcription-latency-gap.test.ts:
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 1. VAD Isolation & Sensitivity Calibration > calibrates speech threshold at 0.005 RMS and detects speech [0.08ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 1. VAD Isolation & Sensitivity Calibration > accumulates silence frames once speech is detected (hasDetectedSpeech = true) [0.05ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 2. Toggle Mode Key-Release Separation vs Hold Mode > in toggle mode, key release does NOT trigger stop regardless of press duration [0.05ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 2. Toggle Mode Key-Release Separation vs Hold Mode > in toggle mode, recording stays active until Tap 2 or endpointing [0.02ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 2. Toggle Mode Key-Release Separation vs Hold Mode > in hold mode, key release stops recording when active [0.02ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 3. Manual-Only Control & Auto-Endpointing Configuration > autoEndpointEnabled = false disables silence endpointing [0.03ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 3. Manual-Only Control & Auto-Endpointing Configuration > transcriptionDelaySec = 0 disables silence endpointing (full manual-only control) [0.03ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 3. Manual-Only Control & Auto-Endpointing Configuration > transcriptionDelaySec configures confirmSilenceMs properly [0.05ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 4. Config Persistence for transcriptionDelaySec & autoEndpointEnabled > loadConfig returns default transcriptionDelaySec (0.5) and autoEndpointEnabled (true) [16.58ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 4. Config Persistence for transcriptionDelaySec & autoEndpointEnabled > updateConfig persists custom transcriptionDelaySec and autoEndpointEnabled values [31.88ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 4. Config Persistence for transcriptionDelaySec & autoEndpointEnabled > updateConfig clamps out-of-range transcriptionDelaySec values to [0.0, 10.0] [34.46ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 5. Short Tap Audio Capture Buffer Window (pendingStopOnStart 800ms minimum capture window) > calculates correct delay to ensure at least 800ms recording duration when pendingStopOnStart is true [0.08ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 5. Short Tap Audio Capture Buffer Window (pendingStopOnStart 800ms minimum capture window) > returns 0ms delay when elapsed recording duration already exceeds 800ms [0.03ms]
+(pass) Transcription Latency Gap & Toggle Silence Endpointing Suite > 5. Short Tap Audio Capture Buffer Window (pendingStopOnStart 800ms minimum capture window) > simulates pendingStopOnStart flow with 800ms minimum window on fast key release during starting state [801.34ms]
+
+src/__tests__/services/interrupt-cancellation.test.ts:
+(pass) Interrupt and Cancellation Test Suite > 1. RecordingLifecycle Cancellation Contracts > cancel() resets state from starting to idle and invalidates sequence ID [0.11ms]
+(pass) Interrupt and Cancellation Test Suite > 1. RecordingLifecycle Cancellation Contracts > cancel() resets state from recording to idle and invalidates sequence ID [0.08ms]
+(pass) Interrupt and Cancellation Test Suite > 1. RecordingLifecycle Cancellation Contracts > cancel() resets state from transcribing to idle and invalidates late transcription completion [0.08ms]
+(pass) Interrupt and Cancellation Test Suite > 1. RecordingLifecycle Cancellation Contracts > cancel() returns rejected result if lifecycle is already idle [0.03ms]
+(pass) Interrupt and Cancellation Test Suite > 2. STT AbortSignal Cancellation Contracts > transcribeDetailed fails fast when passed an already-aborted AbortSignal [1.02ms]
+(pass) Interrupt and Cancellation Test Suite > 2. STT AbortSignal Cancellation Contracts > transcribeDetailed aborts in-flight request when AbortSignal is triggered [0.79ms]
+(pass) Interrupt and Cancellation Test Suite > 3. PasteCoordinator Cancellation & Invalidation Contracts > PasteCoordinator.invalidate() prevents pending paste from completing [50.94ms]
+(pass) Interrupt and Cancellation Test Suite > 4. Integration Flow: Interrupt during Recording and Transcribing > cancelling during transcribing resets state, invalidates in-flight paste, and rejects stale transcription result [20.56ms]
+(pass) Interrupt and Cancellation Test Suite > 4. Integration Flow: Interrupt during Recording and Transcribing > main orchestration with delayed getActiveAppName discards stale paste when cancelled during lookup [0.35ms]
+
+src/__tests__/services/lifecycle-error-settle.test.ts:
+(pass) settleMatchingLifecycleError > does not settle a later lifecycle for an old error sequence [0.06ms]
+(pass) settleMatchingLifecycleError > settles the matching error sequence [0.02ms]
+
+src/__tests__/services/startup-shutdown-remediation.test.ts:
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 1. Logger fallback on unwritable log path > logger module initializes with stderr fallback when PI_VOICE_LOG_PATH is unwritable and routes logs to stderr [54.13ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 1. Logger fallback on unwritable log path > logger operations succeed without throwing in current module context [0.39ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 1. Logger fallback on unwritable log path > isFileLoggingActive returns boolean indicator [0.28ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 2. Runtime state protection of replacement revision and CLI stale cleanup > removeRuntimeState removes file matching current process PID [1.20ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 2. Runtime state protection of replacement revision and CLI stale cleanup > removeRuntimeState DOES NOT delete state file owned by a replacement process PID [1.51ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 2. Runtime state protection of replacement revision and CLI stale cleanup > removeRuntimeState cleans up stale daemon PID state file when explicitly provided [0.74ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 2. Runtime state protection of replacement revision and CLI stale cleanup > saveRuntimeState writes atomically and replacement state is never lost under concurrent operations [1.29ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 2. Runtime state protection of replacement revision and CLI stale cleanup > removeRuntimeState linkSync restoration never overwrites an existing replacement state file when linkSync runs [1.37ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > gracefulShutdown returns the same promise when called multiple times concurrently [2003.23ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > gracefulShutdown completes within bounded wait (<3000ms) [0.40ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > gracefulShutdown resets dictationCoordinator timers so shortTapTimer cannot mutate state after shutdown [0.37ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > stopDaemonServer is async, returns a promise, and awaits server close [4.36ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > captureOrchestrator.teardownCaptureWindow sends cancellation IPC, detaches session, and tears down window cleanly [0.60ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > teardownCaptureWindow detaches session even if window is already destroyed or pending [0.40ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 3. Idempotent, Async & Awaited Shutdown Operations > teardownCaptureWindow resolves within configured bounded timeout even if closed event never fires [51.95ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 4. Deterministic Startup Sequence & Fault Injection > runStartupSequence completes mandatory services before exposing UI and returns true [36.79ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 4. Deterministic Startup Sequence & Fault Injection > runStartupSequence handles mandatory service fault, runs gracefulShutdown, calls app.exit(1) and returns false without partial UI [29.37ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 4. Deterministic Startup Sequence & Fault Injection > runStartupSequence handles rejected startup-service promise, triggers cleanup and app.exit(1), and returns false [19.60ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 4. Deterministic Startup Sequence & Fault Injection > capture window is not re-created by closed handler when destroyed during gracefulShutdown [0.50ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 5. Fatal Process Error Handling > handleFatalProcessError resolves safely without throwing or rejecting [0.48ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 5. Fatal Process Error Handling > handleFatalProcessError is idempotent and avoids re-entrancy loop [0.34ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 6. Shutdown from each lifecycle state > shutdown during 'starting' state resets lifecycle cleanly [0.40ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 6. Shutdown from each lifecycle state > shutdown during 'recording' state resets lifecycle cleanly [0.34ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 6. Shutdown from each lifecycle state > shutdown during 'stopping' state resets lifecycle cleanly [0.31ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 6. Shutdown from each lifecycle state > shutdown during 'transcribing' state resets lifecycle cleanly [0.30ms]
+(pass) VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite > 6. Shutdown from each lifecycle state > shutdown during 'error' state resets lifecycle cleanly [0.30ms]
+
+src/__tests__/services/symbol-scanner.test.ts:
+(pass) symbol-scanner > returns empty result for invalid or root path [0.62ms]
+(pass) symbol-scanner > scans exported functions, interfaces, and classes from TypeScript files [0.92ms]
+(pass) symbol-scanner > uses in-memory cache for consecutive scans [0.89ms]
+
+src/__tests__/services/recording-lifecycle.test.ts:
+(pass) RecordingLifecycle > runs the accepted lifecycle with one sequence ID [0.11ms]
+(pass) RecordingLifecycle > accepts recorder data as an implicit stop [0.03ms]
+(pass) RecordingLifecycle > rejects transient requests but permits restart from recoverable error [0.04ms]
+(pass) RecordingLifecycle > ignores stale acknowledgements and events [0.05ms]
+(pass) RecordingLifecycle > finishes transcription only for the matching stop [0.04ms]
+(pass) RecordingLifecycle > rejects toggles while stopping or transcribing without changing state [0.04ms]
+(pass) RecordingLifecycle > moves a matching stop failure to recoverable error [0.03ms]
+(pass) RecordingLifecycle > shutdown is idempotent and invalidates late events [0.09ms]
+(pass) RecordingLifecycle > shutdown preserves error until explicit reset and rejects late acknowledgements [0.13ms]
+
+src/__tests__/services/audio-endpointing-diagnostics.test.ts:
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 1. Utterance Boundary & Silence Endpointing > detects speech start and triggers endpointing after confirmed silence threshold [1.42ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 1. Utterance Boundary & Silence Endpointing > does not trigger endpointing if speech was never detected (initial room silence) [0.21ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 1. Utterance Boundary & Silence Endpointing > resets speech and silence counters cleanly between recording generations [0.14ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 2. Quality Diagnostics & Input Rejection > diagnoses near-silence input and rejects garbage audio submission [0.10ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 2. Quality Diagnostics & Input Rejection > diagnoses short utterances (<300ms) without submitting to STT [0.06ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 2. Quality Diagnostics & Input Rejection > diagnoses severely clipped microphone input (>40% clipped frames) [0.04ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 2. Quality Diagnostics & Input Rejection > approves valid speech audio with proper duration and level [0.02ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 3. Immediate Cancellation & Sequence Safety > cancellation during starting state invalidates lifecycle and prevents stale start completion [0.06ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 3. Immediate Cancellation & Sequence Safety > cancellation during recording resets state machine to idle and invalidates sequence ID [0.05ms]
+(pass) Audio Capture Diagnostics & Endpointing Regression Suite > 3. Immediate Cancellation & Sequence Safety > cancellation during transcribing invalidates late STT completion [0.05ms]
+
+src/__tests__/services/runtime-state.test.ts:
+(pass) runtime-state > getSocketPath > returns a path under .pi-voice [0.90ms]
+(pass) runtime-state > getSocketPath > creates state directory if missing [0.70ms]
+(pass) runtime-state > saveRuntimeState > writes state file with pid, cwd, and startedAt [1.04ms]
+(pass) runtime-state > readRuntimeState > returns null when no state file exists [0.30ms]
+(pass) runtime-state > readRuntimeState > returns state when file exists and PID is alive (current process) [0.91ms]
+(pass) runtime-state > readRuntimeState > returns null and cleans up for stale PID [0.92ms]
+(pass) runtime-state > readRuntimeState > returns null and cleans up for corrupt JSON [0.80ms]
+(pass) runtime-state > removeRuntimeState > removes state file if it exists [1.08ms]
+(pass) runtime-state > removeRuntimeState > does not throw when state file does not exist [0.35ms]
+
+src/__tests__/services/hud-usefulness.test.ts:
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 1. Visual Identity & Lovevish Translucent Capsule Preservation > preserves translucent glass background, backdrop filter, and quiet contrast edge [0.16ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 1. Visual Identity & Lovevish Translucent Capsule Preservation > includes 5 waveform bars with smooth height transition easing [0.24ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 2. Starting / Prewarming Visual State > gives starting state its own distinct cyan theme, icon, and wave animation [0.05ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 2. Starting / Prewarming Visual State > starting state is clearly distinguishable from recording, transcribing, and error states [0.07ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 3. Multi-modal Meaning (Icon + Title + Color) > defines distinct SVG icons and titles for every AppState and edit mode [0.24ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 3. Multi-modal Meaning (Icon + Title + Color) > selection mode displays 'EDITING' or 'SELECTION' title and text detail [0.05ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 4. Non-Focus-Stealing Cancellation & Escape Path Preservation > cancel button has no-drag region and prevents default mousedown to stop focus theft [0.06ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 4. Non-Focus-Stealing Cancellation & Escape Path Preservation > main window configures HUD as focusable: false with 280x36 bounds [0.15ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 4. Non-Focus-Stealing Cancellation & Escape Path Preservation > preload API exports cancelDictation IPC channel [0.01ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 5. Actionable Errors & Timing > holds error state for 6000ms instead of fast 1500ms auto-hide [0.05ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 5. Actionable Errors & Timing > shows error icon, detail payload message, and dismiss button in HUD [0.06ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 6. Reduced Motion Handling > handles prefers-reduced-motion by disabling animations and preserving readable static states [0.07ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 7. Single Subtitle Contract (No Duplicate Vertical Stack) > enforces single subtitle line rendering without vertical title/detail stack [0.03ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 7. Single Subtitle Contract (No Duplicate Vertical Stack) > sets single subtitle text on hudTitle incorporating dynamic messages, errors, and selection state [0.02ms]
+(pass) VO HUD Usefulness & Aesthetic Pass Contract Suite > 8. Paid API Key HUD Badge Contract > verifies hud.html contains .hud-paid-badge and $ Paid badge display for paid API key usage [0.15ms]
+
+src/__tests__/services/selection-ownership-remediation.test.ts:
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 1. Snapshot Equality & Format-Rich Fingerprinting (Plain Text, HTML, RTF, Image, Custom Formats) > detects matching snapshots across all rich format dimensions [0.78ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 1. Snapshot Equality & Format-Rich Fingerprinting (Plain Text, HTML, RTF, Image, Custom Formats) > detects text modifications [0.15ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 1. Snapshot Equality & Format-Rich Fingerprinting (Plain Text, HTML, RTF, Image, Custom Formats) > detects HTML format modifications [0.06ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 1. Snapshot Equality & Format-Rich Fingerprinting (Plain Text, HTML, RTF, Image, Custom Formats) > detects RTF format modifications [0.05ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 1. Snapshot Equality & Format-Rich Fingerprinting (Plain Text, HTML, RTF, Image, Custom Formats) > detects image format modifications [0.31ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 1. Snapshot Equality & Format-Rich Fingerprinting (Plain Text, HTML, RTF, Image, Custom Formats) > detects custom buffer format modifications [0.10ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 2. Unchanged Selection Clipboard Restoration > restores rich previous clipboard when selection capture clipboard is unchanged [0.24ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 3. User Changes Surviving Success, Denial, Cancellation, Error, and Timeout > user clipboard change survives dictation cancellation [0.11ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 3. User Changes Surviving Success, Denial, Cancellation, Error, and Timeout > user clipboard change survives transcription error [0.14ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 3. User Changes Surviving Success, Denial, Cancellation, Error, and Timeout > user clipboard change survives stopping timeout [0.12ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 3. User Changes Surviving Success, Denial, Cancellation, Error, and Timeout > user clipboard change survives paste denial [0.49ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 4. Sequence Isolation > stale capture completion cannot replace newer sequence ownership [0.61ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 4. Sequence Isolation > calling restoreCapturedSelection for old sequence ID does not affect current sequence ownership [0.20ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 5. SafePaste Restoring Its Immediate Snapshot Exactly Once > SafePaste snapshots pre-paste clipboard and restores its immediate snapshot exactly once without post-paste clobber [252.60ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 6. Recording Error Sequence Binding > late recording error cleanup cannot restore newer sequence ownership [0.56ms]
+(pass) PR-06 Conditional Clipboard Restoration & Ownership Remediation Suite > 6. Recording Error Sequence Binding > renderer-to-preload payload reaches the main handler and rejects late same-sequence errors [0.33ms]
+
+src/__tests__/services/vocabulary-service.test.ts:
+(pass) vocabulary-service > migrates legacy terms, seeds hardcoded corrections, and is idempotent [2.92ms]
+(pass) vocabulary-service > leaves malformed vocabulary data untouched [0.88ms]
+(pass) vocabulary-service > savePersistedVocabulary writes vocabulary.json and loadPersistedVocabulary restores it [2.25ms]
+(pass) vocabulary-service > backfills legacy whitespace flags without adding entries [0.17ms]
+(pass) vocabulary-service > merges legacy case variants into the existing canonical phrase [0.24ms]
+
+src/__tests__/services/clipboard-ordering-regressions.test.ts:
+(pass) clipboard ordering regressions > keeps the sequence high-water mark after ownership is cleared [0.10ms]
+(pass) clipboard ordering regressions > does not restore over a user copy when selection capture is aborted [0.92ms]
+(pass) clipboard ordering regressions > does not let an aborted older capture restore over a newer capture [0.22ms]
+(pass) clipboard ordering regressions > skips stale SafePaste restoration after a newer clipboard change during the hold [0.42ms]
+(pass) clipboard ordering regressions > production paste composition restores the original rich clipboard [0.94ms]
+(pass) clipboard ordering regressions > rejects null recording-error IPC payloads without throwing [0.09ms]
+
+src/__tests__/services/config.test.ts:
+(pass) parseKeyBinding > parses simple key [0.08ms]
+(pass) parseKeyBinding > parses ctrl+t [0.03ms]
+(pass) parseKeyBinding > parses meta+shift+i (default binding) [0.03ms]
+(pass) parseKeyBinding > parses cmd as meta alias [0.02ms]
+(pass) parseKeyBinding > parses command as meta alias [0.02ms]
+(pass) parseKeyBinding > parses control as ctrl alias [0.02ms]
+(pass) parseKeyBinding > parses opt/option as alt aliases [0.03ms]
+(pass) parseKeyBinding > parses function keys [0.03ms]
+(pass) parseKeyBinding > parses number keys [0.03ms]
+(pass) parseKeyBinding > parses special keys [0.04ms]
+(pass) parseKeyBinding > parses arrow keys [0.03ms]
+(pass) parseKeyBinding > is case insensitive [0.03ms]
+(pass) parseKeyBinding > trims whitespace in parts [0.06ms]
+(pass) parseKeyBinding > throws on empty string [0.24ms]
+(pass) parseKeyBinding > throws on modifier-only binding [0.18ms]
+(pass) parseKeyBinding > throws on multiple main keys [0.25ms]
+(pass) parseKeyBinding > throws on unknown key [0.10ms]
+(pass) parseKeyBinding > throws on empty parts (double plus) [0.04ms]
+(pass) parseKeyBinding > all modifier combos at once [0.04ms]
+(pass) formatKeyDisplay > formats simple key on macOS [0.06ms]
+(pass) formatKeyDisplay > formats meta+shift+i binding [0.10ms]
+(pass) formatKeyDisplay > includes all modifiers in output [0.08ms]
+(pass) loadConfig > returns defaults when no config file exists [26.61ms]
+(pass) loadConfig > loads valid config file [30.29ms]
+(pass) loadConfig > uses defaults for missing fields [16.50ms]
+(pass) loadConfig > accepts all valid providers [85.41ms]
+(pass) loadConfig > auto-recovers corrupt JSON syntax to defaultConfig and preserves a unique backup [16.78ms]
+(pass) loadConfig > auto-recovers non-object JSON config to defaultConfig and renames file [15.32ms]
+(pass) loadConfig > auto-heals legacy model names like gemini-1.5-flash to valid models without throwing [27.19ms]
+(pass) loadConfig > repairs global and project configs independently [27.36ms]
+(pass) loadConfig > uses valid global settings after recovering a corrupt project config [30.29ms]
+(pass) loadConfig > falls back to the legacy user config when XDG config is absent [26.02ms]
+(pass) loadConfig > falls back to a valid legacy config after backing up corrupt XDG config [29.14ms]
+(pass) loadConfig > keeps prior corrupt backups [55.78ms]
+(pass) loadConfig > auto-heals invalid provider and invalid key binding without throwing [30.25ms]
+(pass) loadConfig > app startup never crashes on malformed, old, or invalid config files [74.43ms]
+(pass) Global User Config Persistence & Overlay Suite > updateConfig always writes patches to canonical global user config path [19.00ms]
+(pass) Global User Config Persistence & Overlay Suite > updateConfig updates project-local .pi/pi-voice.json if present, but does not create it if absent [53.12ms]
+(pass) Global User Config Persistence & Overlay Suite > preserves valid legacy settings when updating over corrupt XDG config [20.21ms]
+(pass) Global User Config Persistence & Overlay Suite > loadConfig uses global user config as baseline and overlays project-local overrides [40.86ms]
+(pass) Global User Config Persistence & Overlay Suite > guarantees user setting changes persist losslessly across directory changes and app launches [49.83ms]
+(pass) Global User Config Persistence & Overlay Suite > clears geminiApiKey and geminiFallbackApiKey cleanly when empty string is passed to updateConfig [70.19ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 1. Save and clear never write secret fields to project config (.pi/pi-voice.json) [60.34ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 2. Plaintext legacy project key migration is ordered and idempotent [55.68ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 3. basic_text and encryption failure write nothing to disk and abort key write [53.12ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 4. Malformed ciphertext survives unrelated patch and reports decrypt error [68.33ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 5. Wrong-account decrypt differs from absent key in settings payload [58.40ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 6. Strict IPC patch schema rejects unknown keys, wrong types, nulls, and excessive data [3.92ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 7. Valid clear behavior removes secret keys cleanly [72.56ms]
+(pass) PR-04 Secret Persistence, Type Safety & Hardening Suite > 8. User config writes enforce mode 0600 on creation and rewrite [31.35ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 1. Truncated user and project files are backed up and updateConfig completes successfully [20.11ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 2. Unrelated patches preserve clean options when updating over corrupt config [32.33ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 3. Byte-identical backup preservation [28.46ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 4. Safe repaired output for legacy fields vs typed refusal on failed backup [43.26ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 5. Backup rename/write failure leaves corrupt file untouched and rejects update [18.40ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 6. Sequential saves create distinct collision-free backup files [46.46ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 7. Enforces mode 0600 permissions on active and corrupt user config files [32.12ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 8. Concurrent recovery preserves the original corrupt bytes [191.33ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 9. Repairs malformed nested records without deleting valid siblings [19.10ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > timeout cleanup closes stdin and reaps the full lock helper [683.74ms]
+(pass) PR-05 Unified Corrupt-Config Remediation & Recovery Suite > 10. Later project backup failure restores earlier user recovery [17.70ms]
+
+src/__tests__/services/dual-hotkey.test.ts:
+(pass) Dual Hotkey Configuration & Parsing Suite > parses dictation key binding (Ctrl+Cmd+Opt+V) correctly [0.05ms]
+(pass) Dual Hotkey Configuration & Parsing Suite > maps punctuation bindings to Electron accelerators [0.27ms]
+(pass) Dual Hotkey Configuration & Parsing Suite > parses edit key binding (Ctrl+Cmd+Opt+E) correctly [0.08ms]
+(pass) Dual Hotkey Configuration & Parsing Suite > HotkeyService.replace applies edit binding and registers fallback edit hotkey [0.31ms]
+
+src/__tests__/services/selection-transform.test.ts:
+(pass) Selection Transformation & Capture Service Suite > captureActiveSelection returns default fallback structure when execSync times out or fails [2.68ms]
+(pass) Selection Transformation & Capture Service Suite > TranscribeOptions interface correctly type-checks selectedText [0.04ms]
+(pass) Selection Transformation & Capture Service Suite > restoreClipboard handles undefined or empty gracefully without crashing [0.09ms]
+(pass) Selection Transformation & Capture Service Suite > Clipboard Format Preservation Contracts > preserves rich HTML, RTF, and custom buffer formats during selection capture and restoration [145.35ms]
+(pass) Selection Transformation & Capture Service Suite > Clipboard Format Preservation Contracts > restores original clipboard formats on selection capture timeout without selection leak [22.82ms]
+(pass) Selection Transformation & Capture Service Suite > Clipboard Format Preservation Contracts > aborts immediately when AbortSignal is triggered and restores clipboard [0.44ms]
+(pass) Selection Transformation & Capture Service Suite > Delimiter-Safe Prompt Formatting Contracts > wraps selected text safely in XML tags and escapes closing tag delimiters [0.13ms]
+(pass) Selection Transformation & Capture Service Suite > Delimiter-Safe Prompt Formatting Contracts > handles Python triple-quotes and multiline docstrings safely without breaking bounds [0.08ms]
+(pass) Selection Transformation & Capture Service Suite > Delimiter-Safe Prompt Formatting Contracts > escapes adversarial closing tag attempt to prevent prompt injection boundary escape [0.08ms]
+(pass) Selection Transformation & Capture Service Suite > Delimiter-Safe Prompt Formatting Contracts > preserves Unicode, Burmese script, Japanese, and emoji characters faithfully [0.07ms]
+
+src/__tests__/services/macos-safety-integration-smoke.test.ts:
+(pass) macOS safety reliability integration smoke > rejects window changes between capture and paste without wrong-target injection or clipboard corruption [0.64ms]
+(pass) macOS safety reliability integration smoke > keeps a newer lifecycle safe from stale renderer acknowledgements and rejects transient toggles [0.14ms]
+(pass) macOS safety reliability integration smoke > retains transcript without injection when target validation or conditional paste fails [0.76ms]
+(pass) macOS safety reliability integration smoke > does not settle lifecycle or apply stale paste effects after renderer teardown [0.31ms]
+(pass) macOS safety reliability integration smoke > settles successful paste and lifecycle only for the matching sequence [252.61ms]
+(pass) macOS safety reliability integration smoke > retains transcript when app change occurs [0.60ms]
+(pass) macOS safety reliability integration smoke > retains transcript when bundle ID change occurs [0.09ms]
+(pass) macOS safety reliability integration smoke > retains transcript when pid change occurs [0.05ms]
+(pass) macOS safety reliability integration smoke > retains transcript when window change occurs [0.09ms]
+(pass) macOS safety reliability integration smoke > retains transcript when target disappearance occurs [0.05ms]
+(pass) macOS safety reliability integration smoke > retains transcript after native injection injection_rejected [0.63ms]
+(pass) macOS safety reliability integration smoke > keeps ordinary Terminal targets eligible despite secure-looking field metadata [252.26ms]
+(pass) macOS safety reliability integration smoke > keeps ordinary Telegram targets eligible despite secure-looking field metadata [251.24ms]
+(pass) macOS safety reliability integration smoke > keeps ordinary Myanso targets eligible despite secure-looking field metadata [250.93ms]
+(pass) macOS safety reliability integration smoke > rejects malformed daemon responses and verifies shutdown ownership before action [7.55ms]
+(pass) macOS safety reliability integration smoke > does not let an old runtime revision erase its replacement or discard unavailable state [1.61ms]
+
+src/__tests__/services/coding-preset-optimization.test.ts:
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 1. Detect Mode (translateEnabled: false) > getPresetPromptInstructions returns faithful detect mode prompt preserving original language and identifier casing [0.07ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 1. Detect Mode (translateEnabled: false) > sanitizeTranscribedText preserves Burmese script losslessly when translateEnabled is false [0.17ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 1. Detect Mode (translateEnabled: false) > sanitizeTranscribedText preserves Burmese vibe coding dictation for auto preset in coding target apps when translateEnabled is false [0.09ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 2. Translation Mode (translateEnabled: true) > getPresetPromptInstructions returns English technical specification prompt optimized for AI coding assistants [0.05ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 2. Translation Mode (translateEnabled: true) > sanitizeTranscribedText purges Burmese script lines when translateEnabled is true [0.13ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 2. Translation Mode (translateEnabled: true) > sanitizeTranscribedText strips residual Burmese characters from mixed lines when translateEnabled is true [0.06ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 2. Translation Mode (translateEnabled: true) > sanitizeTranscribedText removes Burmese-only output when translateEnabled is true [0.04ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 3. Selection Transform Mode under Coding Preset > resolves coding preset for coding editor apps [0.03ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 4. Zero Conversational Intros & Zero Unrequested Code Block Hallucinations > sanitizer strips wrapping double, single, and curly quotes added by LLMs [0.14ms]
+(pass) Coding Preset Optimization & Vibe Coding Suite (code_comment) > 4. Zero Conversational Intros & Zero Unrequested Code Block Hallucinations > both detect and translate prompt instructions enforce zero preambles and zero boilerplate directives [0.03ms]
+
+src/__tests__/services/logger.test.ts:
+(pass) logger resolveLogPath logic > uses PI_VOICE_LOG_PATH when set [0.24ms]
+(pass) logger resolveLogPath logic > uses XDG_CONFIG_HOME when set [0.05ms]
+(pass) logger resolveLogPath logic > falls back to ~/.config when no env vars set [0.04ms]
+(pass) logger resolveLogPath logic > path always ends with daemon.log [0.08ms]
+(pass) logger resolveLogPath logic > path contains pi-voice directory [0.03ms]
+
+src/__tests__/services/daemon-ipc.test.ts:
+(pass) daemon-ipc > startDaemonServer returns socket path [3.35ms]
+(pass) daemon-ipc > sendCommand receives response from handler [105.57ms]
+(pass) daemon-ipc > sendCommand receives error response for unknown command [104.74ms]
+(pass) daemon-ipc > sendCommand rejects when server is not running [1.49ms]
+(pass) daemon-ipc > stopDaemonServer cleans up socket file [104.39ms]
+(pass) daemon-ipc > startDaemonServer handles stale socket file [2.49ms]
+(pass) daemon-ipc > handler errors are returned as error responses [104.54ms]
+(pass) daemon-ipc > async handler is supported [116.16ms]
+
+src/__tests__/services/renderer-session.test.ts:
+(pass) RendererSession > requires readiness again after teardown and rejects stale senders [0.12ms]
+(pass) RendererSession > detachment rejects later readiness from the old sender [0.03ms]
+
+ 575 pass
+ 0 fail
+ 2190 expect() calls
+Ran 575 tests across 51 files. [17.47s]
+bun_test_exit=0
+tsc_exit=0
+$ bun scripts/build-native-paste-addon.ts --self-check
+gyp info it worked if it ends with ok
+gyp info using node-gyp@12.4.0
+gyp info using node@22.22.3 | darwin | arm64
+gyp info chdir /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-rJYU9p
+gyp info find Python using Python version 3.14.6 found at "/opt/homebrew/opt/python@3.14/bin/python3.14"
+gyp info spawn /opt/homebrew/opt/python@3.14/bin/python3.14
+gyp info spawn args [
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp/gyp/gyp_main.py',
+gyp info spawn args 'binding.gyp',
+gyp info spawn args '-f',
+gyp info spawn args 'make',
+gyp info spawn args '-I',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-rJYU9p/build/config.gypi',
+gyp info spawn args '-I',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp/addon.gypi',
+gyp info spawn args '-I',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3/include/node/common.gypi',
+gyp info spawn args '-Dlibrary=shared_library',
+gyp info spawn args '-Dvisibility=default',
+gyp info spawn args '-Dnode_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3',
+gyp info spawn args '-Dnode_gyp_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp',
+gyp info spawn args '-Dnode_lib_file=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3/$(Configuration)/node.lib',
+gyp info spawn args '-Dmodule_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-rJYU9p',
+gyp info spawn args '-Dnode_engine=v8',
+gyp info spawn args '--depth=.',
+gyp info spawn args '--no-parallel',
+gyp info spawn args '--generator-output',
+gyp info spawn args 'build',
+gyp info spawn args '-Goutput_dir=.'
+gyp info spawn args ]
+gyp info ok
+Built /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/native/pi-paste.node
+pi-paste addon self-check ok
+native_exit=0

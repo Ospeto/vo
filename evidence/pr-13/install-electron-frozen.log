@@ -1,0 +1,10 @@
+bun install v1.3.14 (0d9b296a)
+
++ @types/bun@1.3.8
++ @google/genai@1.40.0
++ @mariozechner/pi-coding-agent@0.52.7
++ openai@6.10.0
++ uiohook-napi@1.5.4
++ zod@4.3.6
+
+129 packages installed [1270.00ms]

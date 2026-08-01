@@ -30,5 +30,5 @@ export const validateElectronHeaderMetadata = (config: string, version: string):
   parseGypAssignment(config, "using_electron_config_gypi") === 1 &&
   parseGypAssignment(config, "node_module_version") === 143 &&
   parseDefine(version, "NODE_MAJOR_VERSION") === 24 &&
-  parseDefine(version, "NODE_MINOR_VERSION") === 11 &&
-  parseDefine(version, "NODE_PATCH_VERSION") === 1;
+  parseDefine(version, "NODE_MINOR_VERSION") === 14 &&
+  parseDefine(version, "NODE_PATCH_VERSION") === 0;
