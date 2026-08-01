@@ -1,0 +1,63 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/dependency-remediation.test.ts:
+(pass) PR-13 dependency remediation > pins the supported Electron ABI and reachable provider resolutions [1.09ms]
+(pass) PR-13 dependency remediation > proves provider advisories were removed without treating the total as a vulnerability count [0.21ms]
+
+src/__tests__/services/gemini-client.test.ts:
+(pass) gemini-client > creates Vertex AI client when GOOGLE_CLOUD_PROJECT is set [51.00ms]
+(pass) gemini-client > defaults to us-central1 when location not set [36.07ms]
+(pass) gemini-client > creates API key client when GEMINI_API_KEY is set [32.03ms]
+(pass) gemini-client > idle client setup does not schedule or issue model inference heartbeat [33.79ms]
+(pass) gemini-client > creates API key client when GOOGLE_API_KEY is set [34.26ms]
+(pass) gemini-client > prefers GEMINI_API_KEY over GOOGLE_API_KEY [32.22ms]
+(pass) gemini-client > forces API key mode with GOOGLE_GENAI_USE_VERTEXAI=false [33.24ms]
+(pass) gemini-client > throws when no credentials are set [354.72ms]
+(pass) gemini-client > returns cached client on subsequent calls [49.80ms]
+(pass) gemini-client > _resetGeminiClient clears the cache [96.29ms]
+(pass) gemini-client > rotates multiple API keys in round-robin order [51.39ms]
+(pass) gemini-client > initializes fallback client when fallback key is configured [45.36ms]
+
+src/__tests__/services/stt.test.ts:
+(pass) transcribe > transcribes with gemini provider [849.05ms]
+(pass) transcribe > aborts a paid fallback when the model timeout wins [94.26ms]
+(pass) transcribe > transcribes with openai provider [71.90ms]
+(pass) transcribe > transcribes with elevenlabs provider [50.85ms]
+(pass) transcribe > transcribes with local provider [36.35ms]
+(pass) transcribe > defaults to gemini provider when not specified [114.40ms]
+(pass) transcribe > gemini provider sends base64 audio data [111.86ms]
+(pass) transcribe > returns empty string from gemini when text is null [108.09ms]
+(pass) transcribe > trims whitespace from transcription [119.36ms]
+(pass) transcribe > converts spoken bullet point phrases to bulleted lists [9.46ms]
+(pass) transcribe > preserves Burmese script for code_comment preset when translate toggle is off [11.00ms]
+(pass) transcribe > preserves Burmese script when preset is auto and activeApp is VS Code and translate toggle is off [10.20ms]
+(pass) transcribe > strips Burmese and English hesitation fillers (nd-sat, like, you know, ဟိုဟာလေ) [31.99ms]
+(pass) transcribe > purges standalone hesitation sounds (အာ..., ဟာ, အင်း) while preserving valid Burmese words (အကြောင်း, အဆင်ပြေ) [20.73ms]
+(pass) transcribe > returns careful proofreading prompt instructions and includes 3.6-flash in fallback chain [0.33ms]
+(pass) transcribe > resolves custom appPresetMappings in resolveEffectivePreset [0.26ms]
+(pass) transcribe > uses fallback client when primary gemini key rejects fast and sets usedPaidKey to true [128.52ms]
+(pass) transcribe > returns usedPaidKey true for openai and elevenlabs providers [89.63ms]
+(pass) transcribe > does not invoke fallback client when primary gemini key succeeds fast [139.17ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > preserves Burmese translation output during editing mode without executing English text translation fallback [122.45ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > preserves Burmese dictation in code preset when translation is not enabled [127.31ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > executes English text translation fallback in non-editing code preset when translation is enabled and Burmese text returned [135.03ms]
+(pass) transcribe > Editing mode & Translation Fallback Ownership Boundaries > skips secondary text translation fallback when abortSignal is aborted [156.37ms]
+
+src/__tests__/services/tts.test.ts:
+(pass) TTS constants > has expected audio format constants [0.11ms]
+(pass) synthesizeStream > throws for local provider (use speakLocal instead) [1.42ms]
+(pass) synthesizeStream > streams gemini TTS as Buffer chunks [2.49ms]
+(pass) synthesizeStream > streams openai TTS as Buffer chunks [0.72ms]
+(pass) synthesizeStream > streams elevenlabs TTS as Buffer chunks [1.03ms]
+(pass) synthesizeStream > defaults to gemini when no provider specified [0.30ms]
+(pass) speakLocal > rejects on non-darwin platform [0.41ms]
+(pass) speakLocal > passes text as argument to say command [0.13ms]
+(pass) speakLocal > uses SAY_VOICE env var when set [0.11ms]
+(pass) speakLocal > rejects when say command exits with non-zero code [0.07ms]
+(pass) speakLocal > rejects when spawn fails [0.08ms]
+
+ 48 pass
+ 0 fail
+ 103 expect() calls
+Ran 48 tests across 4 files. [3.94s]
+provider_mock_tests_exit=0
