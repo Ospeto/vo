@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 
 // Mock logger
 mock.module("../../services/logger.js", () => ({
@@ -76,18 +76,20 @@ const { transcribe } = await import("../../services/stt.js");
 
 describe("transcribe", () => {
   let savedEnv: Record<string, string | undefined>;
+  let fakeWhisperPath: string | null = null;
 
   beforeEach(() => {
-    setGeminiClientForTests(mockGeminiClient as any);
-    setGeminiFallbackClientForTests(mockGeminiFallbackClient as any);
-    const fakeWhisperPath = join(tmpdir(), `fake-whisper-${Date.now()}.bin`);
-    try { writeFileSync(fakeWhisperPath, "fake whisper data"); } catch {}
-    process.env.WHISPER_MODEL_PATH = fakeWhisperPath;
     savedEnv = {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
       GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+      WHISPER_MODEL_PATH: process.env.WHISPER_MODEL_PATH,
     };
+    setGeminiClientForTests(mockGeminiClient as any);
+    setGeminiFallbackClientForTests(mockGeminiFallbackClient as any);
+    fakeWhisperPath = join(tmpdir(), `fake-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
+    try { writeFileSync(fakeWhisperPath, "fake whisper data"); } catch {}
+    process.env.WHISPER_MODEL_PATH = fakeWhisperPath;
     process.env.OPENAI_API_KEY = "test-openai-key";
     process.env.ELEVENLABS_API_KEY = "test-elevenlabs-key";
     process.env.GEMINI_API_KEY = "test-gemini-key";
@@ -102,6 +104,10 @@ describe("transcribe", () => {
   afterEach(() => {
     setGeminiClientForTests(null);
     setGeminiFallbackClientForTests(null);
+    if (fakeWhisperPath && existsSync(fakeWhisperPath)) {
+      try { rmSync(fakeWhisperPath, { force: true }); } catch {}
+      fakeWhisperPath = null;
+    }
     for (const [key, val] of Object.entries(savedEnv)) {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;

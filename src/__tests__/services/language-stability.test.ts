@@ -18,7 +18,11 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   });
 
   afterEach(() => {
-    delete process.env.XDG_CONFIG_HOME;
+    if (originalEnv.XDG_CONFIG_HOME !== undefined) {
+      process.env.XDG_CONFIG_HOME = originalEnv.XDG_CONFIG_HOME;
+    } else {
+      delete process.env.XDG_CONFIG_HOME;
+    }
     if (originalEnv.GEMINI_API_KEY !== undefined) {
       process.env.GEMINI_API_KEY = originalEnv.GEMINI_API_KEY;
     } else {
