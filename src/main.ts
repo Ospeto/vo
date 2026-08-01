@@ -1211,7 +1211,11 @@ export async function startRecordingFlow(): Promise<boolean> {
 
 function handleHotkeyDown(mode: "dictate" | "edit" = "dictate") {
   const now = Date.now();
-  if (now - lastHotkeyDownTime < 350) {
+  const dictMode = dictationCoordinator.getDictationMode();
+  const currentState = dictationCoordinator.snapshot().state;
+  const isHoldModeInitial = dictMode === "hold" && (currentState === "idle" || currentState === "error");
+
+  if (!isHoldModeInitial && now - lastHotkeyDownTime < 350) {
     logger.warn({ deltaMs: now - lastHotkeyDownTime }, "Debounced duplicate hotkey down trigger");
     return;
   }
