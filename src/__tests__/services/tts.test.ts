@@ -30,13 +30,7 @@ const mockGenerateContentStream = mock(async () => ({
     };
   },
 }));
-mock.module("../../services/gemini-client.js", () => ({
-  getGeminiClient: () => ({
-    models: {
-      generateContentStream: mockGenerateContentStream,
-    },
-  }),
-}));
+const { setGeminiClientForTests } = await import("../../services/gemini-client.js");
 
 // Mock OpenAI
 const mockOpenAISpeech = mock(async () => ({
@@ -95,6 +89,11 @@ describe("synthesizeStream", () => {
   let savedEnv: Record<string, string | undefined>;
 
   beforeEach(() => {
+    setGeminiClientForTests({
+      models: {
+        generateContentStream: mockGenerateContentStream,
+      },
+    } as any);
     savedEnv = {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
@@ -110,6 +109,7 @@ describe("synthesizeStream", () => {
   });
 
   afterEach(() => {
+    setGeminiClientForTests(null);
     for (const [key, val] of Object.entries(savedEnv)) {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;

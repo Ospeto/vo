@@ -8,11 +8,23 @@ import logger from "./logger.js";
 let geminiClients: GoogleGenAI[] = [];
 let fallbackClient: GoogleGenAI | null = null;
 let currentKeyIndex = 0;
+let customTestClient: GoogleGenAI | null = null;
+let customTestFallbackClient: GoogleGenAI | null = null;
+
+export function setGeminiClientForTests(client: any): void {
+  customTestClient = client;
+}
+
+export function setGeminiFallbackClientForTests(client: any): void {
+  customTestFallbackClient = client;
+}
 
 export function _resetGeminiClient(): void {
   geminiClients = [];
   fallbackClient = null;
   currentKeyIndex = 0;
+  customTestClient = null;
+  customTestFallbackClient = null;
 }
 
 export function resolveApiKeys(): string[] {
@@ -84,6 +96,10 @@ export function resolveApiKeys(): string[] {
 }
 
 export function getGeminiClient(): GoogleGenAI {
+  if (customTestClient) {
+    return customTestClient;
+  }
+
   if (geminiClients.length > 0) {
     const client = geminiClients[currentKeyIndex];
     if (client) {
@@ -148,6 +164,10 @@ export function getGeminiClient(): GoogleGenAI {
 }
 
 export function getGeminiFallbackClient(): GoogleGenAI | null {
+  if (customTestFallbackClient) {
+    return customTestFallbackClient;
+  }
+
   if (fallbackClient) return fallbackClient;
   try {
     const config = loadConfig();

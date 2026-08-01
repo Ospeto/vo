@@ -14,12 +14,7 @@ mock.module("../../services/logger.js", () => ({
 }));
 
 // Keep config tests from writing the real user's module-load-time vocabulary path.
-mock.module("../../services/vocabulary-service.js", () => ({
-  loadPersistedVocabulary: () => ({ customVocabulary: [], presetVocabulary: {}, entries: [] }),
-  savePersistedVocabulary: () => {},
-  migrateVocabulary: (customVocabulary: string[], presetVocabulary: Record<string, string[]>, entries: unknown[] = []) => entries,
-  backfillLegacyWhitespace: (entries: unknown[]) => entries,
-}));
+import { setVocabularyPathForTests } from "../../services/vocabulary-service.js";
 
 import {
   parseKeyBinding,
@@ -183,6 +178,7 @@ describe("loadConfig", () => {
   beforeEach(() => {
     tmpDir = join(tmpdir(), `pi-voice-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
+    setVocabularyPathForTests(join(tmpDir, "vocabulary.json"));
     origHome = process.env.HOME;
     origXdg = process.env.XDG_CONFIG_HOME;
     process.env.HOME = join(tmpDir, "home");
@@ -190,6 +186,7 @@ describe("loadConfig", () => {
   });
 
   afterEach(() => {
+    setVocabularyPathForTests(null);
     if (origHome === undefined) {
       delete process.env.HOME;
     } else {

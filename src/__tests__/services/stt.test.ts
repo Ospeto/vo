@@ -1,4 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 
 // Mock logger
 mock.module("../../services/logger.js", () => ({
@@ -25,13 +28,6 @@ const mockGeminiFallbackClient = {
     generateContent: (...args: any[]) => mockFallbackGenerateContent?.(...args),
   },
 };
-
-mock.module("../../services/gemini-client.js", () => ({
-  getGeminiClient: () => mockGeminiClient,
-  getGeminiFallbackClient: () => (mockFallbackGenerateContent ? mockGeminiFallbackClient : null),
-  isFallbackClient: (client: unknown) => client === mockGeminiFallbackClient,
-  _resetGeminiClient: () => {},
-}));
 
 // Mock OpenAI
 const mockOpenAITranscription = mock(async () => ({
@@ -75,17 +71,18 @@ mock.module("@napi-rs/whisper", () => ({
   WhisperSamplingStrategy: { Greedy: 0 },
 }));
 
-// Mock whisper-model
-mock.module("../../services/whisper-model.js", () => ({
-  resolveModelPath: async () => "/fake/model.bin",
-}));
-
+const { setGeminiClientForTests, setGeminiFallbackClientForTests } = await import("../../services/gemini-client.js");
 const { transcribe } = await import("../../services/stt.js");
 
 describe("transcribe", () => {
   let savedEnv: Record<string, string | undefined>;
 
   beforeEach(() => {
+    setGeminiClientForTests(mockGeminiClient as any);
+    setGeminiFallbackClientForTests(mockGeminiFallbackClient as any);
+    const fakeWhisperPath = join(tmpdir(), `fake-whisper-${Date.now()}.bin`);
+    try { writeFileSync(fakeWhisperPath, "fake whisper data"); } catch {}
+    process.env.WHISPER_MODEL_PATH = fakeWhisperPath;
     savedEnv = {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
@@ -103,6 +100,8 @@ describe("transcribe", () => {
   });
 
   afterEach(() => {
+    setGeminiClientForTests(null);
+    setGeminiFallbackClientForTests(null);
     for (const [key, val] of Object.entries(savedEnv)) {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;
