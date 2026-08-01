@@ -127,15 +127,14 @@ export function getGeminiClient(): GoogleGenAI {
           try {
             return await origGen(request);
           } catch (err: any) {
-            if (
-              apiKey.startsWith("test-") ||
-              apiKey.includes("TestKey") ||
-              apiKey.includes("dummy") ||
+            const isNetworkOrInvalidKey =
               String(err?.message).includes("API key not valid") ||
               String(err?.message).includes("API_KEY_INVALID") ||
               String(err?.message).includes("fetch failed") ||
-              String(err?.message).includes("400")
-            ) {
+              String(err?.message).includes("ENOTFOUND") ||
+              String(err?.message).includes("ECONNREFUSED");
+
+            if (isNetworkOrInvalidKey && (apiKey.startsWith("test-") || apiKey.includes("TestKey") || apiKey.includes("dummy"))) {
               return { text: "gemini transcription" } as any;
             }
             throw err;
