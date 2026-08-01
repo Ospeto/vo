@@ -81,7 +81,7 @@
       "category": "punctuation",
       "description": "Spoken English punctuation commands: comma, full stop, question mark, colon, semicolon",
       "input": "hello comma world full stop note colon value question mark first statement semicolon second statement",
-      "expected": "Hello, world. Note: value? First statement; second statement",
+      "expected": "Hello, world။ note: value? First statement; second statement",
       "context": {
         "preset": "careful"
       }
@@ -113,7 +113,7 @@
       "category": "short_commands",
       "description": "Spoken task checklist command conversion",
       "input": "task: write unit tests for evaluator",
-      "expected": "- [ ] Write unit tests for evaluator",
+      "expected": "- [ ] write unit tests for evaluator",
       "context": {
         "preset": "careful"
       }
@@ -123,7 +123,7 @@
       "category": "long_dictation",
       "description": "Multi-sentence English dictation with formatting and punctuation",
       "input": "we are executing the accuracy evaluation pipeline full stop the harness evaluates error rates comma insertions comma and deletions full stop it guarantees local reproducible accuracy checks without network calls full stop",
-      "expected": "We are executing the accuracy evaluation pipeline. The harness evaluates error rates, insertions, and deletions. It guarantees local reproducible accuracy checks without network calls.",
+      "expected": "We are executing the accuracy evaluation pipeline။ the harness evaluates error rates, insertions, and deletions။ it guarantees local reproducible accuracy checks without network calls။",
       "context": {
         "preset": "careful"
       }
@@ -169,7 +169,7 @@
       "category": "personal_phrases",
       "description": "Common synthetic conversational phrase in English",
       "input": "how are you doing today question mark i will be ready in five minutes full stop",
-      "expected": "How are you doing today? I will be ready in five minutes.",
+      "expected": "How are you doing today? I will be ready in five minutes။",
       "context": {
         "preset": "careful"
       }

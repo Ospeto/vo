@@ -145,7 +145,7 @@ export function tokenizeText(text: string): string[] {
     if (/^(https?:\/\/|git@|\/|@)/i.test(token)) {
       tokens.push(token);
     } else {
-      const stripped = token.replace(/^[.,?!:;"'“”‘’()\u104E\u104F\u104A\u104B]+|[.,?!:;"'“”‘’()\u104E\u104F\u104A\u104B]+$/g, "");
+      const stripped = token.replace(/^[.,?!:;"'`“”‘’()\u104E\u104F\u104A\u104B]+|[.,?!:;"'`“”‘’()\u104E\u104F\u104A\u104B]+$/g, "");
       tokens.push(stripped.length > 0 ? stripped : token);
     }
   }
@@ -548,7 +548,7 @@ export function evaluateAccuracySuite(suite: AccuracyFixtureSuite, options?: Eva
   };
 }
 
-/** Load accuracy suite from JSON file path, JSON string, or object structure (captain extensible design). */
+/** Load an accuracy suite from a JSON file path, JSON string, or object. */
 export function loadAccuracyFixtureSuite(source: string | object): AccuracyFixtureSuite {
   let parsed: any;
 
