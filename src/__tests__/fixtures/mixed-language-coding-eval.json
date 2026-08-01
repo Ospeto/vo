@@ -1,0 +1,114 @@
+{
+  "version": "1.0.0",
+  "description": "Deterministic text fixtures for VO mixed Burmese/English coding transcription baseline",
+  "fixtures": [
+    {
+      "id": "eng-01",
+      "cohort": "english_only",
+      "text": "Check `userId` and `created_at` in `/tmp/vo-fixture/src/index.ts`.",
+      "protectedTokens": ["userId", "created_at", "/tmp/vo-fixture/src/index.ts"],
+      "casingCues": ["userId", "created_at"],
+      "expectedSanitized": {
+        "translationOff": "Check `userId` and `created_at` in `/tmp/vo-fixture/src/index.ts`",
+        "translationOn": "Check `userId` and `created_at` in `/tmp/vo-fixture/src/index.ts`"
+      },
+      "description": "English code comment with identifiers in backticks, casing cues, and file path"
+    },
+    {
+      "id": "eng-02",
+      "cohort": "english_only",
+      "text": "Run `npm run build` and check https://example.invalid/api/v1 for @scope/example-package status.",
+      "protectedTokens": ["npm run build", "https://example.invalid/api/v1", "@scope/example-package"],
+      "casingCues": [],
+      "expectedSanitized": {
+        "translationOff": "Run `npm run build` and check https://example.invalid/api/v1 for @scope/example-package status",
+        "translationOn": "Run `npm run build` and check https://example.invalid/api/v1 for @scope/example-package status"
+      },
+      "description": "English CLI command, URL, and scoped package name exact preservation"
+    },
+    {
+      "id": "eng-03",
+      "cohort": "english_only",
+      "text": "Set API_KEY in config for ghostty and cursor apps.",
+      "protectedTokens": ["API_KEY", "ghostty", "cursor"],
+      "casingCues": ["API_KEY"],
+      "expectedSanitized": {
+        "translationOff": "Set API_KEY in config for ghostty and cursor apps",
+        "translationOn": "Set API_KEY in config for ghostty and cursor apps"
+      },
+      "description": "Uppercase technical identifier API_KEY and developer tool target app names"
+    },
+    {
+      "id": "bur-01",
+      "cohort": "burmese_only",
+      "text": "ကုဒ်စစ်ဆေးပါ။",
+      "protectedTokens": [],
+      "casingCues": [],
+      "expectedSanitized": {
+        "translationOff": "ကုဒ်စစ်ဆေးပါ",
+        "translationOn": ""
+      },
+      "description": "Pure Burmese instruction without English technical tokens"
+    },
+    {
+      "id": "bur-02",
+      "cohort": "burmese_only",
+      "text": "အမှားရှာပြင်ခိုင်းပါ။",
+      "protectedTokens": [],
+      "casingCues": [],
+      "expectedSanitized": {
+        "translationOff": "အမှားရှာပြင်ခိုင်းပါ",
+        "translationOn": ""
+      },
+      "description": "Pure Burmese sentence purged in translation-ON mode"
+    },
+    {
+      "id": "mix-01",
+      "cohort": "mixed",
+      "text": "Check `userId` ကို စစ်ဆေးပြီး `created_at` ကို update လုပ်ပါ။",
+      "protectedTokens": ["userId", "created_at"],
+      "casingCues": ["userId", "created_at"],
+      "expectedSanitized": {
+        "translationOff": "Check `userId` ကို စစ်ဆေးပြီး `created_at` ကို update လုပ်ပါ",
+        "translationOn": "Check `userId` `created_at` update"
+      },
+      "description": "Mixed Burmese/English sentence with camelCase and snake_case backticked identifiers"
+    },
+    {
+      "id": "mix-02",
+      "cohort": "mixed",
+      "text": "Run `git status` ရိုက်ပြီး `/tmp/vo-fixture/src/index.ts` ကိုကြည့်ပါ။",
+      "protectedTokens": ["git status", "/tmp/vo-fixture/src/index.ts"],
+      "casingCues": [],
+      "expectedSanitized": {
+        "translationOff": "Run `git status` ရိုက်ပြီး `/tmp/vo-fixture/src/index.ts` ကိုကြည့်ပါ",
+        "translationOn": "Run `git status` `/tmp/vo-fixture/src/index.ts`"
+      },
+      "description": "Mixed Burmese sentence containing CLI command and file path"
+    },
+    {
+      "id": "mix-03",
+      "cohort": "mixed",
+      "text": "Check https://example.invalid/api/v1 မှ @scope/example-package ယူပါ။",
+      "protectedTokens": ["https://example.invalid/api/v1", "@scope/example-package"],
+      "casingCues": [],
+      "expectedSanitized": {
+        "translationOff": "Check https://example.invalid/api/v1 မှ @scope/example-package ယူပါ",
+        "translationOn": "Check https://example.invalid/api/v1 @scope/example-package"
+      },
+      "description": "Mixed Burmese sentence containing URL and scoped package token"
+    },
+    {
+      "id": "mix-04",
+      "cohort": "mixed",
+      "text": "API_KEY မပါရင် zed သို့မဟုတ် code မှာ error ပြပါ။",
+      "protectedTokens": ["API_KEY", "zed", "code"],
+      "casingCues": ["API_KEY"],
+      "expectedSanitized": {
+        "translationOff": "API_KEY မပါရင် zed သို့မဟုတ် code မှာ error ပြပါ",
+        "translationOn": "API_KEY zed code error"
+      },
+      "description": "Mixed Burmese sentence containing uppercase identifier and developer app targets"
+    }
+  ]
+}
