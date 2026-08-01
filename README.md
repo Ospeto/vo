@@ -85,7 +85,8 @@
 - Speak *"undo"*, *"ဖျက်လိုက်"*, or *"ပြန်ဖြတ်"* to automatically issue `Cmd+Z` and revert the last pasted dictation.
 
 ### 7. 📊 Monthly Cost & History Tracker
-- In-memory & persistent history tracking up to **200 entries**.
+- In-memory & persistent history tracking up to **500 entries** with clear-history support.
+- Automatic log rotation (2MB threshold, retaining 3 archived log files) and owner-only `0600` file permissions for operational logs (`daemon.log`), archives, history (`history.json`), cost ledger (`cost-ledger.json`), vocabulary, and configuration files.
 - Live monthly API cost calculation badge (`Month: $0.00xxx`).
 
 ---

@@ -8,7 +8,9 @@ import {
   linkSync,
   existsSync,
   mkdirSync,
+  chmodSync,
 } from "node:fs";
+import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
 export interface RuntimeState {
   pid: number;
@@ -86,8 +88,10 @@ export function saveRuntimeState(cwd: string): { revision: number } {
   const targetFile = getStateFile();
   const tmpFile = `${targetFile}.tmp.write.${process.pid}.${Date.now()}`;
   try {
-    writeFileSync(tmpFile, JSON.stringify(state, null, 2), "utf-8");
+    writeFileSync(tmpFile, JSON.stringify(state, null, 2), { encoding: "utf-8", mode: 0o600 });
+    chmodSync(tmpFile, 0o600);
     renameSync(tmpFile, targetFile);
+    ensureOwnerOnlyPermissions(targetFile);
   } catch (err) {
     try {
       if (existsSync(tmpFile)) unlinkSync(tmpFile);
@@ -101,6 +105,8 @@ export function saveRuntimeState(cwd: string): { revision: number } {
 export function readRuntimeStateResult(): RuntimeStateReadResult {
   const file = getStateFile();
   if (!existsSync(file)) return { kind: "missing", revision: stateRevision, state: null };
+
+  ensureOwnerOnlyPermissions(file);
 
   try {
     const raw = readFileSync(file, "utf-8");

@@ -458,7 +458,7 @@ function handleVoiceUndoCheck(text: string): boolean {
 
   if (isMatch) {
     const undoLength = lastPastedText ? lastPastedText.length : 0;
-    logger.info({ text, cleaned, undoLength }, "Voice Undo matched");
+    logger.info({ charCount: text.length, undoLength }, "Voice Undo matched");
     executeUndoCommand(undoLength);
     lastPastedText = "";
     return true;
@@ -851,7 +851,7 @@ function setupIpcHandlers() {
         } catch {}
       }
 
-      logger.info({ text, usedPaidKey }, "STT transcription successful");
+      logger.info({ charCount: text.length, usedPaidKey }, "STT transcription successful");
 
       const isUndo = handleVoiceUndoCheck(text);
       if (isUndo) {
@@ -896,7 +896,7 @@ function setupIpcHandlers() {
         lastPastedText = text;
         lastPasteTime = Date.now();
         playSuccessChime();
-        setState("idle", `Dictated: "${text}"`, { usedPaidKey });
+        setState("idle", "Dictation successful", { usedPaidKey });
       } else {
         recordingLifecycle.finishTranscription(currentSeq, false);
         recordingLifecycle.settle();

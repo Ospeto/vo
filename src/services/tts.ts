@@ -98,7 +98,7 @@ async function* synthesizeStreamGemini(
   }
 
   logger.info(
-    { provider: "gemini", totalBytes, text: text.substring(0, 50) },
+    { provider: "gemini", totalBytes, charCount: text.length },
     "Streamed PCM audio",
   );
 }
@@ -133,7 +133,7 @@ async function* synthesizeStreamOpenAI(
   }
 
   logger.info(
-    { provider: "openai", totalBytes, text: text.substring(0, 50) },
+    { provider: "openai", totalBytes, charCount: text.length },
     "Streamed PCM audio",
   );
 }
@@ -169,7 +169,7 @@ async function* synthesizeStreamElevenLabs(
   }
 
   logger.info(
-    { provider: "elevenlabs", totalBytes, text: text.substring(0, 50) },
+    { provider: "elevenlabs", totalBytes, charCount: text.length },
     "Streamed PCM audio",
   );
 }
@@ -203,7 +203,7 @@ export function speakLocal(text: string): Promise<void> {
     child.on("close", (code) => {
       if (code === 0) {
         logger.info(
-          { provider: "local", text: text.substring(0, 50) },
+          { provider: "local", charCount: text.length },
           "Spoke text",
         );
         resolve();
