@@ -40,14 +40,18 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
-      if (bodyStr) {
-        try {
+      try {
+        let bodyStr = "";
+        if (typeof init?.body === "string") bodyStr = init.body;
+        else if (init?.body && Buffer.isBuffer(init.body)) bodyStr = (init.body as Buffer).toString("utf-8");
+        else if (init?.body && init.body instanceof ArrayBuffer) bodyStr = Buffer.from(init.body).toString("utf-8");
+        else if (init?.body && ArrayBuffer.isView(init.body)) bodyStr = Buffer.from(init.body.buffer, init.body.byteOffset, init.body.byteLength).toString("utf-8");
+        if (bodyStr) {
           const parsed = JSON.parse(bodyStr);
           capturedSystemInstruction = parsed.systemInstruction?.parts?.[0]?.text || "";
           capturedUserPrompt = parsed.contents?.[0]?.parts?.[1]?.text || "";
-        } catch {}
-      }
+        }
+      } catch {}
       return new Response(
         JSON.stringify({
           candidates: [
@@ -90,13 +94,17 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
-      if (bodyStr) {
-        try {
+      try {
+        let bodyStr = "";
+        if (typeof init?.body === "string") bodyStr = init.body;
+        else if (init?.body && Buffer.isBuffer(init.body)) bodyStr = (init.body as Buffer).toString("utf-8");
+        else if (init?.body && init.body instanceof ArrayBuffer) bodyStr = Buffer.from(init.body).toString("utf-8");
+        else if (init?.body && ArrayBuffer.isView(init.body)) bodyStr = Buffer.from(init.body.buffer, init.body.byteOffset, init.body.byteLength).toString("utf-8");
+        if (bodyStr) {
           const parsed = JSON.parse(bodyStr);
           capturedSystemInstruction = parsed.systemInstruction?.parts?.[0]?.text || "";
-        } catch {}
-      }
+        }
+      } catch {}
       return new Response(
         JSON.stringify({
           candidates: [
@@ -136,14 +144,18 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
-      if (bodyStr) {
-        try {
+      try {
+        let bodyStr = "";
+        if (typeof init?.body === "string") bodyStr = init.body;
+        else if (init?.body && Buffer.isBuffer(init.body)) bodyStr = (init.body as Buffer).toString("utf-8");
+        else if (init?.body && init.body instanceof ArrayBuffer) bodyStr = Buffer.from(init.body).toString("utf-8");
+        else if (init?.body && ArrayBuffer.isView(init.body)) bodyStr = Buffer.from(init.body.buffer, init.body.byteOffset, init.body.byteLength).toString("utf-8");
+        if (bodyStr) {
           const parsed = JSON.parse(bodyStr);
           capturedSystemInstruction = parsed.systemInstruction?.parts?.[0]?.text || "";
           capturedUserPrompt = parsed.contents?.[0]?.parts?.[1]?.text || "";
-        } catch {}
-      }
+        }
+      } catch {}
       return new Response(
         JSON.stringify({
           candidates: [

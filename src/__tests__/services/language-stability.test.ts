@@ -110,10 +110,17 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
       let capturedSystemInstruction = "";
       const originalFetch = globalThis.fetch;
       globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
-        const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
-        let body: any = {};
-        try { body = JSON.parse(bodyStr); } catch {}
-        capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
+        try {
+          let bodyStr = "";
+          if (typeof init?.body === "string") bodyStr = init.body;
+          else if (init?.body && Buffer.isBuffer(init.body)) bodyStr = (init.body as Buffer).toString("utf-8");
+          else if (init?.body && init.body instanceof ArrayBuffer) bodyStr = Buffer.from(init.body).toString("utf-8");
+          else if (init?.body && ArrayBuffer.isView(init.body)) bodyStr = Buffer.from(init.body.buffer, init.body.byteOffset, init.body.byteLength).toString("utf-8");
+          if (bodyStr) {
+            const body = JSON.parse(bodyStr);
+            capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
+          }
+        } catch {}
         return new Response(JSON.stringify({
           candidates: [{ content: { parts: [{ text: "The database is ready." }], role: "model" }, finishReason: "STOP" }],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
