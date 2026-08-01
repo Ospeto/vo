@@ -59,15 +59,15 @@ describe("Selection Transformation & Capture Service Suite", () => {
       const adapter = createMockClipboardAdapter("Rich Text Source");
       const port = createClipboardPort(adapter as unknown as ClipboardAdapter<any>);
 
-      // Simulate active selection capture where clipboard text changes to copied text
-      const capturePromise = captureActiveSelection(3000, port);
+      // Simulate OS copy action updating clipboard text as soon as sentinel is set
+      const copyTimer = setInterval(() => {
+        if (adapter.readText() === "__PI_VOICE_SELECTION_SENTINEL__") {
+          adapter.writeText("Const selectedText = 42;");
+        }
+      }, 10);
 
-      // Simulate OS copy action updating clipboard text
-      queueMicrotask(() => {
-        adapter.writeText("Const selectedText = 42;");
-      });
-
-      const result = await capturePromise;
+      const result = await captureActiveSelection(3000, port);
+      clearInterval(copyTimer);
 
       expect(result.hasSelection).toBe(true);
       expect(result.selectedText).toBe("Const selectedText = 42;");
