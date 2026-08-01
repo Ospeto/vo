@@ -130,7 +130,18 @@ export const captureOrchestrator = new CaptureOrchestrator<BrowserWindow, Electr
     applySecurityGuards: (win) => applyWindowSecurityGuards(win),
     loadFile: (win) => win.loadFile(fileURLToPath(new URL("../renderer/capture.html", import.meta.url))),
     captureActiveSelection: (timeoutMs, options) => captureActiveSelection(timeoutMs, options),
-    capturePasteTarget: () => safePasteService.captureTarget(),
+    capturePasteTarget: () => {
+      const captured = safePasteService.captureTarget();
+      if (captured) return;
+      const sequenceId = recordingLifecycle.snapshot().sequenceId;
+      // ponytail: one short retry lets macOS settle the global-hotkey frontmost app without weakening target checks.
+      setTimeout(() => {
+        const snapshot = recordingLifecycle.snapshot();
+        if (snapshot.sequenceId === sequenceId && ["starting", "recording"].includes(snapshot.state)) {
+          safePasteService.captureTarget();
+        }
+      }, 150);
+    },
     playStartChime: () => playStartChime(),
     getInputGain: () => currentConfig?.inputGain ?? 1.0,
     selectionClipboardPort,
