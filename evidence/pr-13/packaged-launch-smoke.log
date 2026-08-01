@@ -1,0 +1,25 @@
+993 |   if (!isURLInstance(fileURLOrPath))
+994 |     return fileURLOrPath;
+995 |   return Bun.fileURLToPath(fileURLOrPath);
+996 | }
+997 | var { Error, TypeError } = globalThis;
+998 |   let err = new Error(message);
+                  ^
+error: Command failed: /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/dist/mac-arm64/vo.app/Contents/MacOS/vo --no-sandbox --headless --user-data-dir /var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-native-smoke-WM9G5e
+   code: null,
+ killed: true,
+ signal: "SIGTERM",
+    cmd: "/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/dist/mac-arm64/vo.app/Contents/MacOS/vo --no-sandbox --headless --user-data-dir /var/folders/w6/329_yp2s4jsg59b_nbv1p1040000gn/T/pi-voice-native-smoke-WM9G5e",
+ stdout: "",
+ stderr: "",
+
+      at genericNodeError (node:child_process:998:13)
+      at exitHandler (node:child_process:103:28)
+      at emit (node:events:98:22)
+      at #maybeClose (node:child_process:766:16)
+      at #handleOnExit (node:child_process:520:72)
+
+Bun v1.3.14 (macOS arm64)
+repackaged_smoke_exit=1
+macOS artifact smoke test passed: /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/dist/mac-arm64/vo.app
+final_packaged_smoke_exit=0

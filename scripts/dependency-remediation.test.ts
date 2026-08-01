@@ -25,4 +25,11 @@ describe("PR-13 dependency remediation", () => {
     expect(Object.keys(after).length).toBeGreaterThan(0);
     expect(Object.keys(after).length).toBeLessThan(Object.keys(before).length);
   });
+
+  test("packaged headless launch exits after the native addon self-check", async () => {
+    const mainSource = await Bun.file(new URL("../src/main.ts", import.meta.url)).text();
+    expect(mainSource).toContain('process.argv.includes("--headless") || app.requestSingleInstanceLock()');
+    expect(mainSource).toContain('app.exit(0);\n      return;');
+    expect(mainSource).toContain('app.exit(1);\n    return;');
+  });
 });

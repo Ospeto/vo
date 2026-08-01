@@ -1,0 +1,33 @@
+--- artifact checks ---
+dist/vo-1.5.0-arm64.dmg:     zlib compressed data
+dist/vo-1.5.0-arm64-mac.zip: Zip archive data, at least v2.0 to extract, compression method=store
+Checksumming Protective Master Boot Record (MBR : 0)…
+Protective Master Boot Record (MBR :: verified   CRC32 $78D2112B
+Checksumming GPT Header (Primary GPT Header : 1)…
+ GPT Header (Primary GPT Header : 1): verified   CRC32 $A9DA8127
+Checksumming GPT Partition Data (Primary GPT Table : 2)…
+GPT Partition Data (Primary GPT Tabl: verified   CRC32 $2E8D041C
+Checksumming  (Apple_Free : 3)…
+                    (Apple_Free : 3): verified   CRC32 $00000000
+Checksumming disk image (Apple_APFS : 4)…
+         disk image (Apple_APFS : 4): verified   CRC32 $A77F3545
+Checksumming  (Apple_Free : 5)…
+                    (Apple_Free : 5): verified   CRC32 $00000000
+Checksumming GPT Partition Data (Backup GPT Table : 6)…
+GPT Partition Data (Backup GPT Table: verified   CRC32 $2E8D041C
+Checksumming GPT Header (Backup GPT Header : 7)…
+  GPT Header (Backup GPT Header : 7): verified   CRC32 $D5A54026
+verified   CRC32 $1D54C30C
+hdiutil: verify: checksum of "dist/vo-1.5.0-arm64.dmg" is VALID
+hdiutil_exit=0
+    testing: vo.app/Contents/Resources/th.lproj/   OK
+    testing: vo.app/Contents/Resources/tr.lproj/   OK
+    testing: vo.app/Contents/Resources/uk.lproj/   OK
+    testing: vo.app/Contents/Resources/ur.lproj/   OK
+    testing: vo.app/Contents/Resources/vi.lproj/   OK
+    testing: vo.app/Contents/Resources/zh_CN.lproj/   OK
+    testing: vo.app/Contents/Resources/zh_TW.lproj/   OK
+No errors detected in compressed data of dist/vo-1.5.0-arm64-mac.zip.
+zip_test_exit=0
+macOS artifact smoke test passed: /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/dist/mac-arm64/vo.app
+packaged_smoke_exit=0
