@@ -68,7 +68,32 @@ class MockElement extends MockNode {
   dataset: Record<string, string> = {};
   title = "";
   value = "";
+  disabled = false;
+  attributes: Record<string, string> = {};
+  classList = {
+    add: (cls: string) => {
+      if (!this.className.includes(cls)) {
+        this.className += ` ${cls}`;
+      }
+    },
+    remove: (cls: string) => {
+      this.className = this.className.replace(cls, "").trim();
+    },
+    contains: (cls: string) => this.className.includes(cls),
+  };
   eventListeners: Record<string, Function[]> = {};
+
+  setAttribute(name: string, val: string) {
+    this.attributes[name] = val;
+  }
+
+  getAttribute(name: string) {
+    return this.attributes[name] ?? null;
+  }
+
+  getContext() {
+    return null;
+  }
 
   constructor(tagName: string) {
     super();
@@ -184,10 +209,23 @@ function getOrCreateElement(id: string, tagName = "div"): MockElement {
 let historyData: Array<{ text: string; timestamp: number; activeApp?: string }> = [];
 let savedConfigCalls: Array<any> = [];
 let lastCopiedText = "";
+let mockConfig: any = {
+  dictationPreset: "careful",
+  dictationMode: "toggle",
+  geminiModel: "gemini-3.6-flash",
+  inputGain: 1.0,
+  keyDisplay: "⌃⌥⌘V",
+};
 
 const originalWindow = (globalThis as any).window;
 const originalDocument = (globalThis as any).document;
 const originalNavigator = (globalThis as any).navigator;
+
+// Pre-create required select/input elements before renderer module load
+getOrCreateElement("modeSelect", "select");
+getOrCreateElement("modalPresetSelect", "select");
+getOrCreateElement("settingModelSelect", "select");
+getOrCreateElement("micDeviceSelect", "select");
 
 // Setup global mock environment before module imports
 (globalThis as any).document = {
@@ -201,7 +239,7 @@ const originalNavigator = (globalThis as any).navigator;
   },
   createTextNode: (text: string) => new MockTextNode(text),
   createDocumentFragment: () => new MockDocumentFragment(),
-  getElementById: (id: string) => elementsStore.get(id) || null,
+  getElementById: (id: string) => elementsStore.get(id) || getOrCreateElement(id, id.toLowerCase().includes("select") ? "select" : "div"),
   querySelector: () => null,
   querySelectorAll: () => [],
   addEventListener: () => {},
@@ -224,7 +262,7 @@ const originalNavigator = (globalThis as any).navigator;
     },
     onStateChanged: () => {},
     onAudioLevelUpdate: () => {},
-    getConfig: async () => ({}),
+    getConfig: async () => mockConfig,
     getStateSnapshot: async () => null,
   },
 };
@@ -240,6 +278,8 @@ const {
   getCustomVocabForTest,
   setPresetVocabMapForTest,
   getPresetVocabMapForTest,
+  initUI,
+  enableControls,
 } = await import("../../renderer/renderer.js");
 
 describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
@@ -249,17 +289,33 @@ describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
     (globalThis as any).navigator = originalNavigator;
   });
   beforeEach(() => {
-    elementsStore.clear();
     savedConfigCalls = [];
     lastCopiedText = "";
+    mockConfig = {
+      dictationPreset: "careful",
+      dictationMode: "toggle",
+      geminiModel: "gemini-3.6-flash",
+      inputGain: 1.0,
+      keyDisplay: "⌃⌥⌘V",
+    };
 
-    // Prepare standard container elements
-    getOrCreateElement("personNamesContainer");
-    getOrCreateElement("personNamesCountBadge");
-    getOrCreateElement("vocabTagsContainer");
+    // Clean container elements between tests for test isolation
+    const personNamesContainer = getOrCreateElement("personNamesContainer");
+    personNamesContainer.childNodes = [];
+    const personNamesBadge = getOrCreateElement("personNamesCountBadge");
+    personNamesBadge.textContent = "";
+    const vocabTagsContainer = getOrCreateElement("vocabTagsContainer");
+    vocabTagsContainer.childNodes = [];
+    const historyContainer = getOrCreateElement("historyContainer");
+    historyContainer.childNodes = [];
+
+    // Reset standard form inputs
     const presetSelect = getOrCreateElement("modalPresetSelect", "select");
     presetSelect.value = "careful";
-    getOrCreateElement("historyContainer");
+    presetSelect.disabled = false;
+    const modeSelect = getOrCreateElement("modeSelect", "select");
+    modeSelect.value = "toggle";
+    modeSelect.disabled = false;
   });
 
   test("1. Person names rendering converts hostile HTML/markup into literal text nodes without executable elements", async () => {
@@ -422,5 +478,47 @@ describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
       expect(packagedCspMatch).not.toBeNull();
       expect(packagedCspMatch?.[1]).toBe(expectedCsp);
     });
+  });
+
+  test("7. Dictation Mode UI control lifecycle: populates modeSelect on initUI, saves on change event, and toggles disabled state via enableControls", async () => {
+    // Verify index.html contains modeSelect with accessibility attributes and options
+    const srcHtmlPath = path.resolve(__dirname, "../../../src/renderer/index.html");
+    const htmlContent = fs.readFileSync(srcHtmlPath, "utf8");
+    expect(htmlContent).toContain('id="modeSelect"');
+    expect(htmlContent).toContain('<option value="toggle">');
+    expect(htmlContent).toContain('<option value="hold">');
+    expect(htmlContent).toContain('aria-label="Dictation Mode"');
+    expect(htmlContent).toContain('aria-describedby="modeSelectHelp"');
+    expect(htmlContent).toContain('id="modeSelectHelp"');
+
+    const modeSelect = getOrCreateElement("modeSelect", "select");
+
+    // 1) Test modeSelect initialization from config.dictationMode during initUI
+    mockConfig = {
+      dictationMode: "hold",
+      dictationPreset: "careful",
+      geminiModel: "gemini-3.6-flash",
+      inputGain: 1.0,
+      keyDisplay: "⌃⌥⌘V",
+    };
+    await initUI();
+    expect(modeSelect.value).toBe("hold");
+
+    // 2) Test change event on modeSelect invoking saveConfig({ dictationMode })
+    savedConfigCalls = [];
+    modeSelect.value = "toggle";
+    await modeSelect.dispatchEvent("change");
+    expect(savedConfigCalls).toContainEqual({ dictationMode: "toggle" });
+
+    modeSelect.value = "hold";
+    await modeSelect.dispatchEvent("change");
+    expect(savedConfigCalls).toContainEqual({ dictationMode: "hold" });
+
+    // 3) Test enableControls enabling and disabling modeSelect
+    enableControls(false);
+    expect(modeSelect.disabled).toBe(true);
+
+    enableControls(true);
+    expect(modeSelect.disabled).toBe(false);
   });
 });
