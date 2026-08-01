@@ -14,6 +14,9 @@ export type NativePasteAddon = {
   smokeFixture?(): NativePasteTarget;
 };
 
+export type NativePasteAddonUnavailableReason = "missing_file" | "wrong_architecture" | "abi_mismatch" | "signing_or_load_failed" | "self_check_failed";
+export type NativePasteAddonReadiness = { ok: true; addon: NativePasteAddon } | { ok: false; reason: NativePasteAddonUnavailableReason };
+
 export function resolveNativePastePath(projectRoot: string): string {
   const candidates = [
     join(projectRoot, "build", "Release", "pi_paste.node"),
@@ -31,11 +34,40 @@ export function resolveNativePastePath(projectRoot: string): string {
   return join(projectRoot, "build", "Release", "pi_paste.node");
 }
 
-export function loadNativePasteAddon(path: string): NativePasteAddon | null {
-  if (process.env.NODE_ENV === "test") return null;
+const LOAD_ERROR_REASONS: ReadonlyArray<readonly [NativePasteAddonUnavailableReason, RegExp]> = [
+  ["wrong_architecture", /wrong architecture|incompatible architecture|bad cpu type|wrong elf class|invalid elf header|not a valid mach-o|mach-o, but wrong architecture/i],
+  ["abi_mismatch", /node_module_version|compiled against a different (node|electron) version|module version mismatch|did not self-register|abi mismatch/i],
+  ["signing_or_load_failed", /code signature|signature (invalid|missing|verification)|library validation|not valid for use in process/i],
+];
+
+export function categorizeNativePasteAddonLoadError(error: unknown): NativePasteAddonUnavailableReason {
+  const message = error instanceof Error ? error.message : String(error);
+  for (const [reason, pattern] of LOAD_ERROR_REASONS) {
+    if (pattern.test(message)) return reason;
+  }
+  return "signing_or_load_failed";
+}
+
+export function checkNativePasteAddon(addon: unknown): NativePasteAddonReadiness {
+  const candidate = addon as NativePasteAddon | null;
+  if (!candidate || typeof candidate.capture !== "function" || typeof candidate.authorize !== "function" || typeof candidate.inject !== "function") {
+    return { ok: false, reason: "self_check_failed" };
+  }
   try {
-    const addon = createRequire(import.meta.url)(path) as NativePasteAddon;
-    if (!addon || typeof addon.capture !== "function" || typeof addon.authorize !== "function" || typeof addon.inject !== "function" || addon.selfCheck() !== true) return null;
-    return addon;
-  } catch { return null; }
+    if (candidate.selfCheck() !== true) return { ok: false, reason: "self_check_failed" };
+  } catch {
+    return { ok: false, reason: "self_check_failed" };
+  }
+  return { ok: true, addon: candidate };
+}
+
+export function loadNativePasteAddon(path: string): NativePasteAddonReadiness {
+  if (!path || !existsSync(path)) return { ok: false, reason: "missing_file" };
+  let loaded: unknown;
+  try {
+    loaded = createRequire(import.meta.url)(path);
+  } catch (error) {
+    return { ok: false, reason: categorizeNativePasteAddonLoadError(error) };
+  }
+  return checkNativePasteAddon(loaded);
 }

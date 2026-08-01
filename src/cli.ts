@@ -131,8 +131,13 @@ async function cmdStatus(): Promise<void> {
     const res = await sendCommand("status");
     if (res.ok) {
       const uptime = typeof res.uptime === "number" ? Math.floor(res.uptime as number) : "?";
+      const nativePasteInfo = res.nativePaste && typeof res.nativePaste === "object"
+        ? (res.nativePaste as { ready?: boolean; reason?: string }).ready
+          ? "ready"
+          : `unavailable (${(res.nativePaste as { reason?: string }).reason ?? "unknown"})`
+        : "unknown";
       console.log(
-        `running: ${res.cwd} (pid: ${res.pid}, state: ${res.state}, uptime: ${uptime}s)`
+        `running: ${res.cwd} (pid: ${res.pid}, state: ${res.state}, uptime: ${uptime}s, native paste: ${nativePasteInfo})`
       );
     } else {
       console.log(

@@ -154,6 +154,31 @@ bun run dist:dmg
 
 Built application output will be placed in `dist/mac-arm64/vo.app`.
 
+### Native Paste Addon (Apple Silicon only)
+
+`vo`'s target-aware paste uses a native addon (`pi-paste.node`) compiled for
+**arm64 only**. `build.mac.target` pins `arch: ["arm64"]` for both the `dmg`
+and `zip` targets, and macOS builds are produced for Apple Silicon
+(`dist/mac-arm64/`). On Intel (x86_64) macOS the addon cannot load and paste
+fails closed.
+
+At startup the daemon logs a structured native paste readiness entry
+(`nativePaste: { ready: true }` or `nativePaste: { ready: false, reason }`)
+and exposes the same status via the `status` daemon command. Actionable
+unavailable reasons:
+
+| Reason | Meaning |
+| :--- | :--- |
+| `missing_file` | `pi-paste.node` was not found in the packaged resources |
+| `wrong_architecture` | Addon is not an arm64 Mach-O binary (e.g. built for x86_64) |
+| `abi_mismatch` | Addon was compiled against a different Node/Electron ABI (`NODE_MODULE_VERSION`) |
+| `signing_or_load_failed` | Code signature invalid/absent or the binary failed to load |
+| `self_check_failed` | Addon loaded but failed its runtime self-check |
+
+Paste is **fail-closed**: when the addon is unavailable or its self-check
+fails, dictation results are retained and never injected — the focused
+application's clipboard and window are left untouched.
+
 ---
 
 ## 📄 License & Terms

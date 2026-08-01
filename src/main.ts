@@ -92,10 +92,15 @@ dictationCoordinator = new DictationControlCoordinator(
   recordingLifecycle
 );
 const addonPath = resolveNativePastePath(projectRoot);
-const addon = loadNativePasteAddon(addonPath);
-const safePasteService = createMacSafePasteService(addon, clipboard as unknown as ClipboardAdapter<any>);
+export const nativePasteReadiness = loadNativePasteAddon(addonPath);
+if (nativePasteReadiness.ok) {
+  logger.info({ nativePaste: { ready: true } }, "native paste addon ready");
+} else {
+  logger.warn({ nativePaste: { ready: false, reason: nativePasteReadiness.reason } }, "native paste addon unavailable");
+}
+const safePasteService = createMacSafePasteService(nativePasteReadiness, clipboard as unknown as ClipboardAdapter<any>);
 const pasteCoordinator = new PasteCoordinator((text, isCurrent, beforeWrite) => safePasteService.paste(text, isCurrent, beforeWrite));
-const selectionClipboardPort = getClipboardPort(createElectronClipboardAdapter(addon?.writeClipboardBuffer));
+const selectionClipboardPort = getClipboardPort(createElectronClipboardAdapter(nativePasteReadiness.ok ? nativePasteReadiness.addon.writeClipboardBuffer : undefined));
 
 let isQuitting = false;
 let popoverWindow: BrowserWindow | null = null;
@@ -1220,7 +1225,7 @@ function toggleRecordingState() {
   });
 }
 
-function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
+export function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
   switch (command) {
     case "status":
       return {
@@ -1229,6 +1234,7 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
         cwd: workingCwd,
         pid: process.pid,
         uptime: process.uptime(),
+        nativePaste: nativePasteReadiness.ok ? { ready: true } : { ready: false, reason: nativePasteReadiness.reason },
       };
     case "show":
       togglePopover();
@@ -1433,13 +1439,12 @@ app.whenReady().then(async () => {
   if (!gotSingleInstanceLock && !process.argv.includes("--headless")) return;
 
   if (process.argv.includes("--headless")) {
-    const isOk = addon !== null && typeof addon.selfCheck === "function" && addon.selfCheck() === true;
-    if (isOk) {
+    if (nativePasteReadiness.ok) {
       console.log("native paste addon self-check ok");
       app.exit(0);
       return;
     }
-    console.error("native paste addon self-check failed");
+    console.error(`native paste addon unavailable: ${nativePasteReadiness.reason}`);
     app.exit(1);
     return;
   }

@@ -92,9 +92,9 @@ export async function getActiveAppName(): Promise<string> {
   try {
     const root = process.cwd();
     const addonPath = resolveNativePastePath(root);
-    const addon = loadNativePasteAddon(addonPath);
-    if (addon) {
-      const target = addon.capture();
+    const readiness = loadNativePasteAddon(addonPath);
+    if (readiness.ok) {
+      const target = readiness.addon.capture();
       if (target && target.ok && target.appName) {
         cachedActiveAppName = target.appName;
         lastActiveAppTime = now;

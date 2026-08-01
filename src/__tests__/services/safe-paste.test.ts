@@ -146,7 +146,7 @@ describe("SafePasteService", () => {
   });
 
   test("guards a missing addon load without throwing during import", () => {
-    expect(loadNativePasteAddon("/definitely/missing/pi-paste.node")).toBeNull();
+    expect(loadNativePasteAddon("/definitely/missing/pi-paste.node")).toEqual({ ok: false, reason: "missing_file" });
   });
 
   test("calls native injection directly and restores after an actual native failure", async () => {
