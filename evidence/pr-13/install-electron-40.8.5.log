@@ -1,0 +1,7 @@
+bun install v1.3.14 (0d9b296a)
+warn: electron's postinstall cost you 1m12s
+
++ electron@40.8.5
+
+1 package installed [74.18s]
+install_40_8_5_exit=0

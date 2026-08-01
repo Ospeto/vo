@@ -10,10 +10,10 @@ const outputDirectory = resolve(root, "native");
 const output = resolve(outputDirectory, "pi-paste.node");
 const smokeOutput = resolve(outputDirectory, "pi-paste-smoke.node");
 const electronPackage = await Bun.file(resolve(root, "node_modules/electron/package.json")).json() as { version: string };
-if (electronPackage.version !== "40.8.3") throw new Error(`Native addon build is pinned to Electron 40.8.3, found ${electronPackage.version}`);
+if (electronPackage.version !== "40.8.5") throw new Error(`Native addon build is pinned to Electron 40.8.5, found ${electronPackage.version}`);
 const headerRoot = process.env["ELECTRON_HEADERS"] ? resolve(process.env["ELECTRON_HEADERS"]) : resolve(root, ".cache/electron-headers", electronPackage.version, "include", "node");
-const archiveUrl = "https://artifacts.electronjs.org/headers/dist/v40.8.3/node-v40.8.3-headers.tar.gz";
-const archiveSha256 = "61fbe26d00801c9d38012636f2080961b0f16a96cee06b052a9af5cb48d05a3a";
+const archiveUrl = "https://artifacts.electronjs.org/headers/dist/v40.8.5/node-v40.8.5-headers.tar.gz";
+const archiveSha256 = "932782802be7f6a2277a2b6d48f1c0fc3b20a1cbdadf767ae110763463cd3f9a";
 const headerFiles = ["node_api.h", "node.h", "config.gypi"];
 const hasHeaders = async (directory: string) => (await Promise.all(headerFiles.map((file) => Bun.file(resolve(directory, file)).exists()))).every(Boolean);
 const validElectron40Headers = async (directory: string) => {
@@ -23,7 +23,7 @@ const validElectron40Headers = async (directory: string) => {
   return validateElectronHeaderMetadata(config, version);
 };
 if (!(await validElectron40Headers(headerRoot))) {
-  if (process.env["ELECTRON_HEADERS"]) throw new Error(`Electron 40.8.3 header metadata mismatch at ${headerRoot}`);
+  if (process.env["ELECTRON_HEADERS"]) throw new Error(`Electron 40.8.5 header metadata mismatch at ${headerRoot}`);
   const cacheRoot = resolve(root, ".cache/electron-headers", electronPackage.version);
   const archive = resolve(cacheRoot, "headers.tar.gz");
   await mkdir(cacheRoot, { recursive: true });

@@ -9,8 +9,8 @@ const advisoryPackages = (audit: Record<string, unknown>) => Object.keys(audit);
 describe("PR-13 dependency remediation", () => {
   test("pins the supported Electron ABI and reachable provider resolutions", async () => {
     const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json() as { devDependencies: Record<string, string> };
-    expect(manifest.devDependencies.electron).toBe("40.8.3");
-    expect(lock).toContain('"electron": ["electron@40.8.3"');
+    expect(manifest.devDependencies.electron).toBe("40.8.5");
+    expect(lock).toContain('"electron": ["electron@40.8.5"');
     expect(lock).toContain('"protobufjs": ["protobufjs@7.6.5"');
     expect(lock).toContain('"ws": ["ws@8.21.1"');
     expect(lock).toContain('"@mariozechner/pi-ai/undici": ["undici@7.29.0"');

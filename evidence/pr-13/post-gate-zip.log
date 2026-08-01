@@ -4,7 +4,7 @@ $ bun scripts/build-native-paste-addon.ts
 gyp info it worked if it ends with ok
 gyp info using node-gyp@12.4.0
 gyp info using node@22.22.3 | darwin | arm64
-gyp info chdir /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-1lXGc9
+gyp info chdir /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-YVG1ut
 gyp info find Python using Python version 3.14.6 found at "/opt/homebrew/opt/python@3.14/bin/python3.14"
 gyp info spawn /opt/homebrew/opt/python@3.14/bin/python3.14
 gyp info spawn args [
@@ -13,17 +13,17 @@ gyp info spawn args 'binding.gyp',
 gyp info spawn args '-f',
 gyp info spawn args 'make',
 gyp info spawn args '-I',
-gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-1lXGc9/build/config.gypi',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-YVG1ut/build/config.gypi',
 gyp info spawn args '-I',
 gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp/addon.gypi',
 gyp info spawn args '-I',
-gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3/include/node/common.gypi',
+gyp info spawn args '/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.5/include/node/common.gypi',
 gyp info spawn args '-Dlibrary=shared_library',
 gyp info spawn args '-Dvisibility=default',
-gyp info spawn args '-Dnode_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3',
+gyp info spawn args '-Dnode_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.5',
 gyp info spawn args '-Dnode_gyp_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/node_modules/node-gyp',
-gyp info spawn args '-Dnode_lib_file=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.3/$(Configuration)/node.lib',
-gyp info spawn args '-Dmodule_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-1lXGc9',
+gyp info spawn args '-Dnode_lib_file=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/electron-headers/40.8.5/$(Configuration)/node.lib',
+gyp info spawn args '-Dmodule_root_dir=/Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/.cache/native-header-probe-YVG1ut',
 gyp info spawn args '-Dnode_engine=v8',
 gyp info spawn args '--depth=.',
 gyp info spawn args '--no-parallel',
@@ -46,7 +46,7 @@ rendering chunks...
 
 out/main/chunks/whisper-model-Bji9-TJJ.js    3.47 kB
 out/main/index.js                          240.80 kB
-✓ built in 368ms
+✓ built in 380ms
 vite v6.4.1 building SSR bundle for production...
 transforming...
 ✓ 13 modules transformed.
@@ -55,7 +55,7 @@ out/preload/hud.cjs       0.75 kB
 out/preload/settings.cjs  1.79 kB
 out/preload/index.cjs     1.79 kB
 out/preload/capture.cjs   2.12 kB
-✓ built in 24ms
+✓ built in 33ms
 vite v6.4.1 building for production...
 transforming...
 ✓ 12 modules transformed.
@@ -67,19 +67,19 @@ rendering chunks...
 ../../out/renderer/assets/hud-DFHNJGgN.js       5.35 kB
 ../../out/renderer/assets/capture-CRWRVy22.js  28.58 kB
 ../../out/renderer/assets/index-CZIfnhWS.js    47.61 kB
-✓ built in 123ms
+✓ built in 173ms
 $ bun build src/cli.ts --outdir out/cli --target node --format esm --external electron
-Bundled 116 modules in 25ms
+Bundled 116 modules in 31ms
 
   cli.js  0.68 MB  (entry point)
 
   • electron-builder  version=25.1.8 os=25.5.0
   • loaded configuration  file=package.json ("build" field)
   • skipped dependencies rebuild  reason=npmRebuild is set to false
-  • packaging       platform=darwin arch=arm64 electron=40.8.3 appOutDir=dist/mac-arm64
+  • packaging       platform=darwin arch=arm64 electron=40.8.5 appOutDir=dist/mac-arm64
   • skipped macOS application code signing  reason=cannot find valid "Developer ID Application" identity or custom non-Apple code signing certificate, it could cause some undefined behaviour, e.g. macOS localized description not visible, see https://electron.build/code-signing allIdentities=     0 identities found
                                                 Valid identities only
      0 valid identities found
   • building        target=macOS zip arch=arm64 file=dist/vo-1.5.0-arm64-mac.zip
   • building block map  blockMapFile=dist/vo-1.5.0-arm64-mac.zip.blockmap
-post_gate_zip_exit=0
+post_gate_zip_40_8_5_exit=0

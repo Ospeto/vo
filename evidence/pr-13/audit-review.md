@@ -3,14 +3,14 @@
 ## Method and limits
 
 - Baseline: `bun audit --json` captured in `audit-before.json` before any version change; the lockfile and full tree were captured in `dependency-tree-before.txt`.
-- Final: `bun audit --json` captured in `audit-after.json` after Electron 40.8.3 and the provider-path lockfile resolutions.
+- Final: `bun audit --json` captured in `audit-after.json` after Electron 40.8.5 and the provider-path lockfile resolutions. `audit-after-electron.json` preserves the first 40.8.3 intermediate; its remaining Electron rows were not accepted as fixed, so the final line moved to 40.8.5.
 - The raw Bun advisory total is an inventory of package/version matches, not a count of proven exploitable vulnerabilities in vo. Reachability below is based on the lockfile paths and the code paths imported by vo; an advisory may still require an untrusted input or an unused optional feature.
 - `bun audit` exits 1 when advisories remain. That is expected here and is not used as the sole pass/fail criterion.
 
 | audit stage | packages | advisory rows | severity summary |
 |---|---:|---:|---|
 | before | 23 | 101 | critical 4, high 49, moderate 38, low 10 |
-| after | 19 | 61 | critical 3, high 34, moderate 18, low 6 |
+| after | 18 | 57 | critical 3, high 34, moderate 16, low 4 |
 
 ## Reviewed classification
 
@@ -26,7 +26,7 @@ Each row groups all advisory IDs reported for the same package; therefore every 
 | `basic-ftp@5.1.0` | `@mariozechner/pi-ai` -> `proxy-agent` -> `pac-proxy-agent` -> `get-uri`; **provider-path reachable** | 1118825, 1113518, 1116454, 1117083 | same | Optional proxy/FTP transport dependency. vo does not select FTP, but the dependency is reachable if provider traffic is configured through that proxy path. |
 | `brace-expansion@2.0.2` | Electron-builder/glob packaging tree; **build-only** | 1130588, 1130589, 1115541, 1123896 | same | Used by packaging/build globs, not application runtime. |
 | `builder-util-runtime@9.2.10` | `app-builder-lib` -> `electron-builder`; **build-only** | 1124278 | same | Electron-builder publishing/update helper is only used while packaging. |
-| `electron@40.8.3` | direct dev dependency, packaged executable; **packaged-runtime reachable** | 18 Electron IDs (1116039, 1116043, 1116047, 1116051, 1116055, 1116059, 1116062, 1116066, 1116070, 1116074, 1116082, 1116086, 1116090, 1116110, 1116258, 1116319, 1117454, 1117457) | 1116055, 1116110, 1116258, 1116319 | 40.8.3 is the required fixed 40.8.x line. The four remaining Electron advisories are reported against the selected line and are retained with the packaged-runtime rationale. |
+| `electron@40.8.5` | direct dev dependency, packaged executable; **packaged-runtime reachable** | 18 Electron IDs (1116039, 1116043, 1116047, 1116051, 1116055, 1116059, 1116062, 1116066, 1116070, 1116074, 1116082, 1116086, 1116090, 1116110, 1116258, 1116319, 1117454, 1117457) | — | 40.8.5 is the compatible fixed 40.8.x line: the intermediate 40.8.3 still matched four Electron advisories (`<40.8.4`/`<40.8.5`) and was rejected before final verification. |
 | `fast-uri@3.1.0` | `ajv`/`ajv-formats` -> `@mariozechner/pi-ai`; **provider-path reachable** | 1130178, 1117884, 1117870, 1124064 | same | Provider schema URI validation dependency. |
 | `fast-xml-parser@5.3.4` | AWS SDK XML builder -> `@mariozechner/pi-ai`; **provider-path reachable** | 1117911, 1113568, 1113569, 1114153, 1115339, 1116307 | same | Bedrock/provider transport path; build-chain changes were intentionally not mixed into this PR. |
 | `file-type@21.3.0` | `@mariozechner/pi-coding-agent`; **packaged-runtime reachable** | 1114301, 1114726 | same | Loaded by the packaged pi session dependency; no direct provider/build-only substitute was added. |
@@ -45,5 +45,5 @@ Each row groups all advisory IDs reported for the same package; therefore every 
 ## Compatibility and rollback
 
 - The lockfile is the rollback boundary: the Electron change is committed separately from the provider-path resolution change, and all provider changes remain in existing semver ranges. Reverting the lockfile/package commit restores the prior resolutions without a blanket major upgrade.
-- Electron 40.8.3 keeps the existing ABI module version 143 but moves the headers to Node 24.14.0. `scripts/build-native-paste-addon.ts` validates the exact Electron version, verified header archive SHA-256, and header metadata before compiling the arm64 addon.
-- Remaining advisories are intentionally not “cleared” by upgrading Electron-builder/Vite/pi major lines. Those changes require separate compatibility evidence and would violate PR-13 scope. The raw reduction from 101 to 61 is evidence of resolved package matches, not proof that 40 advisories are exploitable or that 61 are exploitable.
+- Electron 40.8.5 keeps the existing ABI module version 143 and uses Node 24.14.0 headers. `scripts/build-native-paste-addon.ts` validates the exact Electron version, verified header archive SHA-256, and header metadata before compiling the arm64 addon.
+- Remaining advisories are intentionally not “cleared” by upgrading Electron-builder/Vite/pi major lines. Those changes require separate compatibility evidence and would violate PR-13 scope. The raw reduction from 101 to 57 is evidence of resolved package matches, not proof that 44 advisories are exploitable or that 57 are exploitable.

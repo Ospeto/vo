@@ -53,8 +53,8 @@ describe("SafePasteService", () => {
 
   test("native build provisions exact Electron headers without private cache assumptions", async () => {
     const buildSource = await Bun.file(new URL("../../../scripts/build-native-paste-addon.ts", import.meta.url)).text();
-    expect(buildSource).toContain("https://artifacts.electronjs.org/headers/dist/v40.8.3/node-v40.8.3-headers.tar.gz");
-    expect(buildSource).toContain("61fbe26d00801c9d38012636f2080961b0f16a96cee06b052a9af5cb48d05a3a");
+    expect(buildSource).toContain("https://artifacts.electronjs.org/headers/dist/v40.8.5/node-v40.8.5-headers.tar.gz");
+    expect(buildSource).toContain("932782802be7f6a2277a2b6d48f1c0fc3b20a1cbdadf767ae110763463cd3f9a");
     expect(buildSource).toContain("--nodedir");
     expect(buildSource).toContain("electronPackage.version");
     expect(buildSource).toContain("ELECTRON_HEADERS");
@@ -81,7 +81,7 @@ describe("SafePasteService", () => {
 
   test("pins the Electron ABI and declares node-gyp directly", async () => {
     const packageJson = await Bun.file(new URL("../../../package.json", import.meta.url)).json() as { devDependencies: Record<string, string> };
-    expect(packageJson.devDependencies.electron).toBe("40.8.3");
+    expect(packageJson.devDependencies.electron).toBe("40.8.5");
     expect(packageJson.devDependencies["node-gyp"]).toBe("12.4.0");
   });
 
