@@ -25,7 +25,8 @@ export type StageStatus =
   | "cancelled"
   | "timed_out"
   | "empty_output"
-  | "skipped";
+  | "skipped"
+  | "token_mismatch";
 
 export interface StageResult<T = string> {
   stage: "source" | "translation";
@@ -44,6 +45,7 @@ export interface TwoStepTranslationResult {
   finalText?: string;
   errorStage?: "source" | "translation";
   errorReason?: string;
+  missingTokens?: string[];
 }
 
 export interface TwoStepTranslationOptions {
@@ -112,6 +114,8 @@ export const ALLOWED_TARGET_LANGUAGES: ReadonlySet<string> = new Set([
   "Japanese",
   "Chinese",
   "Burmese",
+  "Korean",
+  "Thai",
 ]);
 
 export interface TextTranslatorPrompt {
@@ -200,6 +204,228 @@ export async function defaultTextTranslator(
   }
 }
 
+const PROSE_SLASH_EXPRESSIONS = new Set(["and/or", "read/write", "either/or"]);
+
+const TECHNICAL_EXTENSIONS = new Set([
+  "ts", "js", "jsx", "tsx", "json", "py", "md", "sh",
+  "yml", "yaml", "css", "html", "cpp", "c", "h", "go", "rs",
+  "sql", "env", "java"
+]);
+
+const TECHNICAL_ACRONYMS = new Set([
+  "API", "SQL", "JSON", "HTTP", "HTTPS", "URL", "URI", "HTML", "CSS", "XML",
+  "SDK", "CLI", "REST", "GRPC", "DOM", "AST", "ID", "UUID", "UI", "UX",
+  "IP", "TCP", "UDP", "DNS", "SSH", "SSL", "TLS", "JWT", "DB", "ORM",
+  "CPU", "GPU", "RAM", "IO", "OS", "ENV", "PR", "STT", "TTS", "LLM", "AI"
+]);
+
+export function isTechnicalPath(cleanPath: string): boolean {
+  if (!cleanPath) return false;
+  if (PROSE_SLASH_EXPRESSIONS.has(cleanPath.toLowerCase())) {
+    return false;
+  }
+
+  if (cleanPath.startsWith("./") || cleanPath.startsWith("../") || cleanPath.startsWith("/")) {
+    return true;
+  }
+
+  const extMatch = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
+  if (extMatch && extMatch[1] && TECHNICAL_EXTENSIONS.has(extMatch[1].toLowerCase())) {
+    return true;
+  }
+
+  const slashCount = (cleanPath.match(/\//g) || []).length;
+  if (slashCount >= 2) {
+    return true;
+  }
+
+  return false;
+}
+
+function matchesTokenAt(text: string, token: string, pos: number): boolean {
+  if (pos < 0 || pos + token.length > text.length) return false;
+  if (text.slice(pos, pos + token.length) !== token) return false;
+
+  if (pos > 0) {
+    const prev = text[pos - 1];
+    const first = token[0];
+    if (prev !== undefined && /[\w]/.test(prev)) return false;
+    if (first !== undefined && prev !== undefined && /[\/.]/.test(first) && /[\/.]/.test(prev)) return false;
+    if (first === "@" && prev !== undefined && /[\w@]/.test(prev)) return false;
+  }
+
+  if (pos + token.length < text.length) {
+    const next = text[pos + token.length];
+    if (token.includes("/") || token.includes(".") || token.includes("@")) {
+      if (next !== undefined && /[a-zA-Z0-9_./?.#&=-]/.test(next)) {
+        const afterNext = text[pos + token.length + 1];
+        if (!/[.!?\u104b\u104c]/.test(next) || (afterNext !== undefined && !/[\s"'\(\)\[\]]/.test(afterNext))) {
+          return false;
+        }
+      }
+    } else {
+      const last = token[token.length - 1];
+      if (last !== undefined && next !== undefined && /[\w-]/.test(last) && /[\w-]/.test(next)) return false;
+    }
+  }
+
+  return true;
+}
+
+function isSentenceStart(text: string, pos: number): boolean {
+  if (pos === 0) return true;
+  return /(?:^|[\.!\?\n\u104b\u104c])["'\(\)\[\]\s]*$/.test(text.slice(0, pos));
+}
+
+export function tokenExistsInText(text: string, token: string): boolean {
+  if (!text || !token) return false;
+
+  const first = token[0];
+  let altToken: string | null = null;
+  let altIsCapitalized = false;
+
+  if (first !== undefined) {
+    if (/[a-z]/.test(first)) {
+      altToken = first.toUpperCase() + token.slice(1);
+      altIsCapitalized = true;
+    } else if (/[A-Z]/.test(first)) {
+      altToken = first.toLowerCase() + token.slice(1);
+      altIsCapitalized = false;
+    }
+  }
+
+  for (let i = 0; i <= text.length - token.length; i++) {
+    if (matchesTokenAt(text, token, i)) return true;
+  }
+
+  if (altToken && altToken !== token) {
+    for (let i = 0; i <= text.length - altToken.length; i++) {
+      if (matchesTokenAt(text, altToken, i)) {
+        if (!altIsCapitalized || isSentenceStart(text, i)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+export function extractTechnicalTokens(text: string): string[] {
+  if (!text) return [];
+
+  const tokens = new Set<string>();
+
+  // 1. Backticked code symbols `symbol`
+  const backtickMatches = text.match(/`([^`\n]+)`/g);
+  if (backtickMatches) {
+    for (const match of backtickMatches) {
+      const inner = match.slice(1, -1).trim();
+      if (inner) {
+        tokens.add(inner);
+      }
+    }
+  }
+
+  // 2. URLs (https://..., http://...)
+  const urlMatches = text.match(/https?:\/\/[^\s>)]+/g);
+  if (urlMatches) {
+    for (const rawUrl of urlMatches) {
+      const url = rawUrl.replace(/[,.!)\];:?'"]+$/g, "");
+      if (url) {
+        tokens.add(url);
+      }
+    }
+  }
+
+  // Remove URLs before matching file paths so URL path segments are not duplicate extracted
+  const textWithoutUrls = text.replace(/https?:\/\/[^\s>)]+/g, " ");
+
+  // 3. File paths (/path/to/file, ./relative/path.ts, ../dir/file.ext, foo/bar.ts, src/services/stt, ./README)
+  const pathMatches = textWithoutUrls.match(
+    /(?:(?:\.\.?\/)+|(?:\/[\w.-]+)+|\b[a-zA-Z0-9_.-]+\/|\b[\w.-]+\.(?:ts|js|jsx|tsx|json|py|md|sh|yml|yaml|css|html|cpp|c|h|go|rs|sql|env|java)\b)[^\s]*/gi
+  );
+  if (pathMatches) {
+    for (const rawPath of pathMatches) {
+      if (!rawPath.startsWith("http://") && !rawPath.startsWith("https://") && !rawPath.startsWith("@")) {
+        const cleanPath = rawPath.replace(/[,.!)\];:?'"]+$/g, "");
+        if (cleanPath && isTechnicalPath(cleanPath)) {
+          tokens.add(cleanPath);
+        }
+      }
+    }
+  }
+
+  // 4. Scoped packages (@scope/package)
+  const scopedPkgMatches = text.match(/@[a-z0-9_.-]+\/[a-z0-9_.-]+/gi);
+  if (scopedPkgMatches) {
+    for (const rawPkg of scopedPkgMatches) {
+      const pkg = rawPkg.replace(/[,.!)\];:?'"]+$/g, "");
+      if (pkg) {
+        tokens.add(pkg);
+      }
+    }
+  }
+
+  // 5. Code identifiers: camelCase, snake_case, SCREAMING_SNAKE_CASE, PascalCase, Acronym PascalCase, and technical acronyms
+  const isSingleCapitalizedWord = (s: string): boolean => /^[A-Z][a-z]+$/.test(s);
+
+  const camelCaseMatches = text.match(/\b[a-z]+[A-Z0-9][a-zA-Z0-9]*\b/g);
+  if (camelCaseMatches) {
+    for (const id of camelCaseMatches) {
+      if (!isSingleCapitalizedWord(id)) tokens.add(id);
+    }
+  }
+  const snakeCaseMatches = text.match(/\b[a-z0-9]+(?:_[a-z0-9]+)+\b/g);
+  if (snakeCaseMatches) {
+    for (const id of snakeCaseMatches) {
+      if (!isSingleCapitalizedWord(id)) tokens.add(id);
+    }
+  }
+  const screamingSnakeMatches = text.match(/\b[A-Z0-9]+(?:_[A-Z0-9]+)+\b/g);
+  if (screamingSnakeMatches) {
+    for (const id of screamingSnakeMatches) {
+      if (!isSingleCapitalizedWord(id)) tokens.add(id);
+    }
+  }
+  const pascalCaseMatches = text.match(/\b[A-Z][a-z0-9]+(?:[A-Z0-9][a-z0-9]*)+\b/g);
+  if (pascalCaseMatches) {
+    for (const id of pascalCaseMatches) {
+      if (!isSingleCapitalizedWord(id)) tokens.add(id);
+    }
+  }
+  const acronymPascalMatches = text.match(/\b[A-Z]{2,}[a-z0-9]+[a-zA-Z0-9]*\b/g);
+  if (acronymPascalMatches) {
+    for (const id of acronymPascalMatches) {
+      if (!isSingleCapitalizedWord(id)) tokens.add(id);
+    }
+  }
+  const acronymMatches = text.match(/\b[A-Z]{2,6}\b/g);
+  if (acronymMatches) {
+    for (const ac of acronymMatches) {
+      if (TECHNICAL_ACRONYMS.has(ac)) {
+        tokens.add(ac);
+      }
+    }
+  }
+
+  // 6. CLI commands and flags (e.g. bun test, npm run, --flag, -v)
+  const cliCmdMatches = text.match(/\b(?:bun|npm|pnpm|yarn|npx|cargo|git|docker|pip|python|node|deno)\s+[a-z0-9_:-]+\b/gi);
+  if (cliCmdMatches) {
+    for (const cmd of cliCmdMatches) {
+      tokens.add(cmd);
+    }
+  }
+  const flagMatches = text.match(/--[a-zA-Z0-9-]+|\b-[a-zA-Z0-9]\b/g);
+  if (flagMatches) {
+    for (const flag of flagMatches) {
+      tokens.add(flag);
+    }
+  }
+
+  return Array.from(tokens);
+}
+
 /**
  * Executes a candidate two-step translation path for mixed Burmese/English dictation:
  * Stage 1: Multilingual STT recognition with translateEnabled: false (preserving Burmese script + English terms).
@@ -209,7 +435,16 @@ export async function executeTwoStepTranslation(
   audioData: ArrayBuffer,
   options: TwoStepTranslationOptions = {}
 ): Promise<TwoStepTranslationResult> {
-  const rawTargetLang = options.targetLanguage;
+  let rawTargetLang = options.targetLanguage;
+  if (!rawTargetLang) {
+    try {
+      const { loadConfig } = await import("./config.js");
+      const cfg = loadConfig();
+      rawTargetLang = cfg.targetLanguage;
+    } catch {
+      rawTargetLang = undefined;
+    }
+  }
   const targetLanguage =
     rawTargetLang && ALLOWED_TARGET_LANGUAGES.has(rawTargetLang)
       ? rawTargetLang
@@ -273,6 +508,8 @@ export async function executeTwoStepTranslation(
       workspacePath: options.workspacePath,
       abortSignal: stage1Controller.signal,
       translateEnabled: false, // Force false for Step 1 recognition
+      targetLanguage: targetLanguage,
+      activeApp: options.activeApp,
     };
 
     const transcriber =
@@ -509,7 +746,8 @@ export async function executeTwoStepTranslation(
     options.activeApp,
     options.dictationPreset,
     options.dictionaryEntries,
-    true
+    true,
+    targetLanguage
   );
 
   if (!sanitizedFinalText) {
@@ -528,6 +766,34 @@ export async function executeTwoStepTranslation(
       translationStage,
       errorStage: "translation",
       errorReason: "Translation output was empty after sanitization",
+    };
+  }
+
+  // Verification postcondition: Ensure all technical tokens from source transcript are preserved in translation output
+  const technicalTokens = extractTechnicalTokens(rawSourceText);
+  const missingTokens = technicalTokens.filter(
+    (token) => !tokenExistsInText(sanitizedFinalText, token)
+  );
+
+  if (missingTokens.length > 0) {
+    const errorReason = `Translation dropped required technical tokens: ${missingTokens.join(", ")}`;
+    const translationStage: StageResult<string> = {
+      stage: "translation",
+      status: "token_mismatch",
+      output: sanitizedFinalText,
+      error: errorReason,
+      modelUsed: translationRes.modelUsed,
+      usedPaidKey: translationRes.usedPaidKey,
+      durationMs: translationDurationMs,
+    };
+
+    return {
+      success: false,
+      sourceStage,
+      translationStage,
+      errorStage: "translation",
+      errorReason,
+      missingTokens,
     };
   }
 
