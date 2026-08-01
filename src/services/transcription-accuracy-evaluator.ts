@@ -124,12 +124,8 @@ export interface AccuracySuiteReport {
   caseResults: CaseEvalResult[];
 }
 
-function punctuationLayout(text: string): string {
-  return text
-    .replace(/[\p{L}\p{M}\p{N}_]+/gu, "w")
-    .replace(/[^w\s.,?!:;"'“”‘’()[\]{}\-–—/\\`။၊]/gu, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function tokenPunctuation(text: string): string[] {
+  return text.trim() ? text.trim().split(/\s+/).map(token => (token.match(/[.,?!:;"'“”‘’။၊]/gu) ?? []).join("")) : [];
 }
 
 export interface EvalOptions {
@@ -165,8 +161,8 @@ export function detectDuplicatedFragments(text: string): DuplicatedFragment[] {
 
   const duplicates: DuplicatedFragment[] = [];
 
-  // Check 1-gram to 5-gram consecutive duplicates
-  for (let gramSize = 1; gramSize <= Math.min(5, Math.floor(tokens.length / 2)); gramSize++) {
+  // Check 5-gram to 1-gram consecutive duplicates
+  for (let gramSize = Math.min(5, Math.floor(tokens.length / 2)); gramSize >= 1; gramSize--) {
     let i = 0;
     while (i <= tokens.length - 2 * gramSize) {
       const gram1 = tokens.slice(i, i + gramSize).map(t => t.toLowerCase()).join(" ");
@@ -188,9 +184,9 @@ export function detectDuplicatedFragments(text: string): DuplicatedFragment[] {
       if (matchCount > 1) {
         const rawFragment = tokens.slice(i, i + gramSize).join(" ");
         // Avoid duplicate overlap reporting for smaller grams inside larger grams
-        const alreadyCovered = duplicates.some(
-          d => d.indices.some(idx => positions.includes(idx)) && d.wordCount >= gramSize
-        );
+        const alreadyCovered = positions.every(position => duplicates.some(
+          duplicate => duplicate.indices.some(index => position >= index && position + gramSize <= index + duplicate.wordCount)
+        ));
         if (!alreadyCovered) {
           duplicates.push({
             fragment: rawFragment,
@@ -386,6 +382,13 @@ export function evaluateTranscriptPair(expectedText: string, actualText: string,
   const alignment = alignWords(expectedTokens, actualTokens);
   const duplicatedFragments = detectDuplicatedFragments(actualText);
   const casingMatch = alignment.diffOps.every(op => op.type !== "match" || op.expected === op.actual);
+  const expectedPunctuation = tokenPunctuation(expectedText);
+  const actualPunctuation = tokenPunctuation(actualText);
+  const punctuationMatch = alignment.diffOps.every(op => {
+    if (op.type === "insertion") return actualPunctuation[op.actualIndex ?? -1] === "";
+    if (op.type === "deletion") return expectedPunctuation[op.expectedIndex ?? -1] === "";
+    return expectedPunctuation[op.expectedIndex ?? -1] === actualPunctuation[op.actualIndex ?? -1];
+  });
 
   return {
     expectedText,
@@ -400,7 +403,7 @@ export function evaluateTranscriptPair(expectedText: string, actualText: string,
     accuracy: alignment.accuracy,
     exactMatch: expectedText === actualText,
     casingMatch,
-    punctuationMatch: punctuationLayout(expectedText) === punctuationLayout(actualText),
+    punctuationMatch,
     protectedTokensMatch: protectedTokens.every(token => actualText.includes(token)),
     diffOps: alignment.diffOps,
     substitutionDetails: alignment.substitutionDetails,

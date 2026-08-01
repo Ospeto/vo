@@ -66,6 +66,13 @@ describe("VO Transcript Post-processing Accuracy Evaluator & Metrics Suite (Roun
       expect(duplicates[0]!.fragment).toBe("အဆင်ပြေအောင်");
       expect(duplicates[0]!.count).toBe(2);
     });
+
+    test("reports only the longest overlapping duplicated fragment", () => {
+      const duplicates = detectDuplicatedFragments("then go go then go go");
+      expect(duplicates).toHaveLength(1);
+      expect(duplicates[0]!.fragment).toBe("then go go");
+      expect(duplicates[0]!.count).toBe(2);
+    });
   });
 
   describe("3. Word Error Rate (WER) & Alignment Matrix Metrics", () => {
@@ -145,6 +152,12 @@ describe("VO Transcript Post-processing Accuracy Evaluator & Metrics Suite (Roun
       expect(punctuation.passed).toBe(false);
       expect(relativePath.report.protectedTokensMatch).toBe(false);
       expect(relativePath.passed).toBe(false);
+    });
+
+    test("allows threshold-authorized word edits without moving punctuation", () => {
+      const report = evaluateTranscriptPair("Hello world.", "Hello brave world.");
+      expect(report.wordErrorRate).toBe(0.5);
+      expect(report.punctuationMatch).toBe(true);
     });
   });
 
