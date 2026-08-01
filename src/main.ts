@@ -896,7 +896,7 @@ function setupIpcHandlers() {
         lastPastedText = text;
         lastPasteTime = Date.now();
         playSuccessChime();
-        setState("idle", `Dictated: "${text}"`, { usedPaidKey });
+        setState("idle", "Dictation successful", { usedPaidKey });
       } else {
         recordingLifecycle.finishTranscription(currentSeq, false);
         recordingLifecycle.settle();

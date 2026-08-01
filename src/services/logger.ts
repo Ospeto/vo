@@ -25,14 +25,26 @@ function resolveLogPath(): string {
   return join(configHome, "pi-voice", "daemon.log");
 }
 
+function repairLogArchivePermissions(dir: string): void {
+  try {
+    if (!existsSync(dir)) return;
+    const files = readdirSync(dir).filter((f) => f.startsWith("daemon-") && f.endsWith(".log"));
+    for (const file of files) {
+      ensureOwnerOnlyPermissions(join(dir, file));
+    }
+  } catch {}
+}
+
 function rotateLogIfNeeded(logFile: string): void {
   try {
+    const dir = dirname(logFile);
+    repairLogArchivePermissions(dir);
+
     if (!existsSync(logFile)) return;
     ensureOwnerOnlyPermissions(logFile);
     const stats = statSync(logFile);
     // 2MB threshold for auto-archiving log files
     if (stats.size > 2 * 1024 * 1024) {
-      const dir = dirname(logFile);
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const archivePath = join(dir, `daemon-${timestamp}.log`);
       renameSync(logFile, archivePath);
@@ -60,6 +72,7 @@ function rotateLogIfNeeded(logFile: string): void {
 }
 
 let fileLoggingActive = false;
+let activeFileStream: pino.DestinationStream | null = null;
 
 function createPinoLogger(): pino.Logger {
   const logPath = resolveLogPath();
@@ -68,6 +81,7 @@ function createPinoLogger(): pino.Logger {
   let fileStream: pino.DestinationStream | null = null;
   try {
     fileStream = pino.destination({ dest: logPath, mkdir: true, sync: true, mode: 0o600 });
+    activeFileStream = fileStream;
     ensureOwnerOnlyPermissions(logPath);
     fileLoggingActive = true;
   } catch (err: any) {
@@ -93,9 +107,33 @@ function createPinoLogger(): pino.Logger {
   return pino({ level: "debug" }, pino.multistream(streams));
 }
 
-const logger = createPinoLogger();
+let logger = createPinoLogger();
 
 export default logger;
+
+/**
+ * Re-initialize logger for tests with active environment variables.
+ */
+export function reinitLoggerForTests(): pino.Logger {
+  logger = createPinoLogger();
+  return logger;
+}
+
+/**
+ * Flush file logger stream synchronously for tests.
+ */
+export function flushLoggerForTests(): void {
+  try {
+    if (activeFileStream) {
+      if (typeof (activeFileStream as any).flushSync === "function") {
+        (activeFileStream as any).flushSync();
+      }
+      if (typeof (activeFileStream as any).flush === "function") {
+        (activeFileStream as any).flush();
+      }
+    }
+  } catch {}
+}
 
 /**
  * Return the resolved log file path (useful for status/diagnostics).

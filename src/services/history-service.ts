@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync } from "node:fs";
 import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
@@ -38,10 +38,12 @@ function getHistoryDir(): string {
   }
 
   // Migrate legacy ~/.pi-voice/history.json if present
-  if (!customHistoryDir) {
-    const legacyPath = join(LEGACY_DIR, "history.json");
-    const targetPath = join(dir, "history.json");
-    if (existsSync(legacyPath) && !existsSync(targetPath)) {
+  const legacyDir = customHistoryDir ? join(dirname(dirname(customHistoryDir)), ".pi-voice") : LEGACY_DIR;
+  const legacyPath = join(legacyDir, "history.json");
+  const targetPath = join(dir, "history.json");
+  if (existsSync(legacyPath)) {
+    ensureOwnerOnlyPermissions(legacyPath);
+    if (!existsSync(targetPath)) {
       try {
         copyFileSync(legacyPath, targetPath);
         ensureOwnerOnlyPermissions(targetPath);
