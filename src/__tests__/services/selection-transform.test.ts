@@ -63,9 +63,9 @@ describe("Selection Transformation & Capture Service Suite", () => {
       const capturePromise = captureActiveSelection(3000, port);
 
       // Simulate OS copy action updating clipboard text
-      setTimeout(() => {
+      queueMicrotask(() => {
         adapter.writeText("Const selectedText = 42;");
-      }, 50);
+      });
 
       const result = await capturePromise;
 
