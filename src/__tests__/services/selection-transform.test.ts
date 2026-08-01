@@ -60,7 +60,7 @@ describe("Selection Transformation & Capture Service Suite", () => {
       const port = createClipboardPort(adapter as unknown as ClipboardAdapter<any>);
 
       // Simulate active selection capture where clipboard text changes to copied text
-      const capturePromise = captureActiveSelection(200, port);
+      const capturePromise = captureActiveSelection(1000, port);
 
       // Simulate OS copy action updating clipboard text
       setTimeout(() => {

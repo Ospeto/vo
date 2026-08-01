@@ -91,6 +91,7 @@ describe("PR-16 Bridge Contract & Subscription Lifecycle Suite", () => {
         cancelDictation: () => {},
         onStateChanged: (_cb) => () => {},
         onAudioLevelUpdate: (_cb) => () => {},
+        getStateSnapshot: async () => ({ state: "idle" }),
       };
 
       const mockCaptureApi: CaptureElectronAPI = {
@@ -223,6 +224,7 @@ describe("PR-16 Bridge Contract & Subscription Lifecycle Suite", () => {
           testApiKey: async () => ({ success: true }),
           previewChime: async () => ({ success: true }),
           cancelDictation: () => {},
+          getStateSnapshot: async () => ({ state: "idle" }),
           onStateChanged: (cb) => {
             const h = (_evt: any, payload: StatePayload) => cb(payload);
             settingsEmitter.on("state-changed", h);

@@ -16,6 +16,7 @@ const api: SettingsElectronAPI = {
   cancelDictation: () => {
     ipcRenderer.send(IPC.CANCEL_DICTATION);
   },
+  getStateSnapshot: () => ipcRenderer.invoke(IPC.STATE_SNAPSHOT),
   onStateChanged: (callback: (payload: StatePayload) => void) => subscribe(IPC.STATE_CHANGED, callback),
   onAudioLevelUpdate: (callback: (payload: AudioLevelPayload | number) => void) => subscribe(IPC.AUDIO_LEVEL_UPDATE, callback),
 };

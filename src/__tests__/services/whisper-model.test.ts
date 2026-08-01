@@ -13,26 +13,22 @@ mock.module("../../services/logger.js", () => ({
   },
 }));
 
-// We need to mock homedir and fetch for this module
-const testHome = join(
-  tmpdir(),
-  `pi-voice-whisper-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-);
-
-mock.module("node:os", () => ({
-  homedir: () => testHome,
-}));
-
 // Mock fetch for download tests
 const originalFetch = globalThis.fetch;
 
-const { resolveModelPath } = await import("../../services/whisper-model.js");
+const { resolveModelPath, setWhisperDirForTests } = await import("../../services/whisper-model.js");
 
 describe("whisper-model", () => {
   let savedEnv: Record<string, string | undefined>;
+  let testHome: string;
 
   beforeEach(() => {
+    testHome = join(
+      tmpdir(),
+      `pi-voice-whisper-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(testHome, { recursive: true });
+    setWhisperDirForTests(join(testHome, ".pi-agent", "whisper"));
     savedEnv = {
       WHISPER_MODEL_PATH: process.env.WHISPER_MODEL_PATH,
       WHISPER_MODEL: process.env.WHISPER_MODEL,
@@ -42,6 +38,7 @@ describe("whisper-model", () => {
   });
 
   afterEach(() => {
+    setWhisperDirForTests(null);
     for (const [key, val] of Object.entries(savedEnv)) {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;

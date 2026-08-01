@@ -20,6 +20,7 @@ export const CHANNEL_ROLE_ALLOWLIST: Record<string, RendererRole[]> = {
   [IPC.PREVIEW_CHIME]: ["settings"],
   [IPC.REGISTER_HOTKEY]: ["settings"],
   [IPC.REGISTER_EDIT_HOTKEY]: ["settings"],
+  [IPC.STATE_SNAPSHOT]: ["settings"],
 };
 
 export function getSenderRole(

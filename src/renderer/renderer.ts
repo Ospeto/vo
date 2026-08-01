@@ -475,6 +475,11 @@ async function initUI() {
     });
   }
 
+  const snapshot = await getSettingsApi()?.getStateSnapshot();
+  if (snapshot) {
+    updateStatusBadge(snapshot.state, snapshot.message);
+  }
+
   await renderHistory();
   renderVocabTags();
   renderDictionaryEntries();

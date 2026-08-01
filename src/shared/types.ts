@@ -154,6 +154,7 @@ export interface SettingsElectronAPI {
   cancelDictation: () => void;
   onStateChanged: (callback: (payload: StatePayload) => void) => () => void;
   onAudioLevelUpdate: (callback: (payload: AudioLevelPayload | number) => void) => () => void;
+  getStateSnapshot: () => Promise<StatePayload>;
 }
 
 export interface CaptureElectronAPI {
