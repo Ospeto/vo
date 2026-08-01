@@ -349,15 +349,15 @@ function removeSpokenRepeats(text: string): string {
   return transformOutsideCodeRegions(text, removeRepeats);
 }
 
-export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean): string {
+export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean, targetLanguage?: string): string {
   if (!text) return "";
 
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
   const effectiveDictionaryEntries = dictionaryEntries ?? loadPersistedVocabulary().entries ?? [];
   let cleaned = text.trim();
 
-  // Filter out unwanted Burmese raw text lines or inline Burmese script ONLY when code_comment preset is active AND translate toggle is ON
-  if (effectivePreset === "code_comment" && translateEnabled === true) {
+  // Filter out unwanted Burmese raw text lines or inline Burmese script ONLY when code_comment preset is active AND translate toggle is ON AND target language is NOT Burmese
+  if (effectivePreset === "code_comment" && translateEnabled === true && targetLanguage !== "Burmese") {
     const purged = cleaned
       .split("\n")
       .map(line => line.replace(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]+/g, "").trim())
@@ -641,6 +641,7 @@ export interface TranscribeOptions {
   workspacePath?: string;
   selectedText?: string;
   abortSignal?: AbortSignal;
+  activeApp?: string;
 }
 
 export function getPresetTemperature(preset?: DictationPreset): number {
@@ -996,7 +997,7 @@ export async function transcribeDetailed(
 ): Promise<TranscriptionResult> {
   let rawText = "";
   let usedPaidKey = false;
-  const activeApp = await getActiveAppName();
+  const activeApp = typeof providerOrOptions === "object" && providerOrOptions.activeApp ? providerOrOptions.activeApp : await getActiveAppName();
 
   const provider = typeof providerOrOptions === "string" ? providerOrOptions : (providerOrOptions.provider ?? "gemini");
   const geminiModel = typeof providerOrOptions === "object" ? (providerOrOptions.geminiModel ?? "gemini-3.1-flash-lite") : "gemini-3.1-flash-lite";
@@ -1063,13 +1064,24 @@ export async function transcribeDetailed(
     isTranslationActive = isTranslationActive ?? false;
   }
 
+  let effectiveTargetLang = targetLanguage;
+  if (!effectiveTargetLang) {
+    try {
+      const { loadConfig } = await import("./config.js");
+      const cfg = loadConfig();
+      effectiveTargetLang = cfg.targetLanguage;
+    } catch {
+      effectiveTargetLang = undefined;
+    }
+  }
+
   const rawPreset = resolveEffectivePreset(dictationPreset, activeApp, appPresetMappings);
   const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
   if (rawPreset === "translate") {
     isTranslationActive = true;
   }
 
-  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true && !abortSignal?.aborted);
+  const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true && !abortSignal?.aborted, effectiveTargetLang);
   logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawCharCount: rawText.length, sanitizedCharCount: sanitized.length, usedPaidKey }, "Transcribed detailed and sanitized");
   return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
 }
