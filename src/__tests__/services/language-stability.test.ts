@@ -108,7 +108,7 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
         const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
         capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
         return new Response(JSON.stringify({
-          candidates: [{ content: { parts: [{ text: "The database is ready." }] } }],
+          candidates: [{ content: { parts: [{ text: "The database is ready." }], role: "model" }, finishReason: "STOP" }],
         }), { status: 200, headers: { "Content-Type": "application/json" } });
       }) as any;
 

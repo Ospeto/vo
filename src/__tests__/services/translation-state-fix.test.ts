@@ -54,7 +54,9 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
             {
               content: {
                 parts: [{ text: "The database connection failed." }],
+                role: "model",
               },
+              finishReason: "STOP",
             },
           ],
         }),
@@ -101,7 +103,9 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
             {
               content: {
                 parts: [{ text: "ဒေတာဘေ့စ် ချိတ်ဆက်မှု မအောင်မြင်ပါ။" }],
+                role: "model",
               },
+              finishReason: "STOP",
             },
           ],
         }),
@@ -146,7 +150,9 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
             {
               content: {
                 parts: [{ text: "Database connection ကို test လုပ်ပါ။" }],
+                role: "model",
               },
+              finishReason: "STOP",
             },
           ],
         }),
