@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, chmodSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import type { DictionaryEntry, VocabularyCategory } from "../shared/types.js";
 import logger from "./logger.js";
+import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
 export interface PersistedVocabulary {
   version?: 2;
@@ -199,6 +200,8 @@ export function loadPersistedVocabulary(customPath?: string, customDictionaryPat
     return { version: 2 as const, customVocabulary, presetVocabulary, entries: migrated };
   }
 
+  ensureOwnerOnlyPermissions(filePath);
+
   try {
     const parsed = JSON.parse(readFileSync(filePath, "utf8"));
     if (!validLegacyShape(parsed)) {
@@ -249,7 +252,9 @@ export function savePersistedVocabulary(vocab: PersistedVocabulary, customPath?:
       entries,
     };
     writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
+    chmodSync(tmp, 0o600);
     renameSync(tmp, filePath);
+    ensureOwnerOnlyPermissions(filePath);
     logger.info({ vocabPath: filePath }, "Persisted custom vocabulary dictionary cleanly");
   } catch (err: any) {
     logger.error({ err: err?.message }, "Failed to save vocabulary.json");

@@ -10,10 +10,11 @@
  *   3. ~/.config/pi-voice/daemon.log          (default)
  */
 
-import { existsSync, statSync, renameSync, unlinkSync, readdirSync } from "node:fs";
+import { existsSync, statSync, renameSync, unlinkSync, readdirSync, chmodSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import pino from "pino";
+import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
 function resolveLogPath(): string {
   const envPath = process.env["PI_VOICE_LOG_PATH"];
@@ -27,6 +28,7 @@ function resolveLogPath(): string {
 function rotateLogIfNeeded(logFile: string): void {
   try {
     if (!existsSync(logFile)) return;
+    ensureOwnerOnlyPermissions(logFile);
     const stats = statSync(logFile);
     // 2MB threshold for auto-archiving log files
     if (stats.size > 2 * 1024 * 1024) {
@@ -34,11 +36,16 @@ function rotateLogIfNeeded(logFile: string): void {
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const archivePath = join(dir, `daemon-${timestamp}.log`);
       renameSync(logFile, archivePath);
+      try { chmodSync(archivePath, 0o600); } catch {}
 
       // Prune old archives, keeping only the 3 most recent archived log files
       const files = readdirSync(dir)
         .filter((f) => f.startsWith("daemon-") && f.endsWith(".log"))
         .sort();
+
+      for (const file of files) {
+        ensureOwnerOnlyPermissions(join(dir, file));
+      }
 
       while (files.length > 3) {
         const oldest = files.shift();
@@ -60,7 +67,8 @@ function createPinoLogger(): pino.Logger {
 
   let fileStream: pino.DestinationStream | null = null;
   try {
-    fileStream = pino.destination({ dest: logPath, mkdir: true, sync: true });
+    fileStream = pino.destination({ dest: logPath, mkdir: true, sync: true, mode: 0o600 });
+    ensureOwnerOnlyPermissions(logPath);
     fileLoggingActive = true;
   } catch (err: any) {
     fileLoggingActive = false;

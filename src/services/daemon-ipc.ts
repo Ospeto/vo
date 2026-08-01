@@ -10,7 +10,7 @@
  */
 
 import { createServer, createConnection, type Server } from "node:net";
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { getSocketPath } from "./runtime-state.js";
 import logger from "./logger.js";
 
@@ -80,6 +80,7 @@ export function startDaemonServer(handler: CommandHandler): Promise<string> {
 
   return new Promise<string>((resolve, reject) => {
     server!.once("listening", () => {
+      try { chmodSync(socketPath, 0o600); } catch {}
       logger.info({ socketPath }, "DaemonIPC listening");
       resolve(socketPath);
     });

@@ -3,6 +3,7 @@ import fs, { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chm
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
+import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
 import logger from "./logger.js";
@@ -635,19 +636,20 @@ function withConfigLock<T>(action: () => T): T {
   return withFileLock(`${getUserConfigPath()}.lock`, action);
 }
 
-function backupCorruptConfig(filePath: string, rawBytes: Buffer, mode: number): string {
+function backupCorruptConfig(filePath: string, rawBytes: Buffer, _mode: number): string {
+  const safeMode = 0o600;
   const backupPath = join(
     dirname(filePath),
     `${basename(filePath)}.corrupt.${Date.now()}.${process.pid}.${randomUUID()}.bak`,
   );
   let fd: number | undefined;
   try {
-    fd = fs.openSync(backupPath, "wx", mode);
+    fd = fs.openSync(backupPath, "wx", safeMode);
     fs.writeFileSync(fd, rawBytes);
     fs.fsyncSync(fd);
     fs.closeSync(fd);
     fd = undefined;
-    chmodSync(backupPath, mode);
+    chmodSync(backupPath, safeMode);
     unlinkSync(filePath);
     return backupPath;
   } catch (err) {
@@ -737,6 +739,8 @@ function inspectConfig(filePath: string): ReadConfigResult {
   if (!existsSync(filePath)) {
     return { filePath, exists: false, json: {}, corrupt: false, repaired: false };
   }
+
+  ensureOwnerOnlyPermissions(filePath);
 
   let rawBytes: Buffer;
   let mode = 0o600;

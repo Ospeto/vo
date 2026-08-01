@@ -56,7 +56,7 @@ export async function prompt(
     ) {
       const content = event.assistantMessageEvent.content.trim();
       if (content.length > 0) {
-        logger.info({ content }, "Agent response");
+        logger.info({ charCount: content.length }, "Agent response");
         options?.onTextEnd?.(content);
       }
     }

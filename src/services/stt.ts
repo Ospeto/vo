@@ -1,5 +1,5 @@
 import OpenAI, { toFile } from "openai";
-import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, appendFileSync, mkdirSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { exec } from "node:child_process";
@@ -12,6 +12,7 @@ import { getGeminiClient } from "./gemini-client.js";
 import { scanWorkspaceSymbols } from "./symbol-scanner.js";
 import logger from "./logger.js";
 import { elevenLabsFetch } from "./elevenlabs.js";
+import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
 const execAsync = promisify(exec);
 
@@ -31,6 +32,7 @@ export function loadUserDictionary(): string[] {
     lastDictionaryReadTime = now;
     return cachedUserDictionary;
   }
+  ensureOwnerOnlyPermissions(DICTIONARY_FILE);
   try {
     const raw = readFileSync(DICTIONARY_FILE, "utf-8");
     cachedUserDictionary = raw
@@ -53,9 +55,10 @@ export function appendUserDictionary(word: string): void {
     }
     const term = word.trim();
     if (term.length > 0) {
-      appendFileSync(DICTIONARY_FILE, `\n${term}`);
+      appendFileSync(DICTIONARY_FILE, `\n${term}`, { mode: 0o600 });
+      ensureOwnerOnlyPermissions(DICTIONARY_FILE);
       cachedUserDictionary = null; // Invalidate cache
-      logger.info({ term }, "Appended new term to personal vocabulary dictionary");
+      logger.info({ charCount: term.length }, "Appended new term to personal vocabulary dictionary");
     }
   } catch (err) {
     logger.error({ err: String(err) }, "Failed to append term to personal vocabulary dictionary");
@@ -898,7 +901,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
       const isTranslationRequested = isTranslationActive === true;
       if (isCodePreset && isTranslationRequested && !hasSelectedText && /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text)) {
         if (!abortSignal?.aborted) {
-          logger.info({ model, rawTextWithBurmese: text }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
+          logger.info({ model, charCount: text.length }, "Gemini STT output contained Burmese script in English preset, executing text translation fallback");
           try {
             const translateRes = await client.models.generateContent({
               model: "gemini-3.1-flash-lite",
@@ -918,7 +921,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
         }
       }
 
-      logger.info({ model, preferredModel, activeApp, customTermsCount: hintEntries.length, dictationPreset, text, byteLength: audioBuffer.length, usedPaidKey: winner.usedPaidKey }, "Gemini STT transcribed successfully");
+      logger.info({ model, preferredModel, activeApp, customTermsCount: hintEntries.length, dictationPreset, charCount: text.length, byteLength: audioBuffer.length, usedPaidKey: winner.usedPaidKey }, "Gemini STT transcribed successfully");
       return { rawText: text, activeApp, usedPaidKey: winner.usedPaidKey };
     } catch (err: any) {
       logger.warn({ model, preferredModel, err: err?.message || String(err) }, "Model attempt failed, moving to next candidate");
@@ -1067,7 +1070,7 @@ export async function transcribeDetailed(
   }
 
   const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true && !abortSignal?.aborted);
-  logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawText, sanitized, usedPaidKey }, "Transcribed detailed and sanitized");
+  logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawCharCount: rawText.length, sanitizedCharCount: sanitized.length, usedPaidKey }, "Transcribed detailed and sanitized");
   return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
 }
 

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync } from "node:fs";
+import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
 export interface HistoryEntry {
   id: string;
@@ -43,6 +44,7 @@ function getHistoryDir(): string {
     if (existsSync(legacyPath) && !existsSync(targetPath)) {
       try {
         copyFileSync(legacyPath, targetPath);
+        ensureOwnerOnlyPermissions(targetPath);
       } catch {}
     }
   }
@@ -69,6 +71,7 @@ export function loadCostLedger(): CostLedger {
   if (!existsSync(path)) {
     return { lifetimeCost: 0, monthlyCosts: {}, totalDictations: 0 };
   }
+  ensureOwnerOnlyPermissions(path);
   try {
     const raw = readFileSync(path, "utf-8");
     const parsed = JSON.parse(raw);
@@ -91,7 +94,9 @@ export function recordCostInLedger(cost: number): CostLedger {
   ledger.totalDictations = (ledger.totalDictations || 0) + 1;
 
   try {
-    writeFileSync(getLedgerPath(), JSON.stringify(ledger, null, 2), "utf-8");
+    const ledgerPath = getLedgerPath();
+    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), { encoding: "utf-8", mode: 0o600 });
+    ensureOwnerOnlyPermissions(ledgerPath);
   } catch {}
 
   return ledger;
@@ -131,6 +136,7 @@ export function calculateDictationCost(
 export function getHistoryEntries(limit: number = 5): HistoryEntry[] {
   const file = getHistoryPath();
   if (!existsSync(file)) return [];
+  ensureOwnerOnlyPermissions(file);
   try {
     const raw = readFileSync(file, "utf-8");
     const parsed = JSON.parse(raw);
@@ -208,7 +214,9 @@ export function addHistoryEntry(
 
   const updated = [entry, ...current].slice(0, MAX_STORED_HISTORY);
   try {
-    writeFileSync(getHistoryPath(), JSON.stringify(updated, null, 2), "utf-8");
+    const historyPath = getHistoryPath();
+    writeFileSync(historyPath, JSON.stringify(updated, null, 2), { encoding: "utf-8", mode: 0o600 });
+    ensureOwnerOnlyPermissions(historyPath);
   } catch {}
 
   return updated.slice(0, 5);
