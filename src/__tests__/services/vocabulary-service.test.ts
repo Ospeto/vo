@@ -1,13 +1,19 @@
-import { describe, test, expect, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { existsSync, rmSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { backfillLegacyWhitespace, loadPersistedVocabulary, migrateVocabulary, savePersistedVocabulary } from "../../services/vocabulary-service.js";
+import { backfillLegacyWhitespace, loadPersistedVocabulary, migrateVocabulary, savePersistedVocabulary, setVocabularyPathForTests } from "../../services/vocabulary-service.js";
 
 const TEST_VOCAB_FILE = join(tmpdir(), "pi-voice-test-vocab", "vocabulary.json");
 
 describe("vocabulary-service", () => {
+  beforeEach(() => {
+    mkdirSync(join(tmpdir(), "pi-voice-test-vocab"), { recursive: true });
+    setVocabularyPathForTests(TEST_VOCAB_FILE);
+  });
+
   afterEach(() => {
+    setVocabularyPathForTests(null);
     try {
       rmSync(join(tmpdir(), "pi-voice-test-vocab"), { recursive: true, force: true });
     } catch {}

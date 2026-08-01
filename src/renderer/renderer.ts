@@ -1,7 +1,11 @@
-import type { AppState, ChimeSoundChoice, StatePayload, GeminiModelChoice, DictionaryEntry, VocabularyCategory } from "../shared/types.js";
+import type { AppState, ChimeSoundChoice, StatePayload, GeminiModelChoice, DictionaryEntry, VocabularyCategory, SettingsElectronAPI, AudioLevelPayload } from "../shared/types.js";
 import { validateDictionaryEntries } from "../services/dictionary-engine.js";
 import type { DictationPreset, DictationMode } from "../services/config.js";
 import type { HistoryEntry } from "../services/history-service.js";
+
+function getSettingsApi(): SettingsElectronAPI | undefined {
+  return window.piVoice as SettingsElectronAPI | undefined;
+}
 
 const statusDot = document.getElementById("statusDot") as HTMLElement;
 const statusLabel = document.getElementById("statusLabel") as HTMLElement;
@@ -375,7 +379,7 @@ function updateModelPills(selectedModel: string) {
 }
 
 async function initUI() {
-  const config = await window.piVoice?.getConfig();
+  const config = await getSettingsApi()?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "careful");
     updateModelPills(config.geminiModel || "gemini-3.6-flash");
@@ -454,7 +458,7 @@ async function initUI() {
 
   if (micDeviceSelect) {
     micDeviceSelect.addEventListener("change", async () => {
-      await window.piVoice?.saveConfig({ audioDeviceId: micDeviceSelect.value });
+      await getSettingsApi()?.saveConfig({ audioDeviceId: micDeviceSelect.value });
     });
   }
 
@@ -466,12 +470,12 @@ async function initUI() {
         currentAppMappings[name] = preset as DictationPreset;
         if (newAppNameInput) newAppNameInput.value = "";
         renderAppRules();
-        await window.piVoice?.saveConfig({ appPresetMappings: currentAppMappings });
+        await getSettingsApi()?.saveConfig({ appPresetMappings: currentAppMappings });
       }
     });
   }
 
-  const snapshot = await window.piVoice?.getStateSnapshot();
+  const snapshot = await getSettingsApi()?.getStateSnapshot();
   if (snapshot) {
     updateStatusBadge(snapshot.state, snapshot.message);
   }
@@ -573,7 +577,7 @@ async function saveDictionaryEntries(nextEntries: DictionaryEntry[], highlightId
     return false;
   }
   try {
-    const config = await window.piVoice?.saveConfig({ dictionaryEntries: nextEntries });
+    const config = await getSettingsApi()?.saveConfig({ dictionaryEntries: nextEntries });
     dictionaryEntries = (config?.dictionaryEntries || nextEntries) as DictionaryEntry[];
     renderDictionaryEntries(highlightId);
     return true;
@@ -724,7 +728,7 @@ export async function addPersonName(name: string) {
 
   if (!currentCustomVocab.includes(cleanName)) {
     currentCustomVocab.push(cleanName);
-    await window.piVoice?.saveConfig({ customVocabulary: currentCustomVocab });
+    await getSettingsApi()?.saveConfig({ customVocabulary: currentCustomVocab });
     renderPersonNames();
   }
   if (personNameInput) personNameInput.value = "";
@@ -733,7 +737,7 @@ export async function addPersonName(name: string) {
 export async function removePersonName(index: number) {
   if (index >= 0 && index < currentCustomVocab.length) {
     currentCustomVocab.splice(index, 1);
-    await window.piVoice?.saveConfig({ customVocabulary: currentCustomVocab });
+    await getSettingsApi()?.saveConfig({ customVocabulary: currentCustomVocab });
     renderPersonNames();
   }
 }
@@ -782,7 +786,7 @@ export async function addVocabTerm(preset: string, term: string) {
   if (!list.includes(cleanTerm)) {
     list.push(cleanTerm);
     currentPresetVocabMap[preset] = list;
-    await window.piVoice?.saveConfig({ presetVocabulary: currentPresetVocabMap });
+    await getSettingsApi()?.saveConfig({ presetVocabulary: currentPresetVocabMap });
     renderVocabTags();
   }
   if (vocabInput) vocabInput.value = "";
@@ -793,7 +797,7 @@ export async function removeVocabTerm(preset: string, index: number) {
   if (index >= 0 && index < list.length) {
     list.splice(index, 1);
     currentPresetVocabMap[preset] = list;
-    await window.piVoice?.saveConfig({ presetVocabulary: currentPresetVocabMap });
+    await getSettingsApi()?.saveConfig({ presetVocabulary: currentPresetVocabMap });
     renderVocabTags();
   }
 }
@@ -802,7 +806,7 @@ export async function renderHistory() {
   const historyContainer = document.getElementById("historyContainer");
   if (!historyContainer) return;
 
-  const history: HistoryEntry[] = (await window.piVoice?.getHistory()) || [];
+  const history: HistoryEntry[] = (await getSettingsApi()?.getHistory()) || [];
 
   if (history.length === 0) {
     const emptyDiv = document.createElement("div");
@@ -867,29 +871,49 @@ export async function renderHistory() {
   historyContainer.appendChild(fragment);
 }
 
-window.piVoice?.onStateChanged((payload: StatePayload) => {
-  if (payload.state === "recording") {
-    playStartChime();
-  } else if (payload.state === "stopping" || payload.state === "transcribing" || payload.state === "idle") {
-    stopSpectrumVisualizer();
-    if (payload.state === "idle") {
-      if (payload.message?.startsWith("Dictated:") || payload.message?.includes("Key:")) {
-        playBassyEndChime();
+let settingsUnsubscribes: Array<() => void> = [];
+
+const api = window.piVoice as SettingsElectronAPI | undefined;
+
+if (api?.onStateChanged) {
+  const unsub = api.onStateChanged((payload: StatePayload) => {
+    if (payload.state === "recording") {
+      playStartChime();
+    } else if (payload.state === "stopping" || payload.state === "transcribing" || payload.state === "idle") {
+      stopSpectrumVisualizer();
+      if (payload.state === "idle") {
+        if (payload.message?.startsWith("Dictated:") || payload.message?.includes("Key:")) {
+          playBassyEndChime();
+        }
+        renderHistory();
       }
-      renderHistory();
     }
-  }
-  updateStatusBadge(payload.state, payload.message);
-});
+    updateStatusBadge(payload.state, payload.message);
+  });
+  if (unsub) settingsUnsubscribes.push(unsub);
+}
 
-window.piVoice?.onAudioLevelUpdate((payload: number | { level: number; spectrum?: number[] }) => {
-  const level = typeof payload === "number" ? payload : payload.level;
+if (api?.onAudioLevelUpdate) {
+  const unsub = api.onAudioLevelUpdate((payload: AudioLevelPayload | number) => {
+    const level = typeof payload === "number" ? payload : payload.level;
 
-  if (meterFill) {
-    meterFill.style.width = `${level}%`;
+    if (meterFill) {
+      meterFill.style.width = `${level}%`;
+    }
+    updateAudioWaveLevel(level);
+  });
+  if (unsub) settingsUnsubscribes.push(unsub);
+}
+
+const cleanupSettingsSubscriptions = () => {
+  for (const unsub of settingsUnsubscribes) {
+    try { unsub(); } catch {}
   }
-  updateAudioWaveLevel(level);
-});
+  settingsUnsubscribes = [];
+};
+
+window.addEventListener("beforeunload", cleanupSettingsSubscriptions);
+window.addEventListener("unload", cleanupSettingsSubscriptions);
 
 function updateStatusBadge(state: AppState, message?: string) {
   if (!statusDot || !statusLabel) return;
@@ -958,7 +982,7 @@ document.querySelectorAll(".preset-pill-btn").forEach((btn) => {
     if (!selectedPreset) return;
     updatePresetPills(selectedPreset);
     if (presetSelect) presetSelect.value = selectedPreset;
-    await window.piVoice?.saveConfig({ dictationPreset: selectedPreset });
+    await getSettingsApi()?.saveConfig({ dictationPreset: selectedPreset });
   });
 });
 
@@ -970,19 +994,19 @@ document.querySelectorAll(".model-pill-btn").forEach((btn) => {
     updateModelPills(selectedModel);
     if (modelSelect) modelSelect.value = selectedModel;
     if (settingModelSelect) settingModelSelect.value = selectedModel;
-    await window.piVoice?.saveConfig({ geminiModel: selectedModel as GeminiModelChoice });
+    await getSettingsApi()?.saveConfig({ geminiModel: selectedModel as GeminiModelChoice });
   });
 });
 
 presetSelect?.addEventListener("change", async () => {
   const selectedPreset = presetSelect.value as DictationPreset;
   updatePresetPills(selectedPreset);
-  await window.piVoice?.saveConfig({ dictationPreset: selectedPreset });
+  await getSettingsApi()?.saveConfig({ dictationPreset: selectedPreset });
 });
 
 modeSelect?.addEventListener("change", async () => {
   const selectedMode = modeSelect.value as DictationMode;
-  await window.piVoice?.saveConfig({ dictationMode: selectedMode });
+  await getSettingsApi()?.saveConfig({ dictationMode: selectedMode });
 });
 
 gainSlider?.addEventListener("input", () => {
@@ -993,19 +1017,19 @@ gainSlider?.addEventListener("input", () => {
 
 gainSlider?.addEventListener("change", async () => {
   const val = parseFloat(gainSlider.value);
-  await window.piVoice?.saveConfig({ inputGain: val });
+  await getSettingsApi()?.saveConfig({ inputGain: val });
 });
 
 modelSelect?.addEventListener("change", async () => {
   const selectedModel = modelSelect.value as GeminiModelChoice;
   if (settingModelSelect) settingModelSelect.value = selectedModel;
-  await window.piVoice?.saveConfig({ geminiModel: selectedModel });
+  await getSettingsApi()?.saveConfig({ geminiModel: selectedModel });
 });
 
 settingModelSelect?.addEventListener("change", async () => {
   const selectedModel = settingModelSelect.value as GeminiModelChoice;
   if (modelSelect) modelSelect.value = selectedModel;
-  await window.piVoice?.saveConfig({ geminiModel: selectedModel });
+  await getSettingsApi()?.saveConfig({ geminiModel: selectedModel });
 });
 
 chimeBtn?.addEventListener("click", async () => {
@@ -1014,7 +1038,7 @@ chimeBtn?.addEventListener("click", async () => {
   if (audioChimesEnabled) {
     playBassyEndChime();
   }
-  await window.piVoice?.saveConfig({ audioChimesEnabled });
+  await getSettingsApi()?.saveConfig({ audioChimesEnabled });
 });
 
 translateToggleBtn?.addEventListener("click", async () => {
@@ -1023,7 +1047,7 @@ translateToggleBtn?.addEventListener("click", async () => {
   if (translateEnabled) {
     playMechanicalClickSound();
   }
-  const updatedConfig = await window.piVoice?.saveConfig({ translateEnabled });
+  const updatedConfig = await getSettingsApi()?.saveConfig({ translateEnabled });
   if (updatedConfig && updatedConfig.translateEnabled !== undefined) {
     translateEnabled = updatedConfig.translateEnabled;
     updateTranslateBtnUI();
@@ -1032,14 +1056,14 @@ translateToggleBtn?.addEventListener("click", async () => {
 
 targetLanguageSelect?.addEventListener("change", async () => {
   const selectedLang = targetLanguageSelect.value;
-  const updatedConfig = await window.piVoice?.saveConfig({ targetLanguage: selectedLang });
+  const updatedConfig = await getSettingsApi()?.saveConfig({ targetLanguage: selectedLang });
   if (updatedConfig && updatedConfig.targetLanguage && targetLanguageSelect) {
     targetLanguageSelect.value = updatedConfig.targetLanguage;
   }
 });
 
 clearHistoryBtn?.addEventListener("click", async () => {
-  await window.piVoice?.clearHistory();
+  await getSettingsApi()?.clearHistory();
   await renderHistory();
 });
 
@@ -1147,7 +1171,7 @@ testApiKeyBtn?.addEventListener("click", async () => {
     apiKeyFeedback.style.color = "#3b82f6";
     apiKeyFeedback.style.display = "block";
   }
-  const res = await (window.piVoice as any)?.testApiKey(keyVal);
+  const res = await (window.piVoice as SettingsElectronAPI | undefined)?.testApiKey(keyVal);
   if (apiKeyFeedback) {
     if (res?.success) {
       apiKeyFeedback.textContent = `✓ ${res.message || "API Key is valid!"}`;
@@ -1166,7 +1190,7 @@ saveApiKeyBtn?.addEventListener("click", async () => {
   const k3 = geminiApiKey3Input?.value.trim() || "";
   const combinedKeys = [k1, k2, k3].filter(Boolean).join(",");
 
-  const updatedConfig = await window.piVoice?.saveConfig({ geminiApiKey: combinedKeys });
+  const updatedConfig = await getSettingsApi()?.saveConfig({ geminiApiKey: combinedKeys });
   if (geminiApiKey1Input) {
     geminiApiKey1Input.value = "";
     geminiApiKey1Input.placeholder = updatedConfig?.hasGeminiKey
@@ -1189,7 +1213,7 @@ saveApiKeyBtn?.addEventListener("click", async () => {
 
 saveFallbackApiKeyBtn?.addEventListener("click", async () => {
   const fallbackKeyVal = geminiFallbackApiKeyInput?.value ? geminiFallbackApiKeyInput.value.trim() : "";
-  const updatedConfig = await window.piVoice?.saveConfig({ geminiFallbackApiKey: fallbackKeyVal });
+  const updatedConfig = await getSettingsApi()?.saveConfig({ geminiFallbackApiKey: fallbackKeyVal });
   if (geminiFallbackApiKeyInput) {
     geminiFallbackApiKeyInput.value = "";
     geminiFallbackApiKeyInput.placeholder = updatedConfig?.hasGeminiFallbackKey
@@ -1207,19 +1231,19 @@ saveFallbackApiKeyBtn?.addEventListener("click", async () => {
 });
 
 chimeStartSelect?.addEventListener("change", async () => {
-  await window.piVoice?.saveConfig({ chimeSoundStart: chimeStartSelect.value as ChimeSoundChoice });
+  await getSettingsApi()?.saveConfig({ chimeSoundStart: chimeStartSelect.value as ChimeSoundChoice });
 });
 
 chimeEndSelect?.addEventListener("change", async () => {
-  await window.piVoice?.saveConfig({ chimeSoundEnd: chimeEndSelect.value as ChimeSoundChoice });
+  await getSettingsApi()?.saveConfig({ chimeSoundEnd: chimeEndSelect.value as ChimeSoundChoice });
 });
 
 symbolScannerToggle?.addEventListener("change", async () => {
-  await window.piVoice?.saveConfig({ symbolScannerEnabled: symbolScannerToggle.checked });
+  await getSettingsApi()?.saveConfig({ symbolScannerEnabled: symbolScannerToggle.checked });
 });
 
 autoEndpointToggle?.addEventListener("change", async () => {
-  await window.piVoice?.saveConfig({ autoEndpointEnabled: autoEndpointToggle.checked });
+  await getSettingsApi()?.saveConfig({ autoEndpointEnabled: autoEndpointToggle.checked });
 });
 
 transcriptionDelayInput?.addEventListener("change", async () => {
@@ -1227,20 +1251,20 @@ transcriptionDelayInput?.addEventListener("change", async () => {
   if (!isNaN(val)) {
     const clamped = Math.max(0.0, Math.min(10.0, val));
     transcriptionDelayInput.value = clamped.toString();
-    await window.piVoice?.saveConfig({ transcriptionDelaySec: clamped });
+    await getSettingsApi()?.saveConfig({ transcriptionDelaySec: clamped });
   }
 });
 
 previewStartChimeBtn?.addEventListener("click", async () => {
-  await window.piVoice?.previewChime(chimeStartSelect.value);
+  await getSettingsApi()?.previewChime(chimeStartSelect.value);
 });
 
 previewEndChimeBtn?.addEventListener("click", async () => {
-  await window.piVoice?.previewChime(chimeEndSelect.value);
+  await getSettingsApi()?.previewChime(chimeEndSelect.value);
 });
 
 resetShortcutBtn?.addEventListener("click", async () => {
-  const res = await window.piVoice?.registerHotkey("ctrl+cmd+option+v");
+  const res = await getSettingsApi()?.registerHotkey("ctrl+cmd+option+v");
   if (res?.success) {
     keycapDisplay.textContent = res.keyDisplay || "⌃⌥⌘V";
     hideHotkeyError();
@@ -1285,7 +1309,7 @@ function startHotkeyRecording() {
       }
 
       const keyStr = [...modifiers, mainKey].join("+");
-      const res = await window.piVoice?.registerHotkey(keyStr);
+      const res = await getSettingsApi()?.registerHotkey(keyStr);
       if (res?.success) {
         keycapDisplay.textContent = res.keyDisplay || keyStr;
         hideHotkeyError();
@@ -1321,7 +1345,7 @@ function hideHotkeyError() {
 let isRecordingEditHotkey = false;
 
 resetEditShortcutBtn?.addEventListener("click", async () => {
-  const res = await window.piVoice?.registerEditHotkey("ctrl+cmd+option+e");
+  const res = await getSettingsApi()?.registerEditHotkey("ctrl+cmd+option+e");
   if (res?.success) {
     editKeycapDisplay.textContent = res.keyDisplay || "⌃⌥⌘E";
     hideEditHotkeyError();
@@ -1366,7 +1390,7 @@ function startEditHotkeyRecording() {
       }
 
       const keyStr = [...modifiers, mainKey].join("+");
-      const res = await window.piVoice?.registerEditHotkey(keyStr);
+      const res = await getSettingsApi()?.registerEditHotkey(keyStr);
       if (res?.success) {
         editKeycapDisplay.textContent = res.keyDisplay || keyStr;
         hideEditHotkeyError();
@@ -1401,7 +1425,7 @@ function hideEditHotkeyError() {
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !isRecordingHotkey && !isRecordingEditHotkey) {
-    window.piVoice?.cancelDictation?.();
+    getSettingsApi()?.cancelDictation?.();
   }
 });
 

@@ -204,6 +204,7 @@ let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 let errorResetTimer: ReturnType<typeof setTimeout> | null = null;
 let activeUsedPaidKey = false;
+let lastStatePayload: StatePayload = { state: "idle", sequenceId: 0 };
 
 function setState(state: AppState, message?: string, options?: { usedPaidKey?: boolean } | boolean) {
   currentState = state;
@@ -227,6 +228,7 @@ function setState(state: AppState, message?: string, options?: { usedPaidKey?: b
     hasSelection: Boolean(activeSelectionText && activeSelectionText.trim().length > 0),
     usedPaidKey,
   };
+  lastStatePayload = payload;
   logger.info({ state, message, sequenceId, hasSelection: payload.hasSelection, usedPaidKey: payload.usedPaidKey }, "State changed");
 
   if (stoppingSafetyTimer) {
@@ -1001,6 +1003,11 @@ function setupIpcHandlers() {
     if (!validateIpcSender(event, IPC.AUDIO_LEVEL_UPDATE)) return;
     popoverWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
     hudWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
+  });
+
+  ipcMain.handle(IPC.STATE_SNAPSHOT, (event) => {
+    enforceIpcSender(event, IPC.STATE_SNAPSHOT);
+    return lastStatePayload;
   });
 
   ipcMain.handle(IPC.GET_CONFIG, (event) => {

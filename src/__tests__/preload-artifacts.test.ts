@@ -63,6 +63,7 @@ describe("Packaged Preload Artifact Integrity & Sandboxed Self-Containment", () 
         "cancelDictation",
         "onStateChanged",
         "onAudioLevelUpdate",
+        "getStateSnapshot",
       ],
       "capture.cjs": [
         "getConfig",
@@ -91,6 +92,7 @@ describe("Packaged Preload Artifact Integrity & Sandboxed Self-Containment", () 
         "cancelDictation",
         "onStateChanged",
         "onAudioLevelUpdate",
+        "getStateSnapshot",
       ],
     };
 

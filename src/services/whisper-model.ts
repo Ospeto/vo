@@ -16,9 +16,15 @@ import logger from "./logger.js";
 const DEFAULT_MODEL = "medium-q5_0";
 const HF_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 
+let customWhisperDir: string | null = null;
+
+export function setWhisperDirForTests(dir: string | null): void {
+  customWhisperDir = dir;
+}
+
 /** Directory where auto-downloaded models are cached */
 function modelCacheDir(): string {
-  return join(homedir(), ".pi-agent", "whisper");
+  return customWhisperDir ?? join(homedir(), ".pi-agent", "whisper");
 }
 
 function modelFileName(model: string): string {

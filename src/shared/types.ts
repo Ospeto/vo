@@ -1,3 +1,6 @@
+import type { PiVoiceConfigPatch } from "../services/config.js";
+import type { HistoryEntry } from "../services/history-service.js";
+
 export type VocabularyCategory = "general" | "person_name" | "technical";
 
 export interface DictionaryEntry {
@@ -96,22 +99,6 @@ export interface AudioStreamMeta {
   bitsPerSample: number;
 }
 
-/** Exposed API in renderer via contextBridge */
-export interface PiVoiceAPI {
-  onStartRecording: (callback: (format: RecordingFormat, inputGain?: number) => void) => void;
-  onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => void;
-  onCancelRecording: (callback: () => void) => void;
-  onStateChanged: (callback: (payload: StatePayload) => void) => void;
-  onAudioLevelUpdate: (callback: (payload: number | AudioLevelPayload) => void) => void;
-  cancelDictation: () => void;
-  onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => void;
-  onPlayAudioStreamChunk: (callback: (pcmData: ArrayBuffer) => void) => void;
-  onPlayAudioStreamEnd: (callback: () => void) => void;
-  sendRecordingData: (data: ArrayBuffer) => void;
-  sendRecordingError: (error: string) => void;
-  sendPlaybackDone: () => void;
-}
-
 export type RendererRole = "settings" | "capture" | "hud";
 
 export interface CaptureConfigPayload {
@@ -119,6 +106,7 @@ export interface CaptureConfigPayload {
   autoEndpointEnabled?: boolean;
   transcriptionDelaySec?: number;
   inputGain?: number;
+  dictationMode?: DictationMode;
 }
 
 export interface SettingsConfigPayload {
@@ -155,17 +143,18 @@ export interface SettingsConfigPayload {
 
 export interface SettingsElectronAPI {
   getConfig: () => Promise<SettingsConfigPayload>;
-  saveConfig: (patch: any) => Promise<SettingsConfigPayload>;
-  registerHotkey: (newKeyStr: string) => Promise<any>;
-  registerEditHotkey: (newKeyStr: string) => Promise<any>;
-  getHistory: () => Promise<any[]>;
-  clearHistory: () => Promise<any[]>;
-  toggleDictation: () => Promise<any>;
-  testApiKey: (keyToTest?: string) => Promise<any>;
-  previewChime: (soundName: string) => Promise<any>;
+  saveConfig: (patch: PiVoiceConfigPatch) => Promise<SettingsConfigPayload>;
+  registerHotkey: (newKeyStr: string) => Promise<{ success: boolean; keyDisplay?: string; error?: string; binding?: KeyBinding; nativeKeyUpAvailable?: boolean; fallbackRegistered?: boolean }>;
+  registerEditHotkey: (newKeyStr: string) => Promise<{ success: boolean; keyDisplay?: string; error?: string; binding?: KeyBinding; nativeKeyUpAvailable?: boolean; fallbackRegistered?: boolean }>;
+  getHistory: () => Promise<HistoryEntry[]>;
+  clearHistory: () => Promise<HistoryEntry[]>;
+  toggleDictation: () => Promise<{ success: boolean; error?: string }>;
+  testApiKey: (keyToTest?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  previewChime: (soundName: string) => Promise<{ success: boolean }>;
   cancelDictation: () => void;
   onStateChanged: (callback: (payload: StatePayload) => void) => () => void;
-  onAudioLevelUpdate: (callback: (payload: any) => void) => () => void;
+  onAudioLevelUpdate: (callback: (payload: AudioLevelPayload | number) => void) => () => void;
+  getStateSnapshot: () => Promise<StatePayload>;
 }
 
 export interface CaptureElectronAPI {
@@ -175,7 +164,7 @@ export interface CaptureElectronAPI {
   sendRecordingStartReady?: (sequenceId: number, deviceStatus?: string) => void;
   sendRecordingStartFailed?: (sequenceId: number, error: string) => void;
   sendRecordingStopped?: (sequenceId: number) => void;
-  sendAudioLevelUpdate: (payload: any) => void;
+  sendAudioLevelUpdate: (payload: AudioLevelPayload | number) => void;
   onStartRecording: (callback: (format: RecordingFormat, inputGain: number, sequenceId: number) => void) => () => void;
   onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => () => void;
   onCancelRecording: (callback: () => void) => () => void;
@@ -185,7 +174,7 @@ export interface CaptureElectronAPI {
 export interface HudElectronAPI {
   cancelDictation: () => void;
   onStateChanged: (callback: (payload: StatePayload) => void) => () => void;
-  onAudioLevelUpdate: (callback: (payload: any) => void) => () => void;
+  onAudioLevelUpdate: (callback: (payload: AudioLevelPayload | number) => void) => () => void;
 }
 
 export type RecordingLifecycleState = "idle" | "starting" | "recording" | "stopping" | "transcribing" | "error";
@@ -201,6 +190,6 @@ export type RecordingLifecycleResult =
 
 declare global {
   interface Window {
-    piVoice: SettingsElectronAPI | CaptureElectronAPI | HudElectronAPI | any;
+    piVoice: SettingsElectronAPI | CaptureElectronAPI | HudElectronAPI;
   }
 }

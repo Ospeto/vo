@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig, updateConfig } from "../../services/config.js";
 import { resolveEffectivePreset, getPresetPromptInstructions, transcribeDetailed } from "../../services/stt.js";
-import { _resetGeminiClient } from "../../services/gemini-client.js";
+import { _resetGeminiClient, setGeminiClientForTests } from "../../services/gemini-client.js";
 
 describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   let tempDir: string;
@@ -18,7 +18,16 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    if (originalEnv.XDG_CONFIG_HOME !== undefined) {
+      process.env.XDG_CONFIG_HOME = originalEnv.XDG_CONFIG_HOME;
+    } else {
+      delete process.env.XDG_CONFIG_HOME;
+    }
+    if (originalEnv.GEMINI_API_KEY !== undefined) {
+      process.env.GEMINI_API_KEY = originalEnv.GEMINI_API_KEY;
+    } else {
+      delete process.env.GEMINI_API_KEY;
+    }
     _resetGeminiClient();
     try {
       rmSync(tempDir, { recursive: true, force: true });
@@ -103,14 +112,14 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
       updateConfig(tempDir, { translateEnabled: false, targetLanguage: "Japanese" });
 
       let capturedSystemInstruction = "";
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
-        const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
-        return new Response(JSON.stringify({
-          candidates: [{ content: { parts: [{ text: "The database is ready." }] } }],
-        }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }) as any;
+      setGeminiClientForTests({
+        models: {
+          generateContent: async (params: any) => {
+            capturedSystemInstruction = params.config?.systemInstruction || "";
+            return { text: "The database is ready." };
+          },
+        },
+      });
 
       try {
         const res = await transcribeDetailed(new Float32Array(16000).buffer, {
@@ -125,7 +134,7 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
         expect(capturedSystemInstruction).toContain("original spoken language");
         expect(capturedSystemInstruction).not.toContain("into fluent, natural Burmese written prose");
       } finally {
-        globalThis.fetch = originalFetch;
+        setGeminiClientForTests(null);
       }
     });
   });

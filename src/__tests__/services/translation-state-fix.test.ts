@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig, updateConfig } from "../../services/config.js";
 import { transcribeDetailed } from "../../services/stt.js";
-import { _resetGeminiClient } from "../../services/gemini-client.js";
+import { _resetGeminiClient, setGeminiClientForTests } from "../../services/gemini-client.js";
 
 describe("VO Translation Mode State & Target Language Preservation Suite", () => {
   let tempDir: string;
@@ -38,29 +38,15 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
     let capturedSystemInstruction = "";
     let capturedUserPrompt = "";
 
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : "";
-      if (bodyStr) {
-        try {
-          const parsed = JSON.parse(bodyStr);
-          capturedSystemInstruction = parsed.systemInstruction?.parts?.[0]?.text || "";
-          capturedUserPrompt = parsed.contents?.[0]?.parts?.[1]?.text || "";
-        } catch {}
-      }
-      return new Response(
-        JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [{ text: "The database connection failed." }],
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }) as any;
+    setGeminiClientForTests({
+      models: {
+        generateContent: async (params: any) => {
+          capturedSystemInstruction = params.config?.systemInstruction || "";
+          capturedUserPrompt = params.contents?.[0]?.parts?.[1]?.text || "";
+          return { text: "The database connection failed." };
+        },
+      },
+    });
 
     try {
       const dummyAudio = new Uint8Array(2000).buffer;
@@ -77,7 +63,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
       expect(capturedSystemInstruction).not.toContain("translation into Burmese");
       expect(capturedUserPrompt).toContain("English");
     } finally {
-      globalThis.fetch = originalFetch;
+      setGeminiClientForTests(null);
     }
   });
 
@@ -86,28 +72,14 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     let capturedSystemInstruction = "";
 
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : "";
-      if (bodyStr) {
-        try {
-          const parsed = JSON.parse(bodyStr);
-          capturedSystemInstruction = parsed.systemInstruction?.parts?.[0]?.text || "";
-        } catch {}
-      }
-      return new Response(
-        JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [{ text: "ဒေတာဘေ့စ် ချိတ်ဆက်မှု မအောင်မြင်ပါ။" }],
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }) as any;
+    setGeminiClientForTests({
+      models: {
+        generateContent: async (params: any) => {
+          capturedSystemInstruction = params.config?.systemInstruction || "";
+          return { text: "ဒေတာဘေ့စ် ချိတ်ဆက်မှု မအောင်မြင်ပါ။" };
+        },
+      },
+    });
 
     try {
       const dummyAudio = new Uint8Array(2000).buffer;
@@ -120,7 +92,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
       expect(capturedSystemInstruction).toContain("translation into Burmese");
     } finally {
-      globalThis.fetch = originalFetch;
+      setGeminiClientForTests(null);
     }
   });
 
@@ -130,29 +102,15 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
     let capturedSystemInstruction = "";
     let capturedUserPrompt = "";
 
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : "";
-      if (bodyStr) {
-        try {
-          const parsed = JSON.parse(bodyStr);
-          capturedSystemInstruction = parsed.systemInstruction?.parts?.[0]?.text || "";
-          capturedUserPrompt = parsed.contents?.[0]?.parts?.[1]?.text || "";
-        } catch {}
-      }
-      return new Response(
-        JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [{ text: "Database connection ကို test လုပ်ပါ။" }],
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }) as any;
+    setGeminiClientForTests({
+      models: {
+        generateContent: async (params: any) => {
+          capturedSystemInstruction = params.config?.systemInstruction || "";
+          capturedUserPrompt = params.contents?.[0]?.parts?.[1]?.text || "";
+          return { text: "Database connection ကို test လုပ်ပါ။" };
+        },
+      },
+    });
 
     try {
       const dummyAudio = new Uint8Array(2000).buffer;
@@ -168,7 +126,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
       expect(capturedSystemInstruction).toContain("high-precision Burmese & English Speech-to-Text transcriber");
       expect(capturedUserPrompt).toContain("Transcribe the spoken audio accurately in its original spoken language");
     } finally {
-      globalThis.fetch = originalFetch;
+      setGeminiClientForTests(null);
     }
   });
 

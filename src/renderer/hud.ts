@@ -1,4 +1,6 @@
-import type { AppState, AudioLevelPayload, StatePayload } from "../shared/types.js";
+import type { AppState, AudioLevelPayload, HudElectronAPI, StatePayload } from "../shared/types.js";
+
+const api = window.piVoice as HudElectronAPI;
 
 const getElement = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -53,7 +55,7 @@ hudCancelBtn.addEventListener("mousedown", (event) => {
 hudCancelBtn.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  window.piVoice.cancelDictation();
+  api.cancelDictation(); // window.piVoice.cancelDictation()
 });
 
 function resetMeterBars(): void {
@@ -106,5 +108,13 @@ const audioHandler = (payload: number | AudioLevelPayload): void => {
   });
 };
 
-window.piVoice.onStateChanged(updateHud);
-window.piVoice.onAudioLevelUpdate(audioHandler);
+const unbindState = api.onStateChanged(updateHud);
+const unbindAudio = api.onAudioLevelUpdate(audioHandler);
+
+const cleanupHudSubscriptions = () => {
+  unbindState?.();
+  unbindAudio?.();
+};
+
+window.addEventListener("beforeunload", cleanupHudSubscriptions);
+window.addEventListener("unload", cleanupHudSubscriptions);

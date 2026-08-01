@@ -24,8 +24,15 @@ const TRUSTED_SEEDS: Array<[string, string[], VocabularyCategory?]> = [
   ["Engram", ["အင်ဂရမ်", "အန်ဂရမ်"], "technical"],
 ];
 
+let customVocabPath: string | null = null;
+
+export function setVocabularyPathForTests(path: string | null): void {
+  customVocabPath = path;
+}
+
 export function resolveVocabularyPath(customPath?: string): string {
   if (customPath) return customPath;
+  if (customVocabPath) return customVocabPath;
   return join(homedir(), ".config", "pi-voice", "vocabulary.json");
 }
 
