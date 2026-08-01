@@ -18,7 +18,12 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
   });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    delete process.env.XDG_CONFIG_HOME;
+    if (originalEnv.GEMINI_API_KEY !== undefined) {
+      process.env.GEMINI_API_KEY = originalEnv.GEMINI_API_KEY;
+    } else {
+      delete process.env.GEMINI_API_KEY;
+    }
     _resetGeminiClient();
     try {
       rmSync(tempDir, { recursive: true, force: true });
@@ -105,7 +110,9 @@ describe("VO Language Stability & Mode Separation Suite (Round 4)", () => {
       let capturedSystemInstruction = "";
       const originalFetch = globalThis.fetch;
       globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
-        const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
+        let body: any = {};
+        try { body = JSON.parse(bodyStr); } catch {}
         capturedSystemInstruction = body.systemInstruction?.parts?.[0]?.text || "";
         return new Response(JSON.stringify({
           candidates: [{ content: { parts: [{ text: "The database is ready." }], role: "model" }, finishReason: "STOP" }],

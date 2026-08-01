@@ -40,7 +40,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : "";
+      const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
       if (bodyStr) {
         try {
           const parsed = JSON.parse(bodyStr);
@@ -90,7 +90,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : "";
+      const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
       if (bodyStr) {
         try {
           const parsed = JSON.parse(bodyStr);
@@ -136,7 +136,7 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const bodyStr = typeof init?.body === "string" ? init.body : "";
+      const bodyStr = typeof init?.body === "string" ? init.body : init?.body ? Buffer.from(init.body as any).toString("utf-8") : "";
       if (bodyStr) {
         try {
           const parsed = JSON.parse(bodyStr);
