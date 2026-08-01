@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type SettingsElectronAPI, type StatePayload } from "../shared/types.js";
+import { IPC, type SettingsElectronAPI, type StatePayload, type AudioLevelPayload } from "../shared/types.js";
 import { subscribe } from "./shared.js";
 import type { PiVoiceConfigPatch } from "../services/config.js";
 
@@ -17,7 +17,7 @@ const api: SettingsElectronAPI = {
     ipcRenderer.send(IPC.CANCEL_DICTATION);
   },
   onStateChanged: (callback: (payload: StatePayload) => void) => subscribe(IPC.STATE_CHANGED, callback),
-  onAudioLevelUpdate: (callback: (payload: any) => void) => subscribe(IPC.AUDIO_LEVEL_UPDATE, callback),
+  onAudioLevelUpdate: (callback: (payload: AudioLevelPayload | number) => void) => subscribe(IPC.AUDIO_LEVEL_UPDATE, callback),
 };
 
 contextBridge.exposeInMainWorld("piVoice", api);

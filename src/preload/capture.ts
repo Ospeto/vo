@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type CaptureElectronAPI, type RecordingFormat } from "../shared/types.js";
+import { IPC, type CaptureElectronAPI, type RecordingFormat, type AudioLevelPayload } from "../shared/types.js";
 import { createRecordingErrorPayload } from "../services/recording-error.js";
 import { subscribe } from "./shared.js";
 
@@ -20,11 +20,11 @@ const api: CaptureElectronAPI = {
   sendRecordingStopped: (sequenceId: number) => {
     ipcRenderer.send(IPC.RECORDING_STOPPED, { sequenceId });
   },
-  sendAudioLevelUpdate: (payload: any) => {
+  sendAudioLevelUpdate: (payload: AudioLevelPayload | number) => {
     ipcRenderer.send(IPC.AUDIO_LEVEL_UPDATE, payload);
   },
   onStartRecording: (callback: (format: RecordingFormat, inputGain: number, sequenceId: number) => void) =>
-    subscribe(IPC.START_RECORDING, (format: any, inputGain: any, sequenceId: any) => callback(format ?? "webm", inputGain ?? 1.0, sequenceId)),
+    subscribe<any>(IPC.START_RECORDING, (format: any, inputGain: any, sequenceId: any) => callback(format ?? "webm", inputGain ?? 1.0, sequenceId)),
   onStopRecording: (callback: (ensureMinimumDuration?: boolean) => void) => subscribe(IPC.STOP_RECORDING, callback),
   onCancelRecording: (callback: () => void) => subscribe(IPC.CANCEL_RECORDING, callback),
   onGainUpdate: (callback: (inputGain: number) => void) => subscribe(IPC.GAIN_UPDATE, callback),

@@ -1,4 +1,4 @@
-import { IPC, type RecordingFormat } from "../shared/types.js";
+import { IPC, type RecordingFormat, type CaptureElectronAPI, type CaptureConfigPayload } from "../shared/types.js";
 import {
   analyzePcmFrame,
   SpeechEndpointDetector,
@@ -68,8 +68,9 @@ let isStartingUp = false;
 
 function sendRecordingError(error: string, sequenceId: number): void {
   const win = getWindowApi();
-  if (win?.piVoice) {
-    win.piVoice.sendRecordingError(error, sequenceId);
+  const api = win?.piVoice as CaptureElectronAPI | undefined;
+  if (api) {
+    api.sendRecordingError(error, sequenceId);
   }
 }
 
@@ -83,8 +84,9 @@ function sendRecordingErrorOnce(generation: number, sequenceId: number, error: s
   audioChunks = [];
   sendRecordingError(error, sequenceId);
   const win = getWindowApi();
-  if (win?.piVoice) {
-    win.piVoice.sendRecordingStartFailed?.(sequenceId, error);
+  const api = win?.piVoice as CaptureElectronAPI | undefined;
+  if (api) {
+    api.sendRecordingStartFailed?.(sequenceId, error);
   }
 }
 
@@ -177,8 +179,9 @@ export function teardownAudio(generation?: number): void {
     const seq = activeSequenceId;
     activeSequenceId = undefined;
     const win = getWindowApi();
-    if (win?.piVoice) {
-      win.piVoice.sendRecordingStopped?.(seq);
+    const api = win?.piVoice as CaptureElectronAPI | undefined;
+    if (api) {
+      api.sendRecordingStopped?.(seq);
     }
   }
 }
@@ -218,7 +221,8 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
     }
 
     const win = getWindowApi();
-    const config = win?.piVoice ? await win.piVoice.getConfig() : undefined;
+    const api = win?.piVoice as CaptureElectronAPI | undefined;
+    const config: CaptureConfigPayload | undefined = api ? await api.getConfig() : undefined;
     if (generation !== recordingGeneration) {
       cleanupLocals();
       return false;
@@ -485,8 +489,9 @@ function startMetering(generation: number) {
     }
 
     const win = getWindowApi();
-    if (generation === recordingGeneration && win?.piVoice) {
-      win.piVoice.sendAudioLevelUpdate({ level: Math.round(smoothedLevel), spectrum });
+    if (generation === recordingGeneration && win) {
+      const api = win.piVoice as CaptureElectronAPI | undefined;
+      api?.sendAudioLevelUpdate({ level: Math.round(smoothedLevel), spectrum });
     }
   }, 50);
 }
@@ -591,8 +596,9 @@ async function finalizeRecording(generation: number, sequenceId: number) {
     return;
   }
   const win = getWindowApi();
-  if (win?.piVoice) {
-    win.piVoice.sendRecordingData(arrayBuffer);
+  const api = win?.piVoice as CaptureElectronAPI | undefined;
+  if (api) {
+    api.sendRecordingData(arrayBuffer);
   }
 }
 
@@ -650,140 +656,187 @@ function stopRecording(ensureMinimumDuration = false) {
   }
 }
 
-export function registerCaptureListeners(): void {
-  const win = getWindowApi();
+let captureUnsubscribes: Array<() => void> = [];
+let beforeUnloadHandler: (() => void) | null = null;
+let unloadHandler: (() => void) | null = null;
+
+export function cleanupCaptureSubscriptions(): void {
+  for (const unsub of captureUnsubscribes) {
+    try {
+      unsub();
+    } catch {}
+  }
+  captureUnsubscribes = [];
+
+  if (typeof window !== "undefined" && typeof (window as any).removeEventListener === "function") {
+    if (beforeUnloadHandler) {
+      window.removeEventListener("beforeunload", beforeUnloadHandler);
+      beforeUnloadHandler = null;
+    }
+    if (unloadHandler) {
+      window.removeEventListener("unload", unloadHandler);
+      unloadHandler = null;
+    }
+  }
+}
+
+export function registerCaptureListeners(winOverride?: any): void {
+  cleanupCaptureSubscriptions();
+  const win = winOverride || getWindowApi();
   if (!win) return;
 
   win.getAnalyserNode = () => analyserNode;
   win.teardownAudio = teardownAudio;
 
-  win.piVoice?.onGainUpdate?.((newGain: number) => {
-    currentGainValue = newGain;
-    if (gainNode && audioCtx) {
-      gainNode.gain.setValueAtTime(newGain, audioCtx.currentTime);
-    }
-  });
+  const api = win.piVoice as CaptureElectronAPI | undefined;
 
-  win.piVoice?.onStartRecording?.(async (format: RecordingFormat, inputGain: number, sequenceId: number) => {
-    const generation = ++recordingGeneration;
-    activeSequenceId = sequenceId;
-    stopRequestedDuringStartup = false;
-    isStartingUp = true;
-    finalizedRecordingGeneration = -1;
-    audioChunks = [];
-    currentGainValue = inputGain;
-
-    try {
-      const activeWin = getWindowApi();
-      const genBefore = recordingGeneration;
-      const config = activeWin?.piVoice ? await activeWin.piVoice.getConfig() : undefined;
-      if (generation !== recordingGeneration) {
-        console.error(`GEN MISMATCH: gen=${generation}, genBefore=${genBefore}, currentGen=${recordingGeneration}, seq=${sequenceId}`);
-        isStartingUp = false;
-        return;
+  if (api?.onGainUpdate) {
+    const unsub = api.onGainUpdate((newGain: number) => {
+      currentGainValue = newGain;
+      if (gainNode && audioCtx) {
+        gainNode.gain.setValueAtTime(newGain, audioCtx.currentTime);
       }
-      const dictationMode = config?.dictationMode ?? "hold";
-      autoEndpointEnabled = isAutoEndpointEnabled(dictationMode, config?.autoEndpointEnabled ?? true);
-      transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
-
-      const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
-      endpointDetector = new SpeechEndpointDetector({
-        speechThresholdRms: 0.005,
-        silenceThresholdRms: 0.003,
-        confirmSilenceMs: confirmSilenceMs > 0 ? confirmSilenceMs : 500,
-        minSpeechDurationMs: 150,
-        frameIntervalMs: 50,
-      });
-      endpointDetector.reset();
-
-      sessionMaxRms = 0;
-      sessionPeakAmplitude = 0;
-      sessionTotalFrames = 0;
-      sessionSpeechFrames = 0;
-      sessionClippingFrames = 0;
-      autoEndpointTriggered = false;
-      if (postRollTimer) {
-        clearTimeout(postRollTimer);
-        postRollTimer = null;
-      }
-
-      sessionMaxAbs = 0;
-      sessionClippedSamples = 0;
-      sessionTotalSamples = 0;
-      sessionTrackEnded = false;
-
-      const ok = await setupAudioPipeline(inputGain, sequenceId, generation);
-      if (!ok || generation !== recordingGeneration) {
-        isStartingUp = false;
-        if (generation === recordingGeneration && finalizedRecordingGeneration !== generation) {
-          sendRecordingErrorOnce(generation, sequenceId, "Microphone setup failed");
-          teardownAudio(generation);
-        }
-        return;
-      }
-
-      if (audioCtx?.state === "suspended") {
-        await audioCtx.resume();
-      }
-
-      if (generation !== recordingGeneration) {
-        isStartingUp = false;
-        return;
-      }
-
-      if (mediaRecorder && mediaRecorder.state === "inactive") {
-        let recordingTotalBytes = 0;
-        mediaRecorder.ondataavailable = (event) => {
-          if (generation === recordingGeneration && event.data && event.data.size > 0) {
-            recordingTotalBytes += event.data.size;
-            if (recordingTotalBytes > MAX_RECORDING_BYTE_SIZE || audioChunks.length >= MAX_RECORDING_CHUNKS) {
-              sendRecordingErrorOnce(generation, sequenceId, "Recording payload size limit exceeded");
-              teardownAudio(generation);
-              return;
-            }
-            audioChunks.push(event.data);
-          }
-        };
-        mediaRecorder.onstop = () => { void finalizeRecording(generation, sequenceId); };
-        mediaRecorder.start(100);
-        recordingStartTime = Date.now();
-        isStartingUp = false;
-
-        const liveWin = getWindowApi();
-        if (liveWin?.piVoice) {
-          liveWin.piVoice.sendRecordingStartReady?.(sequenceId, activeFallbackDeviceStatus);
-        }
-
-        if (stopRequestedDuringStartup && generation === recordingGeneration) {
-          stopRequestedDuringStartup = false;
-          stopRecording(true);
-        }
-      } else {
-        isStartingUp = false;
-        sendRecordingErrorOnce(generation, sequenceId, "MediaRecorder not ready");
-        teardownAudio(generation);
-      }
-    } catch (err: any) {
-      isStartingUp = false;
-      stopRequestedDuringStartup = false;
-      sendRecordingErrorOnce(generation, sequenceId, `MediaRecorder start failed: ${err?.message || err}`);
-      teardownAudio(generation);
-    }
-  });
-
-  win.piVoice?.onCancelRecording?.(() => {
-    const currentGen = recordingGeneration;
-    recordingGeneration++;
-    teardownAudio(currentGen);
-  });
-
-  if (typeof window !== "undefined" && typeof (window as any).addEventListener === "function") {
-    window.addEventListener("beforeunload", () => {
-      cleanupPartialPipeline();
     });
+    if (unsub) captureUnsubscribes.push(unsub);
   }
 
-  win.piVoice?.onStopRecording?.(stopRecording);
+  if (api?.onStartRecording) {
+    const unsub = api.onStartRecording(async (format: RecordingFormat, inputGain: number, sequenceId: number) => {
+      const generation = ++recordingGeneration;
+      activeSequenceId = sequenceId;
+      stopRequestedDuringStartup = false;
+      isStartingUp = true;
+      finalizedRecordingGeneration = -1;
+      audioChunks = [];
+      currentGainValue = inputGain;
+
+      try {
+        const activeWin = getWindowApi();
+        const genBefore = recordingGeneration;
+        const activeApi = activeWin?.piVoice as CaptureElectronAPI | undefined;
+        const config = activeApi ? await activeApi.getConfig() : undefined;
+        if (generation !== recordingGeneration) {
+          console.error(`GEN MISMATCH: gen=${generation}, genBefore=${genBefore}, currentGen=${recordingGeneration}, seq=${sequenceId}`);
+          isStartingUp = false;
+          return;
+        }
+        const dictationMode = config?.dictationMode ?? "hold";
+        autoEndpointEnabled = isAutoEndpointEnabled(dictationMode, config?.autoEndpointEnabled ?? true);
+        transcriptionDelaySec = config?.transcriptionDelaySec ?? 0.5;
+
+        const confirmSilenceMs = Math.round(transcriptionDelaySec * 1000);
+        endpointDetector = new SpeechEndpointDetector({
+          speechThresholdRms: 0.005,
+          silenceThresholdRms: 0.003,
+          confirmSilenceMs: confirmSilenceMs > 0 ? confirmSilenceMs : 500,
+          minSpeechDurationMs: 150,
+          frameIntervalMs: 50,
+        });
+        endpointDetector.reset();
+
+        sessionMaxRms = 0;
+        sessionPeakAmplitude = 0;
+        sessionTotalFrames = 0;
+        sessionSpeechFrames = 0;
+        sessionClippingFrames = 0;
+        autoEndpointTriggered = false;
+        if (postRollTimer) {
+          clearTimeout(postRollTimer);
+          postRollTimer = null;
+        }
+
+        sessionMaxAbs = 0;
+        sessionClippedSamples = 0;
+        sessionTotalSamples = 0;
+        sessionTrackEnded = false;
+
+        const ok = await setupAudioPipeline(inputGain, sequenceId, generation);
+        if (!ok || generation !== recordingGeneration) {
+          isStartingUp = false;
+          if (generation === recordingGeneration && finalizedRecordingGeneration !== generation) {
+            sendRecordingErrorOnce(generation, sequenceId, "Microphone setup failed");
+            teardownAudio(generation);
+          }
+          return;
+        }
+
+        if (audioCtx?.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        if (generation !== recordingGeneration) {
+          isStartingUp = false;
+          return;
+        }
+
+        if (mediaRecorder && mediaRecorder.state === "inactive") {
+          let recordingTotalBytes = 0;
+          mediaRecorder.ondataavailable = (event) => {
+            if (generation === recordingGeneration && event.data && event.data.size > 0) {
+              recordingTotalBytes += event.data.size;
+              if (recordingTotalBytes > MAX_RECORDING_BYTE_SIZE || audioChunks.length >= MAX_RECORDING_CHUNKS) {
+                sendRecordingErrorOnce(generation, sequenceId, "Recording payload size limit exceeded");
+                teardownAudio(generation);
+                return;
+              }
+              audioChunks.push(event.data);
+            }
+          };
+          mediaRecorder.onstop = () => { void finalizeRecording(generation, sequenceId); };
+          mediaRecorder.start(100);
+          recordingStartTime = Date.now();
+          isStartingUp = false;
+
+          const liveWin = getWindowApi();
+          const liveApi = liveWin?.piVoice as CaptureElectronAPI | undefined;
+          if (liveApi) {
+            liveApi.sendRecordingStartReady?.(sequenceId, activeFallbackDeviceStatus);
+          }
+
+          if (stopRequestedDuringStartup && generation === recordingGeneration) {
+            stopRequestedDuringStartup = false;
+            stopRecording(true);
+          }
+        } else {
+          isStartingUp = false;
+          sendRecordingErrorOnce(generation, sequenceId, "MediaRecorder not ready");
+          teardownAudio(generation);
+        }
+      } catch (err: any) {
+        isStartingUp = false;
+        stopRequestedDuringStartup = false;
+        sendRecordingErrorOnce(generation, sequenceId, `MediaRecorder start failed: ${err?.message || err}`);
+        teardownAudio(generation);
+      }
+    });
+    if (unsub) captureUnsubscribes.push(unsub);
+  }
+
+  if (api?.onCancelRecording) {
+    const unsub = api.onCancelRecording(() => {
+      const currentGen = recordingGeneration;
+      recordingGeneration++;
+      teardownAudio(currentGen);
+    });
+    if (unsub) captureUnsubscribes.push(unsub);
+  }
+
+  if (api?.onStopRecording) {
+    const unsub = api.onStopRecording(stopRecording);
+    if (unsub) captureUnsubscribes.push(unsub);
+  }
+
+  if (typeof window !== "undefined" && typeof (window as any).addEventListener === "function") {
+    beforeUnloadHandler = () => {
+      cleanupPartialPipeline();
+      cleanupCaptureSubscriptions();
+    };
+    unloadHandler = () => {
+      cleanupCaptureSubscriptions();
+    };
+    window.addEventListener("beforeunload", beforeUnloadHandler);
+    window.addEventListener("unload", unloadHandler);
+  }
 }
 
 registerCaptureListeners();

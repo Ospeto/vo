@@ -123,6 +123,7 @@ export function getCaptureConfigPayload(config: PiVoiceConfig): CaptureConfigPay
     autoEndpointEnabled: config.autoEndpointEnabled,
     transcriptionDelaySec: config.transcriptionDelaySec,
     inputGain: config.inputGain,
+    dictationMode: config.dictationMode,
   };
 }
 

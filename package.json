@@ -20,6 +20,8 @@
     "native/"
   ],
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "cli": "bun src/cli.ts",
     "dev:electron": "electron-vite dev",
     "dev:cli": "bun src/cli.ts",
