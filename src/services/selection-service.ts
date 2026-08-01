@@ -168,26 +168,25 @@ export async function captureActiveSelection(
     delayTimer = setTimeout(() => {
       if (finished) return;
 
-      // Trigger key code 8 (c) using command down on frontmost process
-      childProc = exec(
-        `osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to key code 8 using {command down}'`,
-        (err) => {
-          if (finished) return;
-          if (err) {
-            logger.debug({ err: String(err) }, "Selection keystroke execution warning");
-            finish(false, "");
-            return;
+      if (process.platform === "darwin") {
+        childProc = exec(
+          `osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to key code 8 using {command down}'`,
+          (err) => {
+            if (finished) return;
+            if (err) {
+              logger.debug({ err: String(err) }, "Selection keystroke execution warning");
+              finish(false, "");
+              return;
+            }
+            const currentText = clipPort?.readText() || "";
+            if (currentText !== SELECTION_SENTINEL) {
+              const trimmed = currentText.trim();
+              finish(trimmed.length > 0 && trimmed !== SELECTION_SENTINEL, currentText);
+            }
           }
-          // Immediate check upon exec completion
-          const currentText = clipPort?.readText() || "";
-          if (currentText !== SELECTION_SENTINEL) {
-            const trimmed = currentText.trim();
-            finish(trimmed.length > 0 && trimmed !== SELECTION_SENTINEL, currentText);
-          }
-        }
-      );
+        );
+      }
 
-      // Dynamic polling every 20ms until timeout or clipboard text changes from sentinel
       pollInterval = setInterval(() => {
         if (finished) return;
         const currentText = clipPort?.readText() || "";
