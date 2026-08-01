@@ -378,20 +378,20 @@ function updateModelPills(selectedModel: string) {
   });
 }
 
-async function initUI() {
+export async function initUI() {
   const config = await getSettingsApi()?.getConfig();
   if (config) {
     updatePresetPills(config.dictationPreset || "careful");
     updateModelPills(config.geminiModel || "gemini-3.6-flash");
-    if (presetSelect) presetSelect.value = config.dictationPreset;
-    if (modeSelect) modeSelect.value = config.dictationMode;
-    if (modelSelect) modelSelect.value = config.geminiModel;
-    if (gainSlider) {
+    if (presetSelect && config.dictationPreset) presetSelect.value = config.dictationPreset;
+    if (modeSelect && config.dictationMode) modeSelect.value = config.dictationMode;
+    if (modelSelect && config.geminiModel) modelSelect.value = config.geminiModel;
+    if (gainSlider && config.inputGain !== undefined) {
       gainSlider.value = config.inputGain.toString();
-      gainValue.textContent = `${config.inputGain.toFixed(2)}×`;
+      if (gainValue) gainValue.textContent = `${config.inputGain.toFixed(2)}×`;
       gainSlider.setAttribute("aria-valuenow", config.inputGain.toFixed(2));
     }
-    if (keycapDisplay) {
+    if (keycapDisplay && config.keyDisplay) {
       keycapDisplay.textContent = config.keyDisplay;
     }
     if (editKeycapDisplay && config.editKeyDisplay) {
@@ -957,7 +957,7 @@ function updateStatusBadge(state: AppState, message?: string) {
   }
 }
 
-function enableControls(enabled: boolean) {
+export function enableControls(enabled: boolean) {
   if (presetSelect) presetSelect.disabled = !enabled;
   document.querySelectorAll<HTMLButtonElement>(".preset-pill-btn").forEach((btn) => {
     btn.disabled = !enabled;
@@ -966,13 +966,13 @@ function enableControls(enabled: boolean) {
     btn.disabled = !enabled;
   });
   if (modeSelect) modeSelect.disabled = !enabled;
-  gainSlider.disabled = !enabled;
+  if (gainSlider) gainSlider.disabled = !enabled;
   if (modelSelect) modelSelect.disabled = !enabled;
   if (recordBtn) recordBtn.disabled = !enabled;
   if (resetShortcutBtn) resetShortcutBtn.disabled = !enabled;
   if (recordEditBtn) recordEditBtn.disabled = !enabled;
   if (resetEditShortcutBtn) resetEditShortcutBtn.disabled = !enabled;
-  configBtn.disabled = !enabled;
+  if (configBtn) configBtn.disabled = !enabled;
 }
 
 document.querySelectorAll(".preset-pill-btn").forEach((btn) => {

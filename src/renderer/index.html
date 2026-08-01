@@ -157,6 +157,26 @@
             <span id="editHotkeyFeedback" class="feedback-msg"></span>
           </div>
 
+          <!-- Dictation Mode Section -->
+          <div class="modal-section-group">
+            <label class="section-label" for="modeSelect">Dictation Mode</label>
+            <div class="chime-card-row">
+              <div class="chime-card-header">
+                <span class="chime-step-badge" style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">Trigger</span>
+                <span class="chime-step-title">Shortcut Activation Mode</span>
+              </div>
+              <div class="chime-card-controls">
+                <select id="modeSelect" class="chime-select" aria-label="Dictation Mode" aria-describedby="modeSelectHelp">
+                  <option value="toggle">Toggle (Press shortcut to start/stop)</option>
+                  <option value="hold">Hold (Hold shortcut to record)</option>
+                </select>
+              </div>
+            </div>
+            <p id="modeSelectHelp" class="setting-desc chime-card-desc" style="font-size: 11px; color: #94a3b8; margin: 6px 0 0 0;">
+              Toggle: Press shortcut once to start recording, press again to stop. Hold: Hold shortcut down while speaking, release key to finish recording.
+            </p>
+          </div>
+
           <!-- Microphone Input Device Section -->
           <div class="modal-section-group">
             <label class="section-label" for="micDeviceSelect">Microphone Input Device</label>
