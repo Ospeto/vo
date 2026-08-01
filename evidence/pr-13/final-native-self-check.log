@@ -29,7 +29,7 @@ gyp info spawn args '--generator-output',
 gyp info spawn args 'build',
 gyp info spawn args '-Goutput_dir=.'
 gyp info spawn args ]
-gyp info ok 
+gyp info ok
 Built /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/native/pi-paste.node
 pi-paste addon self-check ok
 native_final_exit=0

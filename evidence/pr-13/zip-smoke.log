@@ -31,17 +31,17 @@ gyp info spawn args '--generator-output',
 gyp info spawn args 'build',
 gyp info spawn args '-Goutput_dir=.'
 gyp info spawn args ]
-gyp info ok 
+gyp info ok
 Built /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/native/pi-paste.node
 $ electron-vite build && mkdir -p out/src/assets out/renderer && cp -R src/assets/* out/src/assets/
 vite v6.4.1 building SSR bundle for production...
 transforming...
 ✓ 30 modules transformed.
 rendering chunks...
-[plugin vite:reporter] 
+[plugin vite:reporter]
 (!) /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/config.ts is dynamically imported by /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/stt.ts, /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/stt.ts, /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/stt.ts but also statically imported by /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/main.ts, /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/gemini-client.ts, /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/hotkey-service.ts, dynamic import will not move module into another chunk.
 
-[plugin vite:reporter] 
+[plugin vite:reporter]
 (!) /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/gemini-client.ts is dynamically imported by /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/stt.ts but also statically imported by /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/main.ts, /Users/macbookair/.treehouse/pi-voice-694b87/8/pi-voice/src/services/stt.ts, dynamic import will not move module into another chunk.
 
 out/main/chunks/whisper-model-Bji9-TJJ.js    3.47 kB
