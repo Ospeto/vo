@@ -1,0 +1,12 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/dependency-remediation.test.ts:
+(pass) PR-13 dependency remediation > pins the supported Electron ABI and reachable provider resolutions [0.50ms]
+(pass) PR-13 dependency remediation > proves provider advisories were removed without treating the total as a vulnerability count [0.11ms]
+(pass) PR-13 dependency remediation > packaged headless launch exits after the native addon self-check [0.55ms]
+
+ 3 pass
+ 0 fail
+ 18 expect() calls
+Ran 3 tests across 1 file. [35.00ms]
+oracle_rerun_test_exit=0
