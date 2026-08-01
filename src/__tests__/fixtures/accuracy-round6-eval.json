@@ -1,0 +1,310 @@
+{
+  "version": "1.0.0",
+  "description": "VO Round 6 Local Synthetic Transcript Post-processing Fixture Suite",
+  "cases": [
+    {
+      "id": "name-01",
+      "category": "names",
+      "description": "Synthetic developer person name and custom brand term preservation",
+      "input": "စာရေးကောင်း and အောင်အောင် tested the system",
+      "expected": "SarYayKaung and Aung Aung tested the system",
+      "context": {
+        "activeApp": "Ghostty",
+        "preset": "careful",
+        "dictionaryEntries": [
+          { "id": "d1", "phrase": "SarYayKaung", "spokenAliases": ["စာရေးကောင်း"], "enabled": true, "category": "person_name" },
+          { "id": "d2", "phrase": "Aung Aung", "spokenAliases": ["အောင်အောင်"], "enabled": true, "category": "person_name" }
+        ]
+      }
+    },
+    {
+      "id": "name-02",
+      "category": "names",
+      "description": "Spoken alias mapping to custom developer name",
+      "input": "စာရေးကောင်း tested the app with Alice",
+      "expected": "SarYayKaung tested the app with Alice",
+      "context": {
+        "activeApp": "Ghostty",
+        "preset": "careful",
+        "dictionaryEntries": [
+          { "id": "d1", "phrase": "SarYayKaung", "spokenAliases": ["စာရေးကောင်း"], "enabled": true, "category": "person_name" }
+        ]
+      }
+    },
+    {
+      "id": "tech-01",
+      "category": "technical_terms",
+      "description": "Preserve camelCase, snake_case, uppercase env vars, URLs, and package names",
+      "input": "check userId and created_at with API_KEY at https://example.invalid/api/v1 for @scope/pkg",
+      "expected": "Check userId and created_at with API_KEY at https://example.invalid/api/v1 for @scope/pkg",
+      "protectedTokens": ["userId", "created_at", "API_KEY", "https://example.invalid/api/v1", "@scope/pkg"],
+      "context": {
+        "activeApp": "Ghostty",
+        "preset": "code_comment"
+      }
+    },
+    {
+      "id": "tech-02",
+      "category": "technical_terms",
+      "description": "CLI command flags and tool names",
+      "input": "run bun test --watch in ghostty",
+      "expected": "Run bun test --watch in ghostty",
+      "protectedTokens": ["bun test --watch"],
+      "context": {
+        "activeApp": "Terminal",
+        "preset": "code_comment"
+      }
+    },
+    {
+      "id": "num-01",
+      "category": "numbers",
+      "description": "Exact numbers, decimals, years, and file mode octals",
+      "input": "process 123 items with score 45.6 in year 2026 mode 0600",
+      "expected": "Process 123 items with score 45.6 in year 2026 mode 0600",
+      "context": {
+        "preset": "careful"
+      }
+    },
+    {
+      "id": "num-02",
+      "category": "numbers",
+      "description": "Spoken numbers in Burmese and English context",
+      "input": "၃ ခု စစ်ဆေးပြီး 2026 ခုနှစ် သို့ ပြောင်းပါ",
+      "expected": "၃ ခု စစ်ဆေးပြီး 2026 ခုနှစ် သို့ ပြောင်းပါ",
+      "context": {
+        "preset": "careful",
+        "translateEnabled": false
+      }
+    },
+    {
+      "id": "punct-01",
+      "category": "punctuation",
+      "description": "Spoken English punctuation commands: comma, full stop, question mark, colon, semicolon",
+      "input": "hello comma world full stop note colon value question mark first statement semicolon second statement",
+      "expected": "Hello, world။ note: value? First statement; second statement",
+      "context": {
+        "preset": "careful"
+      }
+    },
+    {
+      "id": "punct-02",
+      "category": "punctuation",
+      "description": "Spoken Burmese punctuation commands: ပုဒ်မ, ပုဒ်ဖြတ်, မေးခွန်းသင်္ကေတ, အာမေဋိတ်",
+      "input": "အကြောင်းအရာ ပုဒ်မ အဆင်ပြေပါတယ် ပုဒ်ဖြတ် အဆင်ပြေလား မေးခွန်းသင်္ကေတ ဝမ်းသာပါတယ် အာမေဋိတ်",
+      "expected": "အကြောင်းအရာ။ အဆင်ပြေပါတယ်၊ အဆင်ပြေလား? ဝမ်းသာပါတယ်!",
+      "context": {
+        "preset": "careful",
+        "translateEnabled": false
+      }
+    },
+    {
+      "id": "cmd-01",
+      "category": "short_commands",
+      "description": "CLI command in terminal app with trailing period stripping",
+      "input": "git status.",
+      "expected": "Git status",
+      "context": {
+        "activeApp": "Ghostty",
+        "preset": "code_comment"
+      }
+    },
+    {
+      "id": "cmd-02",
+      "category": "short_commands",
+      "description": "Spoken task checklist command conversion",
+      "input": "task: write unit tests for evaluator",
+      "expected": "- [ ] write unit tests for evaluator",
+      "context": {
+        "preset": "careful"
+      }
+    },
+    {
+      "id": "long-01",
+      "category": "long_dictation",
+      "description": "Multi-sentence English dictation with formatting and punctuation",
+      "input": "we are executing the accuracy evaluation pipeline full stop the harness evaluates error rates comma insertions comma and deletions full stop it guarantees local reproducible accuracy checks without network calls full stop",
+      "expected": "We are executing the accuracy evaluation pipeline။ the harness evaluates error rates, insertions, and deletions။ it guarantees local reproducible accuracy checks without network calls။",
+      "context": {
+        "preset": "careful"
+      }
+    },
+    {
+      "id": "long-02",
+      "category": "long_dictation",
+      "description": "Multi-sentence Burmese dictation in detect mode",
+      "input": "ဒီနေ့ စနစ်သစ်ကို စမ်းသပ်ပါမည် ပုဒ်မ အမှားများကို စစ်ဆေးပြီး အစီရင်ခံစာ ထုတ်ပေးပါ ပုဒ်မ",
+      "expected": "ဒီနေ့ စနစ်သစ်ကို စမ်းသပ်ပါမည်။ အမှားများကို စစ်ဆေးပြီး အစီရင်ခံစာ ထုတ်ပေးပါ။",
+      "context": {
+        "preset": "careful",
+        "translateEnabled": false
+      }
+    },
+    {
+      "id": "mix-01",
+      "category": "mixed_burmese_english",
+      "description": "Mixed Burmese sentence containing camelCase identifier and CLI command",
+      "input": "Check `userId` ကို စစ်ဆေးပြီး `git status` ရိုက်ပါ",
+      "expected": "Check `userId` ကို စစ်ဆေးပြီး `git status` ရိုက်ပါ",
+      "protectedTokens": ["`userId`", "`git status`"],
+      "context": {
+        "preset": "code_comment",
+        "translateEnabled": false
+      }
+    },
+    {
+      "id": "mix-02",
+      "category": "mixed_burmese_english",
+      "description": "Mixed sentence in code_comment preset with translateEnabled: true purging Burmese script",
+      "input": "Check `userId` ကို စစ်ဆေးပြီး `git status` ရိုက်ပါ",
+      "expected": "Check `userId` `git status`",
+      "protectedTokens": ["`userId`", "`git status`"],
+      "context": {
+        "preset": "code_comment",
+        "translateEnabled": true,
+        "targetLanguage": "English"
+      }
+    },
+    {
+      "id": "pers-01",
+      "category": "personal_phrases",
+      "description": "Common synthetic conversational phrase in English",
+      "input": "how are you doing today question mark i will be ready in five minutes full stop",
+      "expected": "How are you doing today? I will be ready in five minutes။",
+      "context": {
+        "preset": "careful"
+      }
+    },
+    {
+      "id": "pers-02",
+      "category": "personal_phrases",
+      "description": "Common synthetic conversational phrase in Burmese",
+      "input": "ကျေးဇူးအများကြီးတင်ပါတယ် ပုဒ်မ အဆင်ပြေပါတယ် ပုဒ်မ",
+      "expected": "ကျေးဇူးအများကြီးတင်ပါတယ်။ အဆင်ပြေပါတယ်။",
+      "context": {
+        "preset": "careful",
+        "translateEnabled": false
+      }
+    },
+    {
+      "id": "ep-01",
+      "category": "endpointing",
+      "description": "Speech detected followed by silence frames endpoints successfully",
+      "input": "endpointing test",
+      "expected": "endpointed: true",
+      "context": {
+        "endpointingScenario": {
+          "confirmSilenceMs": 100,
+          "frames": [
+            { "rms": 0.02, "isSpeech": true },
+            { "rms": 0.02, "isSpeech": true },
+            { "rms": 0.02, "isSpeech": true },
+            { "rms": 0.001, "isSpeech": false },
+            { "rms": 0.001, "isSpeech": false }
+          ],
+          "expectedEndpointed": true
+        }
+      }
+    },
+    {
+      "id": "ep-02",
+      "category": "endpointing",
+      "description": "Continuous speech without silence does not endpoint prematurely",
+      "input": "endpointing test continuous",
+      "expected": "endpointed: false",
+      "context": {
+        "endpointingScenario": {
+          "confirmSilenceMs": 1500,
+          "frames": [
+            { "rms": 0.02, "isSpeech": true },
+            { "rms": 0.02, "isSpeech": true },
+            { "rms": 0.03, "isSpeech": true }
+          ],
+          "expectedEndpointed": false
+        }
+      }
+    },
+    {
+      "id": "mic-01",
+      "category": "microphone_diagnostics",
+      "description": "Short audio duration yields too_short status",
+      "input": "mic diagnostic short",
+      "expected": "too_short",
+      "context": {
+        "audioStats": {
+          "durationMs": 200,
+          "maxRms": 0.05,
+          "peakAmplitude": 0.1,
+          "speechFrames": 3,
+          "totalFrames": 5,
+          "clippingFrames": 0,
+          "hasSpeech": true
+        },
+        "expectedDiagnosticStatus": "too_short"
+      }
+    },
+    {
+      "id": "mic-02",
+      "category": "microphone_diagnostics",
+      "description": "Near silence input yields near_silence status",
+      "input": "mic diagnostic silence",
+      "expected": "near_silence",
+      "context": {
+        "audioStats": {
+          "durationMs": 3000,
+          "maxRms": 0.0005,
+          "peakAmplitude": 0.001,
+          "speechFrames": 0,
+          "totalFrames": 100,
+          "clippingFrames": 0,
+          "hasSpeech": false
+        },
+        "expectedDiagnosticStatus": "near_silence"
+      }
+    },
+    {
+      "id": "lang-01",
+      "category": "language_stability",
+      "description": "Detect mode (translateEnabled: false) preserves Burmese script losslessly",
+      "input": "ဒီနေ့ ရာသီဥတု သာယာပါသည်",
+      "expected": "ဒီနေ့ ရာသီဥတု သာယာပါသည်",
+      "context": {
+        "preset": "code_comment",
+        "translateEnabled": false
+      }
+    },
+    {
+      "id": "vocab-01",
+      "category": "vocabulary_hints",
+      "description": "Spoken alias correctly maps to configured phrase",
+      "input": "မက်စ် ၁၄၁ စနစ် ဖွင့်ပါ",
+      "expected": "MAS 141 စနစ် ဖွင့်ပါ",
+      "context": {
+        "preset": "careful",
+        "dictionaryEntries": [
+          { "id": "v1", "phrase": "MAS 141", "spokenAliases": ["မက်စ် ၁၄၁"], "enabled": true, "category": "technical" }
+        ]
+      }
+    },
+    {
+      "id": "corr-01",
+      "category": "deterministic_corrections",
+      "description": "Deduplication of multi-word duplicate spoken stutters",
+      "input": "we need to check we need to check the database",
+      "expected": "We need to check the database",
+      "context": {
+        "preset": "careful"
+      }
+    },
+    {
+      "id": "corr-02",
+      "category": "deterministic_corrections",
+      "description": "Burmese stutter fragment deduplication",
+      "input": "အဆင်ပြေအောင် အဆင်ပြေအောင် ဆောင်ရွက်ပေးပါ",
+      "expected": "အဆင်ပြေအောင် ဆောင်ရွက်ပေးပါ",
+      "context": {
+        "preset": "careful",
+        "translateEnabled": false
+      }
+    }
+  ]
+}

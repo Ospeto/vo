@@ -1,8 +1,8 @@
-# Burmese Coding Evaluation Boundary (PR 1 Baseline)
+# Burmese Coding Evaluation Boundary
 
 ## Overview
 
-This document specifies the evaluation boundary for PR 1 of the VO mixed Burmese/English coding transcription task.
+This document specifies the deterministic evaluation boundary for the VO mixed Burmese/English coding transcription task, from the PR 1 baseline through the Round 6 local metrics fixture.
 
 PR 1 establishes a **deterministic, text-only baseline** for technical dictation characterization across three cohorts:
 1. `english_only`: Pure English technical instructions and identifiers.
@@ -19,6 +19,23 @@ Unit tests in `src/__tests__/services/burmese-coding-baseline.test.ts` are stric
 - **Provider-free**: No Gemini API, OpenAI API, or external network calls are executed during test runs.
 - **Deterministic**: Tests evaluate pure functions (`resolveEffectivePreset`, `getPresetPromptInstructions`, `sanitizeTranscribedText`) against fixed text fixtures.
 - **Secret-free**: Zero API keys or local credentials are required to run `bun test`.
+
+## Local Accuracy Metrics (Round 6)
+
+`src/__tests__/fixtures/accuracy-round6-eval.json` extends the deterministic,
+provider-free boundary with synthetic post-processing cases. Run its repeatable
+report from the repository root:
+
+```bash
+bun scripts/run-accuracy-eval.ts
+```
+
+Pass `--fixture <path>` to evaluate another suite with the same schema. The
+report includes exact pass/fail results, word error rate (WER), accuracy,
+word-level substitutions/insertions/deletions, duplicate-fragment counts, and
+per-category summaries. These metrics characterize deterministic text
+post-processing, endpointing simulations, and microphone-diagnostic fixtures;
+they do not measure provider STT, real audio, or latency accuracy.
 
 ---
 
