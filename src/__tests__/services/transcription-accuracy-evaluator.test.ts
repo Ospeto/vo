@@ -126,9 +126,15 @@ describe("VO Transcript Post-processing Accuracy Evaluator & Metrics Suite (Roun
     test("rejects casing, punctuation, and protected-token regressions hidden by normalized WER", () => {
       const casing = evaluateAccuracyCase({
         id: "case", category: "technical_terms", description: "case", input: "api_key", expected: "API_KEY",
+        protectedTokens: ["API_KEY"],
       });
       const punctuation = evaluateAccuracyCase({
-        id: "punctuation", category: "punctuation", description: "punctuation", input: "hello world", expected: "Hello, world",
+        id: "punctuation", category: "punctuation", description: "punctuation", input: "is question mark it ready", expected: "Is it ready?",
+        maxWerThreshold: 0,
+      });
+      const relativePath = evaluateAccuracyCase({
+        id: "path", category: "technical_terms", description: "path", input: "check src main ts", expected: "Check src/main.ts",
+        protectedTokens: ["src/main.ts"], maxWerThreshold: 1,
       });
 
       expect(casing.report.wordErrorRate).toBe(0);
@@ -137,6 +143,8 @@ describe("VO Transcript Post-processing Accuracy Evaluator & Metrics Suite (Roun
       expect(punctuation.report.wordErrorRate).toBe(0);
       expect(punctuation.report.punctuationMatch).toBe(false);
       expect(punctuation.passed).toBe(false);
+      expect(relativePath.report.protectedTokensMatch).toBe(false);
+      expect(relativePath.passed).toBe(false);
     });
   });
 

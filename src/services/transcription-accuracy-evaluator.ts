@@ -62,6 +62,7 @@ export interface AccuracyTestCase {
   description: string;
   input: string;
   expected: string;
+  protectedTokens?: string[];
   maxWerThreshold?: number;
   context?: {
     activeApp?: string;
@@ -123,19 +124,12 @@ export interface AccuracySuiteReport {
   caseResults: CaseEvalResult[];
 }
 
-const PUNCTUATION_REGEX = /[.,?!:;"'“”‘’()[\]{}\-–—/\\`။၊]/gu;
-
-function punctuationSequence(text: string): string[] {
-  return text.match(PUNCTUATION_REGEX) ?? [];
-}
-
-function protectedTokens(text: string): string[] {
-  return text.split(/\s+/).filter(token =>
-    /^(?:https?:\/\/|git@|@|--|\/)/i.test(token)
-    || /[_`]/.test(token)
-    || /\p{Ll}\p{Lu}/u.test(token)
-    || /^(?=.*\p{Lu})[\p{Lu}\d_.-]+$/u.test(token)
-  );
+function punctuationLayout(text: string): string {
+  return text
+    .replace(/[\p{L}\p{M}\p{N}_]+/gu, "w")
+    .replace(/[^w\s.,?!:;"'“”‘’()[\]{}\-–—/\\`။၊]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export interface EvalOptions {
@@ -385,7 +379,7 @@ export function alignWords(expectedTokens: string[], actualTokens: string[]): {
 }
 
 /** Evaluate expected vs actual transcript text with transparent word-level metrics. */
-export function evaluateTranscriptPair(expectedText: string, actualText: string): AccuracyReport {
+export function evaluateTranscriptPair(expectedText: string, actualText: string, protectedTokens: string[] = []): AccuracyReport {
   const expectedTokens = tokenizeText(expectedText);
   const actualTokens = tokenizeText(actualText);
 
@@ -406,8 +400,8 @@ export function evaluateTranscriptPair(expectedText: string, actualText: string)
     accuracy: alignment.accuracy,
     exactMatch: expectedText === actualText,
     casingMatch,
-    punctuationMatch: punctuationSequence(expectedText).join("") === punctuationSequence(actualText).join(""),
-    protectedTokensMatch: protectedTokens(expectedText).join("\n") === protectedTokens(actualText).join("\n"),
+    punctuationMatch: punctuationLayout(expectedText) === punctuationLayout(actualText),
+    protectedTokensMatch: protectedTokens.every(token => actualText.includes(token)),
     diffOps: alignment.diffOps,
     substitutionDetails: alignment.substitutionDetails,
     insertionDetails: alignment.insertionDetails,
@@ -446,7 +440,7 @@ export function evaluateAccuracyCase(caseItem: AccuracyTestCase): CaseEvalResult
     );
   }
 
-  const report = evaluateTranscriptPair(caseItem.expected, actualOutput);
+  const report = evaluateTranscriptPair(caseItem.expected, actualOutput, caseItem.protectedTokens);
   const passed = caseItem.maxWerThreshold === undefined
     ? report.exactMatch
     : report.wordErrorRate <= caseItem.maxWerThreshold
@@ -582,6 +576,7 @@ export function loadAccuracyFixtureSuite(source: string | object): AccuracyFixtu
       description: c.description ?? `Accuracy case ${index + 1}`,
       input: c.input ?? "",
       expected: c.expected ?? "",
+      protectedTokens: c.protectedTokens,
       maxWerThreshold: c.maxWerThreshold,
       context: c.context,
     })),

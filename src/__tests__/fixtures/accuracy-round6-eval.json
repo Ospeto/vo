@@ -37,6 +37,7 @@
       "description": "Preserve camelCase, snake_case, uppercase env vars, URLs, and package names",
       "input": "check userId and created_at with API_KEY at https://example.invalid/api/v1 for @scope/pkg",
       "expected": "Check userId and created_at with API_KEY at https://example.invalid/api/v1 for @scope/pkg",
+      "protectedTokens": ["userId", "created_at", "API_KEY", "https://example.invalid/api/v1", "@scope/pkg"],
       "context": {
         "activeApp": "Ghostty",
         "preset": "code_comment"
@@ -48,6 +49,7 @@
       "description": "CLI command flags and tool names",
       "input": "run bun test --watch in ghostty",
       "expected": "Run bun test --watch in ghostty",
+      "protectedTokens": ["bun test --watch"],
       "context": {
         "activeApp": "Terminal",
         "preset": "code_comment"
@@ -143,6 +145,7 @@
       "description": "Mixed Burmese sentence containing camelCase identifier and CLI command",
       "input": "Check `userId` ကို စစ်ဆေးပြီး `git status` ရိုက်ပါ",
       "expected": "Check `userId` ကို စစ်ဆေးပြီး `git status` ရိုက်ပါ",
+      "protectedTokens": ["`userId`", "`git status`"],
       "context": {
         "preset": "code_comment",
         "translateEnabled": false
@@ -154,6 +157,7 @@
       "description": "Mixed sentence in code_comment preset with translateEnabled: true purging Burmese script",
       "input": "Check `userId` ကို စစ်ဆေးပြီး `git status` ရိုက်ပါ",
       "expected": "Check `userId` `git status`",
+      "protectedTokens": ["`userId`", "`git status`"],
       "context": {
         "preset": "code_comment",
         "translateEnabled": true,
