@@ -106,6 +106,7 @@ describe("macOS Accessibility Runtime Revocation Protection Suite", () => {
     expect(res.success).toBe(true);
     expect(res.nativeKeyUpAvailable).toBe(true);
     expect(service.isNativeKeyUpAvailable()).toBe(true);
+    await service.stop();
   });
 
   test("startup with permission denied rejects Hold Mode and returns error without crashing", async () => {
@@ -118,9 +119,11 @@ describe("macOS Accessibility Runtime Revocation Protection Suite", () => {
     expect(res.nativeKeyUpAvailable).toBe(false);
     expect(res.error).toContain("Accessibility/Input Monitoring permissions required");
     expect(service.isNativeKeyUpAvailable()).toBe(false);
+    await service.stop();
   });
 
   test("runtime trust revocation triggers onTrustLost, stops FnHook, and reports nativeKeyUpAvailable=false", async () => {
+    const { systemPreferences } = await import("electron");
     const service = new HotkeyService();
     const onTrustLost = mock(() => {});
     const binding = { keycode: 47, ctrl: true, shift: false, alt: false, meta: true };
@@ -147,6 +150,9 @@ describe("macOS Accessibility Runtime Revocation Protection Suite", () => {
     expect(onTrustLost).toHaveBeenCalledTimes(1);
     expect(service.isNativeKeyUpAvailable()).toBe(false);
     expect(mockUIOhook.stop).toHaveBeenCalled();
+    expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(false);
+
+    await service.stop();
   });
 
   test("repeated trust loss checks are safe and idempotent", async () => {

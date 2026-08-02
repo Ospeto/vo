@@ -37,7 +37,7 @@ function getReleaseCodes(binding: KeyBinding): number[] {
 /**
  * Monitors configurable key combinations globally using uiohook-napi.
  * Triggers onFnDown(mode) when keys are held, onFnUp(mode) when released.
- * 
+ *
  * Note on native boundary: uiohook-napi manages an underlying macOS CGEventTap.
  * When macOS Accessibility/Input Monitoring trust is revoked at runtime, the CGEventTap
  * is invalidated by the system. FnHook performs non-prompting runtime trust checks

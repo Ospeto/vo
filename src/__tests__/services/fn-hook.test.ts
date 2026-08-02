@@ -308,11 +308,13 @@ describe("FnHook", () => {
     expect(hook.isStarted()).toBe(false);
     expect(onTrustLost).toHaveBeenCalledTimes(1);
     expect(mockUIOhook.stop).toHaveBeenCalled();
+    expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(false);
 
     // Repeated checkTrust is idempotent
     hook.checkTrust();
     expect(onTrustLost).toHaveBeenCalledTimes(1);
 
+    hook.stop();
     // Restore mock default
     (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
   });
@@ -320,7 +322,7 @@ describe("FnHook", () => {
   test("key event discards execution and stops hook if trust lost at runtime", async () => {
     const { systemPreferences } = await import("electron");
     let trustedMock = true;
-    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => trustedMock);
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation((prompt?: boolean) => trustedMock);
 
     const onFnDown = mock(() => {});
     const onTrustLost = mock(() => {});
@@ -336,7 +338,9 @@ describe("FnHook", () => {
     expect(onFnDown).not.toHaveBeenCalled();
     expect(hook.isStarted()).toBe(false);
     expect(onTrustLost).toHaveBeenCalledTimes(1);
+    expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(false);
 
+    hook.stop();
     (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
   });
 
