@@ -8,6 +8,7 @@ export type FnHookCallbacks = {
   onFnDown: (mode: "dictate" | "edit") => void;
   onFnUp: (mode: "dictate" | "edit") => void;
   onCancel?: () => void;
+  onTrustLost?: () => void;
 };
 
 /**
@@ -36,12 +37,20 @@ function getReleaseCodes(binding: KeyBinding): number[] {
 /**
  * Monitors configurable key combinations globally using uiohook-napi.
  * Triggers onFnDown(mode) when keys are held, onFnUp(mode) when released.
+ *
+ * Note on native boundary: uiohook-napi manages an underlying macOS CGEventTap.
+ * When macOS Accessibility/Input Monitoring trust is revoked at runtime, the CGEventTap
+ * is invalidated by the system. FnHook performs non-prompting runtime trust checks
+ * and ensures safe, idempotent teardown at VO's lifecycle edge so an invalid tap
+ * is stopped and unhooked without freezing or crashing the application.
  */
 export class FnHook {
   public isFnDown = false;
   private activeMode: "dictate" | "edit" | null = null;
   private callbacks: FnHookCallbacks;
   private started = false;
+  private trustLost = false;
+  private trustTimer: ReturnType<typeof setInterval> | null = null;
   private binding: KeyBinding;
   private editBinding: KeyBinding | null;
   private releaseCodes: Set<number>;
@@ -63,11 +72,47 @@ export class FnHook {
     return this.started;
   }
 
+  public checkTrust(): boolean {
+    if (process.platform === "darwin" || typeof systemPreferences?.isTrustedAccessibilityClient === "function") {
+      const trusted = systemPreferences.isTrustedAccessibilityClient(false);
+      if (!trusted) {
+        this.handleTrustLoss();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private handleTrustLoss(): void {
+    if (this.trustLost) return;
+    this.trustLost = true;
+    logger.warn("macOS Accessibility trust lost at runtime; tearing down uIOhook event tap");
+    this.stop();
+    this.callbacks.onTrustLost?.();
+  }
+
+  private startTrustTimer(): void {
+    this.clearTrustTimer();
+    this.trustTimer = setInterval(() => {
+      this.checkTrust();
+    }, 1000);
+    if (this.trustTimer && typeof this.trustTimer === "object" && "unref" in this.trustTimer) {
+      (this.trustTimer as any).unref();
+    }
+  }
+
+  private clearTrustTimer(): void {
+    if (this.trustTimer) {
+      clearInterval(this.trustTimer);
+      this.trustTimer = null;
+    }
+  }
+
   start(): void {
     if (this.started) return;
 
     // macOS requires accessibility permissions for global keyboard hooks
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" || typeof systemPreferences?.isTrustedAccessibilityClient === "function") {
       const trusted = systemPreferences.isTrustedAccessibilityClient(true);
       if (!trusted) {
         throw new Error(
@@ -76,7 +121,11 @@ export class FnHook {
       }
     }
 
+    this.trustLost = false;
+
     this.keydownHandler = (e: UiohookKeyboardEvent) => {
+      if (!this.checkTrust()) return;
+
       if (e.keycode === UiohookKey.Escape) {
         this.callbacks.onCancel?.();
         return;
@@ -115,6 +164,8 @@ export class FnHook {
     };
 
     this.keyupHandler = (e: UiohookKeyboardEvent) => {
+      if (!this.checkTrust()) return;
+
       if (this.activeMode === null) return;
 
       const currentMode = this.activeMode;
@@ -137,21 +188,40 @@ export class FnHook {
       throw err;
     }
     logger.info({ key: this.displayName }, "Started monitoring key");
+
+    if (process.platform === "darwin" || typeof systemPreferences?.isTrustedAccessibilityClient === "function") {
+      this.startTrustTimer();
+    }
   }
 
   stop(): void {
+    this.clearTrustTimer();
     if (!this.started && !this.keydownHandler && !this.keyupHandler) return;
-    if (this.started) uIOhook.stop();
+    if (this.started) {
+      this.started = false;
+      try {
+        uIOhook.stop();
+      } catch (err) {
+        logger.warn({ err: String(err) }, "Error calling uIOhook.stop() during teardown");
+      }
+    }
     this.detachListeners();
-    this.started = false;
     this.activeMode = null;
     this.isFnDown = false;
     logger.info("Stopped monitoring key");
   }
 
   private detachListeners(): void {
-    if (this.keydownHandler) uIOhook.off("keydown", this.keydownHandler);
-    if (this.keyupHandler) uIOhook.off("keyup", this.keyupHandler);
+    if (this.keydownHandler) {
+      try {
+        uIOhook.off("keydown", this.keydownHandler);
+      } catch {}
+    }
+    if (this.keyupHandler) {
+      try {
+        uIOhook.off("keyup", this.keyupHandler);
+      } catch {}
+    }
     this.keydownHandler = null;
     this.keyupHandler = null;
   }

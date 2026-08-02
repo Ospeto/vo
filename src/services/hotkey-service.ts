@@ -7,6 +7,7 @@ export interface HotkeyCallbacks {
   onDown: (mode: "dictate" | "edit") => void;
   onUp?: (mode: "dictate" | "edit") => void;
   onCancel?: () => void;
+  onTrustLost?: () => void;
 }
 
 export interface HotkeyRegisterResult {
@@ -113,6 +114,7 @@ export class HotkeyService implements IHotkeyService {
     } catch {}
 
     const onCancel = typeof callbacks === "function" ? undefined : callbacks.onCancel;
+    const onTrustLost = typeof callbacks === "function" ? undefined : callbacks.onTrustLost;
 
     // 1. Register native Fn hook via uiohook-napi
     this.fnHook = new FnHook(
@@ -120,6 +122,14 @@ export class HotkeyService implements IHotkeyService {
         onFnDown: (mode) => this.onDownCallback?.(mode),
         onFnUp: (mode) => this.onUpCallback?.(mode),
         onCancel: () => onCancel?.(),
+        onTrustLost: () => {
+          logger.warn("HotkeyService: native FnHook reported trust lost at runtime");
+          if (this.fnHook) {
+            this.fnHook.stop();
+            this.fnHook = null;
+          }
+          onTrustLost?.();
+        },
       },
       binding,
       this.currentDisplay,

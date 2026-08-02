@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, mock } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 
 // Mock logger
 mock.module("../../services/logger.js", () => ({
@@ -96,6 +96,14 @@ function simulateKeyUp(keycode: number) {
   }
 }
 
+const activeHooks: InstanceType<typeof FnHook>[] = [];
+
+function createHook(...args: ConstructorParameters<typeof FnHook>): InstanceType<typeof FnHook> {
+  const hook = new FnHook(...args);
+  activeHooks.push(hook);
+  return hook;
+}
+
 describe("FnHook", () => {
   beforeEach(() => {
     keydownCallbacks.length = 0;
@@ -107,10 +115,17 @@ describe("FnHook", () => {
     mockUIOhook.stop.mockClear();
   });
 
+  afterEach(() => {
+    for (const hook of activeHooks) {
+      hook.stop();
+    }
+    activeHooks.length = 0;
+  });
+
   test("starts uiohook on start()", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false }; // ctrl+t
-    const hook = new FnHook(callbacks, binding, "ctrl+t");
+    const hook = createHook(callbacks, binding, "ctrl+t");
 
     hook.start();
     expect(mockUIOhook.start).toHaveBeenCalled();
@@ -120,7 +135,7 @@ describe("FnHook", () => {
   test("does not double-start", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     hook.start();
     hook.start(); // second call should be no-op
@@ -131,7 +146,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
     simulateKeyDown(20, { ctrlKey: true });
@@ -143,7 +158,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
 
@@ -160,7 +175,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
 
@@ -177,7 +192,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
     simulateKeyDown(20, { ctrlKey: true });
@@ -191,7 +206,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "t");
 
     hook.start();
     simulateKeyDown(20, {});
@@ -209,7 +224,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "t");
 
     hook.start();
     simulateKeyDown(20, {});
@@ -223,7 +238,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "t");
 
     hook.start();
 
@@ -236,7 +251,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const callbacks = { onFnDown, onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     hook.start();
     hook.stop();
@@ -250,7 +265,7 @@ describe("FnHook", () => {
   test("stop() is no-op when not started", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     hook.stop(); // should not throw
     expect(mockUIOhook.stop).not.toHaveBeenCalled();
@@ -259,7 +274,7 @@ describe("FnHook", () => {
   test("isFnDown tracks active state", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     expect(hook.isFnDown).toBe(false);
 
@@ -276,7 +291,7 @@ describe("FnHook", () => {
     const onFnUp = mock(() => {});
     // meta+shift+i: keycode=23 (I), meta=true, shift=true
     const binding = { keycode: 23, ctrl: false, shift: true, alt: false, meta: true };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "meta+shift+i");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "meta+shift+i");
 
     hook.start();
     simulateKeyDown(23, { metaKey: true, shiftKey: true });
@@ -285,5 +300,81 @@ describe("FnHook", () => {
     // Release shift triggers release
     simulateKeyUp(42); // UiohookKey.Shift
     expect(onFnUp).toHaveBeenCalledTimes(1);
+  });
+
+  test("runtime trust loss triggers onTrustLost callback and stops uIOhook cleanly", async () => {
+    const { systemPreferences } = await import("electron");
+    let trustedMock = true;
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation((prompt: boolean) => trustedMock);
+
+    const onTrustLost = mock(() => {});
+    const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
+    const hook = createHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}), onTrustLost }, binding, "t");
+
+    hook.start();
+    expect(hook.isStarted()).toBe(true);
+
+    // Simulate runtime revocation of Accessibility permission
+    trustedMock = false;
+
+    // Check trust explicitly
+    const isOk = hook.checkTrust();
+    expect(isOk).toBe(false);
+    expect(hook.isStarted()).toBe(false);
+    expect(onTrustLost).toHaveBeenCalledTimes(1);
+    expect(mockUIOhook.stop).toHaveBeenCalled();
+    expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(false);
+
+    // Repeated checkTrust is idempotent
+    hook.checkTrust();
+    expect(onTrustLost).toHaveBeenCalledTimes(1);
+
+    hook.stop();
+    // Restore mock default
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
+  });
+
+  test("key event discards execution and stops hook if trust lost at runtime", async () => {
+    const { systemPreferences } = await import("electron");
+    let trustedMock = true;
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation((prompt?: boolean) => trustedMock);
+
+    const onFnDown = mock(() => {});
+    const onTrustLost = mock(() => {});
+    const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
+    const hook = createHook({ onFnDown, onFnUp: mock(() => {}), onTrustLost }, binding, "t");
+
+    hook.start();
+
+    // Revoke permission before key down
+    trustedMock = false;
+    simulateKeyDown(20, {});
+
+    expect(onFnDown).not.toHaveBeenCalled();
+    expect(hook.isStarted()).toBe(false);
+    expect(onTrustLost).toHaveBeenCalledTimes(1);
+    expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(false);
+
+    hook.stop();
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
+  });
+
+  test("stop() is idempotent and handles uIOhook.stop() native exceptions gracefully", () => {
+    const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
+    const hook = createHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}) }, binding, "t");
+
+    hook.start();
+
+    // Force uIOhook.stop to throw (simulating broken native CGEventTap on revocation)
+    mockUIOhook.stop.mockImplementationOnce(() => {
+      throw new Error("CGEventTap is invalid");
+    });
+
+    expect(() => hook.stop()).not.toThrow();
+    expect(hook.isStarted()).toBe(false);
+    expect(mockUIOhook.off).toHaveBeenCalled();
+
+    // Second stop call is safe no-op
+    expect(() => hook.stop()).not.toThrow();
   });
 });
