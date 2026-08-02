@@ -374,7 +374,7 @@ describe("transcribe", () => {
       expect(mockGenerateContent).toHaveBeenCalledTimes(2);
     });
 
-    test("skips secondary text translation fallback when abortSignal is aborted", async () => {
+    test("aborts translation flow when abortSignal is aborted", async () => {
       const { transcribeDetailed } = await import("../../services/stt.js");
       const controller = new AbortController();
       mockGenerateContent.mockImplementationOnce(async () => {
@@ -383,15 +383,12 @@ describe("transcribe", () => {
       });
 
       const data = new ArrayBuffer(10);
-      const res = await transcribeDetailed(data, {
+      expect(transcribeDetailed(data, {
         provider: "gemini",
         dictationPreset: "code_comment",
         translateEnabled: true,
         abortSignal: controller.signal,
-      });
-
-      expect(res.text).toBe("မင်္ဂလာပါ");
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+      })).rejects.toThrow("Transcription cancelled");
     });
   });
 });

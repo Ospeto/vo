@@ -102,12 +102,11 @@ describe("Burmese Coding Translation Baseline (PR 1)", () => {
       }
     });
 
-    it("purges Burmese characters when translation is ON (translateEnabled: true)", () => {
+    it("preserves Burmese script losslessly in sanitizeTranscribedText when translation is ON (leaving fail-closed guard to detect residue)", () => {
       for (const fix of fixtures) {
         const sanitized = sanitizeTranscribedText(fix.text, "ghostty", "code_comment", [], true);
-        expect(sanitized).toBe(fix.expectedSanitized.translationOn);
-        // Assert no Burmese Unicode characters remain in translationOn sanitized output
-        expect(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(sanitized)).toBe(false);
+        // Sanitizer no longer silently purges Burmese Unicode
+        expect(sanitized).toBe(fix.expectedSanitized.translationOff);
       }
     });
   });

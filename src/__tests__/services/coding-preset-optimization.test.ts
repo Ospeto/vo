@@ -53,26 +53,26 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
       expect(instructions).toContain("ZERO BOILERPLATE & ZERO PREAMBLES");
     });
 
-    test("sanitizeTranscribedText purges Burmese script lines when translateEnabled is true", () => {
+    test("sanitizeTranscribedText preserves Burmese script losslessly when translateEnabled is true so fail-closed guard can inspect residue", () => {
       const input = "Return early if userId is null or undefined\nပြန်တော့လုပ်ရဦးမလားလို့";
       const result = sanitizeTranscribedText(input, "VS Code", "code_comment", undefined, true);
 
-      expect(result).toBe("Return early if userId is null or undefined");
-      expect(result).not.toContain("ပြန်တော့");
+      expect(result).toBe("Return early if userId is null or undefined\nပြန်တော့လုပ်ရဦးမလားလို့");
+      expect(result).toContain("ပြန်တော့");
     });
 
-    test("sanitizeTranscribedText strips residual Burmese characters from mixed lines when translateEnabled is true", () => {
+    test("sanitizeTranscribedText preserves residual Burmese characters on mixed lines when translateEnabled is true", () => {
       const input = "Refactor this function to handle errors gracefully ပြန်ကြည့်ပေးပါ";
       const result = sanitizeTranscribedText(input, "Cursor", "code_comment", undefined, true);
 
-      expect(result).toBe("Refactor this function to handle errors gracefully");
-      expect(result).not.toContain("ပြန်ကြည့်ပေးပါ");
+      expect(result).toBe("Refactor this function to handle errors gracefully ပြန်ကြည့်ပေးပါ");
+      expect(result).toContain("ပြန်ကြည့်ပေးပါ");
     });
 
-    test("sanitizeTranscribedText removes Burmese-only output when translateEnabled is true", () => {
+    test("sanitizeTranscribedText preserves Burmese-only output when translateEnabled is true", () => {
       const result = sanitizeTranscribedText("ပြန်တော့လုပ်ရဦးမလားလို့", "Cursor", "code_comment", undefined, true);
 
-      expect(result).toBe("");
+      expect(result).toBe("ပြန်တော့လုပ်ရဦးမလားလို့");
     });
   });
 
