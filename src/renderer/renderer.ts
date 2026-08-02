@@ -846,11 +846,14 @@ export async function renderHistory() {
     el.title = "Click to copy text to clipboard";
     el.addEventListener("click", async () => {
       try {
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+          throw new Error("Clipboard API unavailable");
+        }
         await navigator.clipboard.writeText(item.text);
         const originalText = metaEl.textContent;
         metaEl.textContent = "";
         const copiedSpan = document.createElement("span");
-        copiedSpan.style.color = "#34d399";
+        copiedSpan.style.color = "#2dd4bf";
         copiedSpan.style.fontWeight = "600";
         copiedSpan.textContent = "✓ Copied to clipboard!";
         metaEl.appendChild(copiedSpan);
@@ -918,7 +921,7 @@ window.addEventListener("unload", cleanupSettingsSubscriptions);
 function updateStatusBadge(state: AppState, message?: string) {
   if (!statusDot || !statusLabel) return;
 
-  const containerEl = document.querySelector(".container");
+  const containerEl = document.querySelector(".panel");
   if (state === "recording" || state === "starting") {
     containerEl?.classList.add("recording-pulse");
   } else {

@@ -1,10 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, symlinkSync } from "node:fs";
 import {
   calculateDictationCost,
   getMonthlyTotalCost,
+  getHistoryEntries,
   addHistoryEntry,
   clearHistory,
   setHistoryDirForTests,
@@ -51,6 +52,18 @@ describe("history-service cost audit", () => {
     const ledger = loadCostLedger();
     const expectedCost = calculateDictationCost(5, text.length, "gemini-3.1-flash-lite", false);
     expect(ledger.lifetimeCost).toBeCloseTo(expectedCost, 5);
+  });
+
+  test("clearHistory replaces symlink without overwriting its target", () => {
+    const historyPath = join(testDir, "history.json");
+    const targetPath = join(testDir, "outside.json");
+    writeFileSync(targetPath, "keep me");
+    symlinkSync(targetPath, historyPath);
+
+    clearHistory();
+
+    expect(readFileSync(targetPath, "utf8")).toBe("keep me");
+    expect(getHistoryEntries()).toEqual([]);
   });
 
   test("getMonthlyTotalCost sums monthly entries and records in cost-ledger.json", () => {
