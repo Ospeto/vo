@@ -14,11 +14,11 @@
         <div class="logo-mark">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="url(#grad1)"/>
-            <path d="M9.5 16.5l7-4.5-7-4.5v9z" fill="#007AFF"/>
+            <path d="M9.5 16.5l7-4.5-7-4.5v9z" fill="#38bdf8"/>
             <defs>
               <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#007AFF"/>
-                <stop offset="100%" stop-color="#10B981"/>
+                <stop offset="0%" stop-color="#38bdf8"/>
+                <stop offset="100%" stop-color="#34d399"/>
               </linearGradient>
             </defs>
           </svg>
@@ -150,7 +150,7 @@
           <div class="modal-section-group">
             <label class="section-label">Voice AI Edit Shortcut (Selection Transform)</label>
             <div class="shortcut-settings-row">
-              <span id="editKeycapDisplay" class="keycaps" style="color: #c084fc; border-color: rgba(192, 132, 252, 0.4);">⌃⌥⌘E</span>
+              <span id="editKeycapDisplay" class="keycaps keycaps-purple">⌃⌥⌘E</span>
               <button id="recordEditBtn" class="action-btn">Record Shortcut</button>
               <button id="resetEditShortcutBtn" class="link-btn-danger" title="Reset to ⌃⌥⌘E">Reset</button>
             </div>
@@ -162,7 +162,7 @@
             <label class="section-label" for="modeSelect">Dictation Mode</label>
             <div class="chime-card-row">
               <div class="chime-card-header">
-                <span class="chime-step-badge" style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">Trigger</span>
+                <span class="chime-step-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc; border-color: rgba(192, 132, 252, 0.3);">Trigger</span>
                 <span class="chime-step-title">Shortcut Activation Mode</span>
               </div>
               <div class="chime-card-controls">
@@ -172,7 +172,7 @@
                 </select>
               </div>
             </div>
-            <p id="modeSelectHelp" class="setting-desc chime-card-desc" style="font-size: 11px; color: #94a3b8; margin: 6px 0 0 0;">
+            <p id="modeSelectHelp" class="setting-desc chime-card-desc" style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
               Toggle: Press shortcut once to start recording, press again to stop. Hold: Hold shortcut down while speaking, release key to finish recording.
             </p>
           </div>
@@ -182,7 +182,7 @@
             <label class="section-label" for="micDeviceSelect">Microphone Input Device</label>
             <div class="chime-card-row">
               <div class="chime-card-header">
-                <span class="chime-step-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Audio Input</span>
+                <span class="chime-step-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(52, 211, 153, 0.3);">Audio Input</span>
                 <span class="chime-step-title">Hardware Mic</span>
               </div>
               <div class="chime-card-controls">
@@ -198,7 +198,7 @@
             <label class="section-label" for="settingModelSelect">Default Gemini Model</label>
             <div class="chime-card-row">
               <div class="chime-card-header">
-                <span class="chime-step-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">AI Model</span>
+                <span class="chime-step-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(96, 165, 250, 0.3);">AI Model</span>
                 <span class="chime-step-title">Default Speech Engine</span>
               </div>
               <div class="chime-card-controls">
@@ -219,7 +219,7 @@
             <label class="section-label" for="targetLanguageSelect">Target Translation Language</label>
             <div class="chime-card-row">
               <div class="chime-card-header">
-                <span class="chime-step-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Translation</span>
+                <span class="chime-step-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(52, 211, 153, 0.3);">Translation</span>
                 <span class="chime-step-title">Target Language</span>
               </div>
               <div class="chime-card-controls">
@@ -241,20 +241,20 @@
           <!-- Silence Auto-Endpointing & Transcription Delay Section -->
           <div class="modal-section-group">
             <label class="section-label">Silence Endpointing & Transcription Delay</label>
-            <div class="sound-setting-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div class="sound-setting-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
               <div>
-                <span class="setting-title" style="font-weight: 500; font-size: 13px;">Enable Auto-Endpointing</span>
-                <p class="setting-desc" style="font-size: 11px; color: #94a3b8; margin: 2px 0 0 0;">Automatically end recording when silence is detected</p>
+                <span class="setting-title" style="font-weight: 500; font-size: 12px;">Enable Auto-Endpointing</span>
+                <p class="setting-desc" style="font-size: 10.5px; color: #94a3b8; margin-top: 1px;">Automatically end recording when silence is detected</p>
               </div>
-              <input type="checkbox" id="autoEndpointToggle" checked style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
+              <input type="checkbox" id="autoEndpointToggle" checked style="width: 16px; height: 16px; accent-color: #38bdf8; cursor: pointer;">
             </div>
             <div class="chime-card-row">
               <div class="chime-card-header">
-                <span class="chime-step-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">Silence Gap</span>
+                <span class="chime-step-badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; border-color: rgba(251, 191, 36, 0.3);">Silence Gap</span>
                 <span class="chime-step-title">Transcription Delay (Seconds)</span>
               </div>
               <div class="chime-card-controls">
-                <input type="number" id="transcriptionDelayInput" min="0" max="10" step="0.1" value="0.5" class="chime-select" style="width: 100px; font-size: 12px; padding: 4px 8px;" aria-label="Transcription Delay in Seconds">
+                <input type="number" id="transcriptionDelayInput" min="0" max="10" step="0.1" value="0.5" class="chime-select" style="width: 90px; font-size: 11.5px; padding: 4px 8px;" aria-label="Transcription Delay in Seconds">
               </div>
             </div>
           </div>
@@ -321,31 +321,31 @@
               <input type="password" id="geminiApiKey2Input" placeholder="Primary Key 2 (Optional Backup)" class="chime-select" style="font-size: 11px; padding: 6px 10px;" aria-label="Gemini Key 2">
               <input type="password" id="geminiApiKey3Input" placeholder="Primary Key 3 (Optional Backup)" class="chime-select" style="font-size: 11px; padding: 6px 10px;" aria-label="Gemini Key 3">
             </div>
-            <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 4px;">Requests will automatically rotate between Key 1, 2, and 3 to triple your rate limits.</span>
+            <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 4px;">Requests will automatically rotate between Key 1, 2, and 3 to triple your rate limits.</span>
             <span id="apiKeyFeedback" class="feedback-msg"></span>
           </div>
 
           <!-- Fallback Paid API Key Section -->
-          <div class="modal-section-group" style="margin-top: 10px;">
+          <div class="modal-section-group">
             <label class="section-label" for="geminiFallbackApiKeyInput" style="display: flex; align-items: center; gap: 6px;">
               <span>Fallback Paid API Key</span>
-              <span class="cost-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">Emergency Backup</span>
+              <span class="cost-badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; border-color: rgba(251, 191, 36, 0.3);">Emergency Backup</span>
             </label>
             <div class="apiKey-settings-row">
               <input type="password" id="geminiFallbackApiKeyInput" placeholder="Paste Paid Gemini API Key (Emergency Failover Backup)" aria-label="Fallback Gemini API Key">
               <button id="saveFallbackApiKeyBtn" class="action-btn-sm">Save</button>
             </div>
-            <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 2px;">Optional paid key used only if all primary keys hit rate limits or fail.</span>
+            <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 2px;">Optional paid key used only if all primary keys hit rate limits or fail.</span>
             <span id="fallbackApiKeyFeedback" class="feedback-msg"></span>
           </div>
         </div>
 
         <!-- TAB 3: VOCABULARY & TEXT RULES -->
         <div id="tab-dictionary" class="tab-pane hidden">
-          <div class="modal-section-group" style="border-color: rgba(34, 197, 94, 0.3); background: rgba(34, 197, 94, 0.05);">
+          <div class="modal-section-group" style="border-color: rgba(52, 211, 153, 0.3); background: rgba(16, 185, 129, 0.05);">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-              <label class="section-label" style="color: #86efac; margin-bottom: 0;">Vocabulary & Text Rules</label>
-              <span id="vocabTotalCountBadge" class="cost-badge" style="background: rgba(34, 197, 94, 0.15); color: #86efac;">0 Entries</span>
+              <label class="section-label" style="color: #34d399; margin-bottom: 0;">Vocabulary & Text Rules</label>
+              <span id="vocabTotalCountBadge" class="cost-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(52, 211, 153, 0.3);">0 Entries</span>
             </div>
 
             <!-- Add / Edit Entry Form -->
@@ -361,7 +361,7 @@
               </select>
               <button id="addDictionaryEntryBtn" type="button" class="action-btn-sm">+ Add Entry</button>
             </div>
-            <div id="dictionaryValidation" role="alert" style="color:#fca5a5;font-size:10px;min-height:14px;margin-top:4px;"></div>
+            <div id="dictionaryValidation" role="alert" style="color: #f43f5e; font-size: 10px; min-height: 14px; margin-top: 4px;"></div>
 
             <!-- Useful Filters Bar -->
             <div id="dictionaryFilterBar" style="display: flex; gap: 6px; margin-top: 10px; margin-bottom: 6px; overflow-x: auto;">
@@ -372,18 +372,17 @@
             </div>
 
             <!-- Unified Entries Container -->
-            <div id="dictionaryEntriesContainer" class="vocab-tags" style="margin-top:6px;max-height:160px;overflow-y:auto;"></div>
+            <div id="dictionaryEntriesContainer" class="vocab-tags" style="margin-top: 6px; max-height: 160px; overflow-y: auto;"></div>
           </div>
 
-          
           <!-- Dynamic Workspace Symbol Scanner Toggle Section -->
-          <div class="modal-section-group" style="margin-top: 10px;">
+          <div class="modal-section-group">
             <div class="sound-setting-row" style="display: flex; align-items: center; justify-content: space-between;">
               <div>
-                <label for="symbolScannerToggle" style="font-size: 11.5px; font-weight: 600; color: #f4f4f5; display: block;">Dynamic Symbol Scanner</label>
-                <span style="font-size: 9.5px; color: #a1a1aa; display: block; margin-top: 1px;">Auto-extract project symbols to prevent code hallucinations</span>
+                <label for="symbolScannerToggle" style="font-size: 11.5px; font-weight: 600; color: #f8fafc; display: block;">Dynamic Symbol Scanner</label>
+                <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 1px;">Auto-extract project symbols to prevent code hallucinations</span>
               </div>
-              <input type="checkbox" id="symbolScannerToggle" checked style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
+              <input type="checkbox" id="symbolScannerToggle" checked style="width: 16px; height: 16px; accent-color: #38bdf8; cursor: pointer;">
             </div>
           </div>
         </div>

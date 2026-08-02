@@ -72,11 +72,13 @@ mock.module("@napi-rs/whisper", () => ({
 }));
 
 const { setGeminiClientForTests, setGeminiFallbackClientForTests } = await import("../../services/gemini-client.js");
+const { loadConfig, updateConfig } = await import("../../services/config.js");
 const { transcribe } = await import("../../services/stt.js");
 
 describe("transcribe", () => {
   let savedEnv: Record<string, string | undefined>;
   let fakeWhisperPath: string | null = null;
+  let savedTranslateEnabled: boolean | undefined;
 
   beforeEach(() => {
     savedEnv = {
@@ -85,6 +87,9 @@ describe("transcribe", () => {
       GEMINI_API_KEY: process.env.GEMINI_API_KEY,
       WHISPER_MODEL_PATH: process.env.WHISPER_MODEL_PATH,
     };
+    savedTranslateEnabled = loadConfig().translateEnabled;
+    updateConfig(process.cwd(), { translateEnabled: false });
+
     setGeminiClientForTests(mockGeminiClient as any);
     setGeminiFallbackClientForTests(mockGeminiFallbackClient as any);
     fakeWhisperPath = join(tmpdir(), `fake-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
@@ -102,6 +107,9 @@ describe("transcribe", () => {
   });
 
   afterEach(() => {
+    if (savedTranslateEnabled !== undefined) {
+      updateConfig(process.cwd(), { translateEnabled: savedTranslateEnabled });
+    }
     setGeminiClientForTests(null);
     setGeminiFallbackClientForTests(null);
     if (fakeWhisperPath && existsSync(fakeWhisperPath)) {
