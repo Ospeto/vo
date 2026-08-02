@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, mock } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 
 // Mock logger
 mock.module("../../services/logger.js", () => ({
@@ -96,6 +96,14 @@ function simulateKeyUp(keycode: number) {
   }
 }
 
+const activeHooks: InstanceType<typeof FnHook>[] = [];
+
+function createHook(...args: ConstructorParameters<typeof FnHook>): InstanceType<typeof FnHook> {
+  const hook = new FnHook(...args);
+  activeHooks.push(hook);
+  return hook;
+}
+
 describe("FnHook", () => {
   beforeEach(() => {
     keydownCallbacks.length = 0;
@@ -107,10 +115,17 @@ describe("FnHook", () => {
     mockUIOhook.stop.mockClear();
   });
 
+  afterEach(() => {
+    for (const hook of activeHooks) {
+      hook.stop();
+    }
+    activeHooks.length = 0;
+  });
+
   test("starts uiohook on start()", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false }; // ctrl+t
-    const hook = new FnHook(callbacks, binding, "ctrl+t");
+    const hook = createHook(callbacks, binding, "ctrl+t");
 
     hook.start();
     expect(mockUIOhook.start).toHaveBeenCalled();
@@ -120,7 +135,7 @@ describe("FnHook", () => {
   test("does not double-start", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     hook.start();
     hook.start(); // second call should be no-op
@@ -131,7 +146,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
     simulateKeyDown(20, { ctrlKey: true });
@@ -143,7 +158,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
 
@@ -160,7 +175,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
 
@@ -177,7 +192,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: true, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "ctrl+t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "ctrl+t");
 
     hook.start();
     simulateKeyDown(20, { ctrlKey: true });
@@ -191,7 +206,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "t");
 
     hook.start();
     simulateKeyDown(20, {});
@@ -209,7 +224,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "t");
 
     hook.start();
     simulateKeyDown(20, {});
@@ -223,7 +238,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onFnUp = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "t");
 
     hook.start();
 
@@ -236,7 +251,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const callbacks = { onFnDown, onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     hook.start();
     hook.stop();
@@ -250,7 +265,7 @@ describe("FnHook", () => {
   test("stop() is no-op when not started", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     hook.stop(); // should not throw
     expect(mockUIOhook.stop).not.toHaveBeenCalled();
@@ -259,7 +274,7 @@ describe("FnHook", () => {
   test("isFnDown tracks active state", () => {
     const callbacks = { onFnDown: mock(() => {}), onFnUp: mock(() => {}) };
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook(callbacks, binding, "t");
+    const hook = createHook(callbacks, binding, "t");
 
     expect(hook.isFnDown).toBe(false);
 
@@ -276,7 +291,7 @@ describe("FnHook", () => {
     const onFnUp = mock(() => {});
     // meta+shift+i: keycode=23 (I), meta=true, shift=true
     const binding = { keycode: 23, ctrl: false, shift: true, alt: false, meta: true };
-    const hook = new FnHook({ onFnDown, onFnUp }, binding, "meta+shift+i");
+    const hook = createHook({ onFnDown, onFnUp }, binding, "meta+shift+i");
 
     hook.start();
     simulateKeyDown(23, { metaKey: true, shiftKey: true });
@@ -294,7 +309,7 @@ describe("FnHook", () => {
 
     const onTrustLost = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}), onTrustLost }, binding, "t");
+    const hook = createHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}), onTrustLost }, binding, "t");
 
     hook.start();
     expect(hook.isStarted()).toBe(true);
@@ -327,7 +342,7 @@ describe("FnHook", () => {
     const onFnDown = mock(() => {});
     const onTrustLost = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown, onFnUp: mock(() => {}), onTrustLost }, binding, "t");
+    const hook = createHook({ onFnDown, onFnUp: mock(() => {}), onTrustLost }, binding, "t");
 
     hook.start();
 
@@ -346,7 +361,7 @@ describe("FnHook", () => {
 
   test("stop() is idempotent and handles uIOhook.stop() native exceptions gracefully", () => {
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
-    const hook = new FnHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}) }, binding, "t");
+    const hook = createHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}) }, binding, "t");
 
     hook.start();
 
