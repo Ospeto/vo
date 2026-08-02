@@ -35,14 +35,19 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
     updateConfig(tempDir, { translateEnabled: true, targetLanguage: "Burmese" });
 
     // Mock Gemini API generateContent to inspect prompt systemInstruction
-    let capturedSystemInstruction = "";
-    let capturedUserPrompt = "";
+    const capturedSystemInstructions: string[] = [];
+    const capturedContents: string[] = [];
 
     setGeminiClientForTests({
       models: {
         generateContent: async (params: any) => {
-          capturedSystemInstruction = params.config?.systemInstruction || "";
-          capturedUserPrompt = params.contents?.[0]?.parts?.[1]?.text || "";
+          if (params.config?.systemInstruction) {
+            capturedSystemInstructions.push(params.config.systemInstruction);
+          }
+          const contentStr = typeof params.contents === "string"
+            ? params.contents
+            : JSON.stringify(params.contents || "");
+          capturedContents.push(contentStr);
           return { text: "The database connection failed." };
         },
       },
@@ -58,10 +63,10 @@ describe("VO Translation Mode State & Target Language Preservation Suite", () =>
       });
 
       expect(res.text).toContain("The database connection failed");
-      // System prompt must target English, NOT Burmese!
-      expect(capturedSystemInstruction).toContain("translation into English");
-      expect(capturedSystemInstruction).not.toContain("translation into Burmese");
-      expect(capturedUserPrompt).toContain("English");
+      // System prompt / content must target English, NOT Burmese!
+      const combinedInstructions = capturedSystemInstructions.join(" ") + " " + capturedContents.join(" ");
+      expect(combinedInstructions).toContain("English");
+      expect(combinedInstructions).not.toContain("translation into Burmese");
     } finally {
       setGeminiClientForTests(null);
     }

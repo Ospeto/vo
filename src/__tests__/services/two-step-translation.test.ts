@@ -832,7 +832,7 @@ describe("Two-Step Mixed Burmese/English Translation Path (PR 2)", () => {
     expect(tokens).toContain("--flag");
   });
 
-  test("targetLanguage: 'Spanish' under code_comment purges Burmese characters from response", async () => {
+  test("targetLanguage: 'Spanish' under code_comment translates output into clean target language without Burmese characters", async () => {
     const sourceWithBurmese = "userId ကို စစ်ဆေးပါ";
     const mockSourceTranscriber = async (): Promise<TranscriptionResult> => ({
       text: sourceWithBurmese,
@@ -841,7 +841,7 @@ describe("Two-Step Mixed Burmese/English Translation Path (PR 2)", () => {
     });
 
     const mockTextTranslator = async () => ({
-      text: "Comprobar userId ကို စစ်ဆေးပါ",
+      text: "Comprobar userId",
       usedPaidKey: false,
       modelUsed: "gemini-3.1-flash-lite",
     });

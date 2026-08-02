@@ -349,22 +349,14 @@ function removeSpokenRepeats(text: string): string {
   return transformOutsideCodeRegions(text, removeRepeats);
 }
 
+export const BURMESE_UNICODE_REGEX = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/;
+
 export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean, targetLanguage?: string): string {
   if (!text) return "";
 
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
   const effectiveDictionaryEntries = dictionaryEntries ?? loadPersistedVocabulary().entries ?? [];
   let cleaned = text.trim();
-
-  // Filter out unwanted Burmese raw text lines or inline Burmese script ONLY when code_comment preset is active AND translate toggle is ON AND target language is NOT Burmese
-  if (effectivePreset === "code_comment" && translateEnabled === true && targetLanguage !== "Burmese") {
-    const purged = cleaned
-      .split("\n")
-      .map(line => line.replace(/[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]+/g, "").trim())
-      .filter(line => line.length > 0)
-      .join("\n");
-    cleaned = purged;
-  }
 
   // 1. Strip wrapping quotes added by LLMs
   if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
@@ -1015,6 +1007,74 @@ export async function transcribeDetailed(
     ? providerOrOptions.dictionaryEntries
     : migrateVocabulary(customVocabulary || [], presetVocabulary || {}, persistedVocabulary.entries || [], loadUserDictionary());
 
+  let isTranslationActive = translateEnabled;
+  let appPresetMappings: Record<string, DictationPreset> | undefined;
+  try {
+    const { loadConfig } = await import("./config.js");
+    const cfg = loadConfig();
+    appPresetMappings = cfg.appPresetMappings;
+    if (isTranslationActive === undefined) {
+      isTranslationActive = cfg.translateEnabled ?? false;
+    }
+  } catch {
+    isTranslationActive = isTranslationActive ?? false;
+  }
+
+  let effectiveTargetLang = targetLanguage;
+  if (!effectiveTargetLang) {
+    try {
+      const { loadConfig } = await import("./config.js");
+      const cfg = loadConfig();
+      effectiveTargetLang = cfg.targetLanguage;
+    } catch {
+      effectiveTargetLang = undefined;
+    }
+  }
+
+  const rawPreset = resolveEffectivePreset(dictationPreset, activeApp, appPresetMappings);
+  const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
+  if (rawPreset === "translate") {
+    isTranslationActive = true;
+  }
+
+  const isTranslationTargetingNonBurmese = isTranslationActive === true && (effectiveTargetLang ?? "English") !== "Burmese";
+
+  if (isTranslationTargetingNonBurmese && !abortSignal?.aborted) {
+    const { executeTwoStepTranslation } = await import("./two-step-translation.js");
+    const result = await executeTwoStepTranslation(audioData, {
+      sourceProvider: provider,
+      geminiModel,
+      dictationPreset: dictationPreset ?? effectivePreset,
+      customVocabulary,
+      presetVocabulary,
+      dictionaryEntries,
+      symbolScannerEnabled,
+      workspacePath,
+      targetLanguage: effectiveTargetLang,
+      abortSignal,
+      activeApp,
+    });
+
+    if (result.success && result.finalText) {
+      const finalText = result.finalText;
+      if (BURMESE_UNICODE_REGEX.test(finalText)) {
+        throw new Error("Translation incomplete: Burmese script remained in transcript");
+      }
+      return {
+        text: finalText,
+        usedPaidKey: result.translationStage?.usedPaidKey || result.sourceStage.usedPaidKey || false,
+        modelUsed: result.translationStage?.modelUsed || result.sourceStage.modelUsed || geminiModel,
+      };
+    } else {
+      if (result.sourceStage?.status === "cancelled" || result.translationStage?.status === "cancelled") {
+        const cancelErr = new Error("Transcription cancelled");
+        cancelErr.name = "AbortError";
+        throw cancelErr;
+      }
+      throw new Error(result.errorReason || "Two-step translation failed");
+    }
+  }
+
   switch (provider) {
     case "local":
       rawText = await transcribeLocal(audioData, abortSignal);
@@ -1051,37 +1111,12 @@ export async function transcribeDetailed(
     }
   }
 
-  let isTranslationActive = translateEnabled;
-  let appPresetMappings: Record<string, DictationPreset> | undefined;
-  try {
-    const { loadConfig } = await import("./config.js");
-    const cfg = loadConfig();
-    appPresetMappings = cfg.appPresetMappings;
-    if (isTranslationActive === undefined) {
-      isTranslationActive = cfg.translateEnabled ?? false;
-    }
-  } catch {
-    isTranslationActive = isTranslationActive ?? false;
-  }
-
-  let effectiveTargetLang = targetLanguage;
-  if (!effectiveTargetLang) {
-    try {
-      const { loadConfig } = await import("./config.js");
-      const cfg = loadConfig();
-      effectiveTargetLang = cfg.targetLanguage;
-    } catch {
-      effectiveTargetLang = undefined;
-    }
-  }
-
-  const rawPreset = resolveEffectivePreset(dictationPreset, activeApp, appPresetMappings);
-  const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
-  if (rawPreset === "translate") {
-    isTranslationActive = true;
-  }
-
   const sanitized = sanitizeTranscribedText(rawText, activeApp, effectivePreset, dictionaryEntries, provider === "gemini" && isTranslationActive === true && !abortSignal?.aborted, effectiveTargetLang);
+
+  if (isTranslationTargetingNonBurmese && BURMESE_UNICODE_REGEX.test(sanitized)) {
+    throw new Error("Translation incomplete: Burmese script remained in transcript");
+  }
+
   logger.info({ provider, geminiModel, dictationPreset, effectivePreset, activeApp, rawCharCount: rawText.length, sanitizedCharCount: sanitized.length, usedPaidKey }, "Transcribed detailed and sanitized");
   return { text: sanitized, usedPaidKey, modelUsed: geminiModel };
 }
