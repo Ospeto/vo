@@ -1,6 +1,6 @@
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync, renameSync } from "node:fs";
 import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
 export interface HistoryEntry {
@@ -227,8 +227,10 @@ export function addHistoryEntry(
 export function clearHistory(): void {
   try {
     const historyPath = getHistoryPath();
-    writeFileSync(historyPath, JSON.stringify([], null, 2), { encoding: "utf-8", mode: 0o600 });
-    ensureOwnerOnlyPermissions(historyPath);
+    const tempPath = `${historyPath}.${process.pid}.${Date.now()}.tmp`;
+    writeFileSync(tempPath, JSON.stringify([], null, 2), { encoding: "utf-8", mode: 0o600 });
+    ensureOwnerOnlyPermissions(tempPath);
+    renameSync(tempPath, historyPath);
 
     const legacyDir = customHistoryDir ? join(dirname(dirname(customHistoryDir)), ".pi-voice") : LEGACY_DIR;
     const legacyPath = join(legacyDir, "history.json");

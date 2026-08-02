@@ -83,6 +83,22 @@ html, body {
   border-radius: var(--corner-radius);
   box-shadow: var(--shadow-popover);
   overflow: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.panel.recording-pulse {
+  border-color: rgba(45, 212, 191, 0.65);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 28px rgba(45, 212, 191, 0.3), var(--inset-highlight);
+  animation: recordPulse 1.8s infinite ease-in-out;
+}
+@keyframes recordPulse {
+  0%, 100% {
+    border-color: rgba(45, 212, 191, 0.5);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 20px rgba(45, 212, 191, 0.2), var(--inset-highlight);
+  }
+  50% {
+    border-color: rgba(45, 212, 191, 0.85);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 32px rgba(45, 212, 191, 0.45), var(--inset-highlight);
+  }
 }
 
 .panel::before {
@@ -620,6 +636,135 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--text-main);
   padding: 4px 7px;
   font-size: 11px;
+}
+
+.shortcut-settings-row, .apiKey-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.apiKey-settings-row input {
+  flex: 1;
+  min-width: 0;
+}
+.chime-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.chime-card-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.chime-card-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+.chime-card-desc {
+  display: none !important;
+}
+.vocab-input-row {
+  display: flex;
+  gap: 5px;
+}
+.vocab-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+.vocab-filter-btn {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.vocab-filter-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.1);
+}
+.vocab-filter-btn.active {
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.35);
+  color: var(--accent-teal);
+  font-weight: 600;
+}
+.vocab-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px;
+}
+.vocab-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 10px;
+  color: var(--accent-emerald);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  transition: all 0.15s ease;
+}
+.vocab-tag button,
+.vocab-tag-empty {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+  padding: 3px 0;
+}
+.vocab-tag button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.vocab-tag button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.history-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-main);
+  font-size: 10.5px;
+}
+.history-meta {
+  font-size: 9.5px;
+  color: var(--text-faint);
+  margin-left: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Compact modal controls */
+.chime-step-badge {
+  display: none;
+}
+.chime-step-title {
+  font-size: 10.5px;
+  color: var(--text-secondary);
 }
 
 .chime-preview-btn {
