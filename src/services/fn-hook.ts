@@ -73,7 +73,7 @@ export class FnHook {
   }
 
   public checkTrust(): boolean {
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" || typeof systemPreferences?.isTrustedAccessibilityClient === "function") {
       const trusted = systemPreferences.isTrustedAccessibilityClient(false);
       if (!trusted) {
         this.handleTrustLoss();
@@ -112,7 +112,7 @@ export class FnHook {
     if (this.started) return;
 
     // macOS requires accessibility permissions for global keyboard hooks
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" || typeof systemPreferences?.isTrustedAccessibilityClient === "function") {
       const trusted = systemPreferences.isTrustedAccessibilityClient(true);
       if (!trusted) {
         throw new Error(
@@ -189,7 +189,7 @@ export class FnHook {
     }
     logger.info({ key: this.displayName }, "Started monitoring key");
 
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" || typeof systemPreferences?.isTrustedAccessibilityClient === "function") {
       this.startTrustTimer();
     }
   }
