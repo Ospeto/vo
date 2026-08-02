@@ -72,13 +72,11 @@ mock.module("@napi-rs/whisper", () => ({
 }));
 
 const { setGeminiClientForTests, setGeminiFallbackClientForTests } = await import("../../services/gemini-client.js");
-const { loadConfig, updateConfig } = await import("../../services/config.js");
 const { transcribe } = await import("../../services/stt.js");
 
 describe("transcribe", () => {
   let savedEnv: Record<string, string | undefined>;
   let fakeWhisperPath: string | null = null;
-  let savedTranslateEnabled: boolean | undefined;
 
   beforeEach(() => {
     savedEnv = {
@@ -87,8 +85,6 @@ describe("transcribe", () => {
       GEMINI_API_KEY: process.env.GEMINI_API_KEY,
       WHISPER_MODEL_PATH: process.env.WHISPER_MODEL_PATH,
     };
-    savedTranslateEnabled = loadConfig().translateEnabled;
-    updateConfig(process.cwd(), { translateEnabled: false });
 
     setGeminiClientForTests(mockGeminiClient as any);
     setGeminiFallbackClientForTests(mockGeminiFallbackClient as any);
@@ -107,9 +103,6 @@ describe("transcribe", () => {
   });
 
   afterEach(() => {
-    if (savedTranslateEnabled !== undefined) {
-      updateConfig(process.cwd(), { translateEnabled: savedTranslateEnabled });
-    }
     setGeminiClientForTests(null);
     setGeminiFallbackClientForTests(null);
     if (fakeWhisperPath && existsSync(fakeWhisperPath)) {
@@ -125,7 +118,7 @@ describe("transcribe", () => {
 
   test("transcribes with gemini provider", async () => {
     const data = new ArrayBuffer(100);
-    const result = await transcribe(data, "gemini");
+    const result = await transcribe(data, { provider: "gemini", translateEnabled: false });
     expect(result).toBe("Gemini transcription");
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
   });
@@ -145,7 +138,7 @@ describe("transcribe", () => {
       originalSetTimeout(callback, delay === 2000 ? 1 : delay && delay > 2000 ? 10 : delay, ...args)) as typeof setTimeout;
 
     try {
-      await expect(transcribe(new ArrayBuffer(10), "gemini")).rejects.toThrow("All Gemini STT models failed");
+      await expect(transcribe(new ArrayBuffer(10), { provider: "gemini", translateEnabled: false })).rejects.toThrow("All Gemini STT models failed");
       expect(fallbackSignal?.aborted).toBe(true);
       expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
     } finally {
@@ -157,14 +150,14 @@ describe("transcribe", () => {
 
   test("transcribes with openai provider", async () => {
     const data = new ArrayBuffer(100);
-    const result = await transcribe(data, "openai");
+    const result = await transcribe(data, { provider: "openai", translateEnabled: false });
     expect(result).toBe("Openai transcription");
     expect(mockOpenAITranscription).toHaveBeenCalledTimes(1);
   });
 
   test("transcribes with elevenlabs provider", async () => {
     const data = new ArrayBuffer(100);
-    const result = await transcribe(data, "elevenlabs");
+    const result = await transcribe(data, { provider: "elevenlabs", translateEnabled: false });
     expect(result).toBe("Elevenlabs transcription");
     expect(mockElevenLabsSTT).toHaveBeenCalledTimes(1);
     const [url, init] = mockElevenLabsSTT.mock.calls[0] as [string, RequestInit];
@@ -175,20 +168,20 @@ describe("transcribe", () => {
   test("transcribes with local provider", async () => {
     // local expects Float32Array PCM data
     const samples = new Float32Array([0.1, 0.2, 0.3]);
-    const result = await transcribe(samples.buffer as ArrayBuffer, "local");
+    const result = await transcribe(samples.buffer as ArrayBuffer, { provider: "local", translateEnabled: false });
     expect(result).toBe("Whisper transcription");
     expect(mockWhisperFull).toHaveBeenCalledTimes(1);
   });
 
   test("defaults to gemini provider when not specified", async () => {
     const samples = new Float32Array([0.1, 0.2]);
-    const result = await transcribe(samples.buffer as ArrayBuffer);
+    const result = await transcribe(samples.buffer as ArrayBuffer, { translateEnabled: false });
     expect(result).toBe("Gemini transcription");
   });
 
   test("gemini provider sends base64 audio data", async () => {
     const data = new Uint8Array([1, 2, 3]).buffer;
-    await transcribe(data, "gemini");
+    await transcribe(data, { provider: "gemini", translateEnabled: false });
 
     const calls = mockGenerateContent.mock.calls as any[];
     const content = calls[0]![0].contents[0].parts;
@@ -204,7 +197,7 @@ describe("transcribe", () => {
     }));
 
     const data = new ArrayBuffer(10);
-    const result = await transcribe(data, "gemini");
+    const result = await transcribe(data, { provider: "gemini", translateEnabled: false });
     expect(result).toBe("");
 
     // Restore
@@ -219,7 +212,7 @@ describe("transcribe", () => {
     }));
 
     const data = new ArrayBuffer(10);
-    const result = await transcribe(data, "gemini");
+    const result = await transcribe(data, { provider: "gemini", translateEnabled: false });
     expect(result).toBe("Hello world");
 
     // Restore
@@ -290,7 +283,7 @@ describe("transcribe", () => {
     }));
 
     const data = new ArrayBuffer(10);
-    const result = await transcribeDetailed(data, "gemini");
+    const result = await transcribeDetailed(data, { provider: "gemini", translateEnabled: false });
     expect(result.text).toBe("Paid fallback transcription");
     expect(result.usedPaidKey).toBe(true);
     expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
@@ -302,10 +295,10 @@ describe("transcribe", () => {
     const { transcribeDetailed } = await import("../../services/stt.js");
     const data = new ArrayBuffer(10);
 
-    const openaiRes = await transcribeDetailed(data, "openai");
+    const openaiRes = await transcribeDetailed(data, { provider: "openai", translateEnabled: false });
     expect(openaiRes.usedPaidKey).toBe(true);
 
-    const elevenRes = await transcribeDetailed(data, "elevenlabs");
+    const elevenRes = await transcribeDetailed(data, { provider: "elevenlabs", translateEnabled: false });
     expect(elevenRes.usedPaidKey).toBe(true);
   });
 
@@ -318,7 +311,7 @@ describe("transcribe", () => {
     }));
 
     const data = new ArrayBuffer(10);
-    const result = await transcribe(data, "gemini");
+    const result = await transcribe(data, { provider: "gemini", translateEnabled: false });
     expect(result).toBe("Primary fast result");
     expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(0);
 
