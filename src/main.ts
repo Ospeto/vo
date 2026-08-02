@@ -505,10 +505,12 @@ function handleVoiceUndoCheck(text: string): boolean {
 
 
 
+const POPOVER_SIZE = { width: 390, height: 720 } as const;
+
 function createPopoverWindow() {
   popoverWindow = new BrowserWindow({
-    width: 390,
-    height: 560,
+    width: POPOVER_SIZE.width,
+    height: POPOVER_SIZE.height,
     show: false,
     frame: false,
     transparent: true,
@@ -614,7 +616,7 @@ function togglePopover(focus = false) {
 
     const pos = calculatePopoverPosition(
       trayBounds,
-      { width: 390, height: 560 },
+      POPOVER_SIZE,
       screenBounds
     );
 

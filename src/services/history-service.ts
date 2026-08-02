@@ -226,9 +226,14 @@ export function addHistoryEntry(
 
 export function clearHistory(): void {
   try {
-    const file = getHistoryPath();
-    if (existsSync(file)) {
-      unlinkSync(file);
+    const historyPath = getHistoryPath();
+    writeFileSync(historyPath, JSON.stringify([], null, 2), { encoding: "utf-8", mode: 0o600 });
+    ensureOwnerOnlyPermissions(historyPath);
+
+    const legacyDir = customHistoryDir ? join(dirname(dirname(customHistoryDir)), ".pi-voice") : LEGACY_DIR;
+    const legacyPath = join(legacyDir, "history.json");
+    if (existsSync(legacyPath)) {
+      try { unlinkSync(legacyPath); } catch {}
     }
   } catch {}
 }

@@ -846,13 +846,15 @@ export async function renderHistory() {
     el.title = "Click to copy text to clipboard";
     el.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(item.text);
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(item.text);
+        }
         const originalText = metaEl.textContent;
         metaEl.textContent = "";
         const copiedSpan = document.createElement("span");
-        copiedSpan.style.color = "#34d399";
+        copiedSpan.style.color = "#2dd4bf";
         copiedSpan.style.fontWeight = "600";
-        copiedSpan.textContent = "✓ Copied to clipboard!";
+        copiedSpan.textContent = "✓ Copied!";
         metaEl.appendChild(copiedSpan);
         setTimeout(() => {
           metaEl.textContent = originalText;
