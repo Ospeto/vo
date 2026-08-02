@@ -211,6 +211,30 @@ function cancelDictation(reason: string = "Cancelled") {
   setState("idle", reason);
 }
 
+export function handleTrustLost() {
+  logger.warn("Accessibility trust lost at runtime; cancelling active dictation if any and showing error state");
+  if (currentState !== "idle") {
+    cancelDictation("Accessibility/Input Monitoring permission revoked at runtime");
+  }
+  setState(
+    "error",
+    "Accessibility/Input Monitoring permissions required. Please grant access in System Preferences > Privacy & Security > Accessibility."
+  );
+}
+
+function createHotkeyCallbacks(): HotkeyCallbacks {
+  return {
+    onDown: (mode) => handleHotkeyDown(mode),
+    onUp: () => handleHotkeyUp(),
+    onCancel: () => {
+      if (currentState !== "idle") {
+        cancelDictation("Cancelled via Escape key");
+      }
+    },
+    onTrustLost: () => handleTrustLost(),
+  };
+}
+
 let hudWindow: BrowserWindow | null = null;
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null;
 let errorResetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1043,15 +1067,7 @@ function setupIpcHandlers() {
       await hotkeyService.stop();
       const hotkeyRes = await hotkeyService.start(
         currentConfig.key,
-        {
-          onDown: (mode) => handleHotkeyDown(mode),
-          onUp: () => handleHotkeyUp(),
-          onCancel: () => {
-            if (currentState !== "idle") {
-              cancelDictation("Cancelled via Escape key");
-            }
-          },
-        },
+        createHotkeyCallbacks(),
         currentConfig.editKey,
         currentConfig.dictationMode
       );
@@ -1061,15 +1077,7 @@ function setupIpcHandlers() {
         await hotkeyService.stop();
         const restoreRes = await hotkeyService.start(
           currentConfig.key,
-          {
-            onDown: (mode) => handleHotkeyDown(mode),
-            onUp: () => handleHotkeyUp(),
-            onCancel: () => {
-              if (currentState !== "idle") {
-                cancelDictation("Cancelled via Escape key");
-              }
-            },
-          },
+          createHotkeyCallbacks(),
           currentConfig.editKey,
           previousDictationMode
         );
@@ -1152,15 +1160,7 @@ function setupIpcHandlers() {
 
     const res = await hotkeyService.replace(
       newKeyStr,
-      {
-        onDown: (mode) => handleHotkeyDown(mode),
-        onUp: () => handleHotkeyUp(),
-        onCancel: () => {
-          if (currentState !== "idle") {
-            cancelDictation("Cancelled via Escape key");
-          }
-        },
-      },
+      createHotkeyCallbacks(),
       formatKeyBinding(currentConfig.editKey),
       currentConfig.dictationMode
     );
@@ -1180,15 +1180,7 @@ function setupIpcHandlers() {
       const binding = parseKeyBinding(newKeyStr);
       const res = await hotkeyService.start(
         currentConfig.key,
-        {
-          onDown: (mode) => handleHotkeyDown(mode),
-          onUp: () => handleHotkeyUp(),
-          onCancel: () => {
-            if (currentState !== "idle") {
-              cancelDictation("Cancelled via Escape key");
-            }
-          },
-        },
+        createHotkeyCallbacks(),
         binding,
         currentConfig.dictationMode
       );
@@ -1430,15 +1422,7 @@ export async function runStartupSequence(cwd: string = workingCwd): Promise<bool
     hotkeyService = new HotkeyService();
     const hotkeyRes = await hotkeyService.start(
       currentConfig.key,
-      {
-        onDown: (mode) => handleHotkeyDown(mode),
-        onUp: () => handleHotkeyUp(),
-        onCancel: () => {
-          if (currentState !== "idle") {
-            cancelDictation("Cancelled via Escape key");
-          }
-        },
-      },
+      createHotkeyCallbacks(),
       currentConfig.editKey,
       currentConfig.dictationMode
     );

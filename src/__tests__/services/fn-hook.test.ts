@@ -286,4 +286,76 @@ describe("FnHook", () => {
     simulateKeyUp(42); // UiohookKey.Shift
     expect(onFnUp).toHaveBeenCalledTimes(1);
   });
+
+  test("runtime trust loss triggers onTrustLost callback and stops uIOhook cleanly", async () => {
+    const { systemPreferences } = await import("electron");
+    let trustedMock = true;
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation((prompt: boolean) => trustedMock);
+
+    const onTrustLost = mock(() => {});
+    const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
+    const hook = new FnHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}), onTrustLost }, binding, "t");
+
+    hook.start();
+    expect(hook.isStarted()).toBe(true);
+
+    // Simulate runtime revocation of Accessibility permission
+    trustedMock = false;
+
+    // Check trust explicitly
+    const isOk = hook.checkTrust();
+    expect(isOk).toBe(false);
+    expect(hook.isStarted()).toBe(false);
+    expect(onTrustLost).toHaveBeenCalledTimes(1);
+    expect(mockUIOhook.stop).toHaveBeenCalled();
+
+    // Repeated checkTrust is idempotent
+    hook.checkTrust();
+    expect(onTrustLost).toHaveBeenCalledTimes(1);
+
+    // Restore mock default
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
+  });
+
+  test("key event discards execution and stops hook if trust lost at runtime", async () => {
+    const { systemPreferences } = await import("electron");
+    let trustedMock = true;
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => trustedMock);
+
+    const onFnDown = mock(() => {});
+    const onTrustLost = mock(() => {});
+    const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
+    const hook = new FnHook({ onFnDown, onFnUp: mock(() => {}), onTrustLost }, binding, "t");
+
+    hook.start();
+
+    // Revoke permission before key down
+    trustedMock = false;
+    simulateKeyDown(20, {});
+
+    expect(onFnDown).not.toHaveBeenCalled();
+    expect(hook.isStarted()).toBe(false);
+    expect(onTrustLost).toHaveBeenCalledTimes(1);
+
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
+  });
+
+  test("stop() is idempotent and handles uIOhook.stop() native exceptions gracefully", () => {
+    const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
+    const hook = new FnHook({ onFnDown: mock(() => {}), onFnUp: mock(() => {}) }, binding, "t");
+
+    hook.start();
+
+    // Force uIOhook.stop to throw (simulating broken native CGEventTap on revocation)
+    mockUIOhook.stop.mockImplementationOnce(() => {
+      throw new Error("CGEventTap is invalid");
+    });
+
+    expect(() => hook.stop()).not.toThrow();
+    expect(hook.isStarted()).toBe(false);
+    expect(mockUIOhook.off).toHaveBeenCalled();
+
+    // Second stop call is safe no-op
+    expect(() => hook.stop()).not.toThrow();
+  });
 });
