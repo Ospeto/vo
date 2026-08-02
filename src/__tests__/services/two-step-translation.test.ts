@@ -1115,6 +1115,59 @@ describe("Two-Step Mixed Burmese/English Translation Path (PR 2)", () => {
     }
   });
 
+  test("buildTextTranslatorPrompt generates enhanced engineering prompt when dictationPreset is code_comment", () => {
+    const prompt = buildTextTranslatorPrompt("user id null ဖြစ်ရင် return လုပ်ပါ", {
+      dictationPreset: "code_comment",
+      activeApp: "Cursor",
+      fileExtension: ".ts",
+      workspaceSymbols: ["loadUser", "userId"],
+      targetLanguage: "English",
+    });
+
+    expect(prompt.systemInstruction).toContain("Senior Software Engineer and Technical Specification Architect");
+    expect(prompt.systemInstruction).toContain("CRITICAL CODE PRESET DIRECTIVES");
+    expect(prompt.systemInstruction).toContain("CONCISE ENGINEERING IMPERATIVES");
+    expect(prompt.systemInstruction).toContain("INLINE BACKTICKS FOR SYMBOLS");
+    expect(prompt.systemInstruction).toContain("Active Application: Cursor");
+    expect(prompt.systemInstruction).toContain("Active Workspace Symbols: loadUser, userId");
+    expect(prompt.systemInstruction).toContain("//");
+  });
+
+  test("executeTwoStepTranslation passes dictationPreset, activeApp, and workspaceSymbols down to textTranslator", async () => {
+    let capturedOptions: any;
+
+    const mockSourceTranscriber = async (): Promise<TranscriptionResult> => ({
+      text: "user id null ဖြစ်ရင် return လုပ်ပါ",
+      usedPaidKey: false,
+      modelUsed: "gemini-3.1-flash-lite",
+    });
+
+    const mockTextTranslator = async (
+      sourceText: string,
+      opts: any
+    ) => {
+      capturedOptions = opts;
+      return {
+        text: "Return early if `userId` is null",
+        modelUsed: "gemini-3.1-flash-lite",
+        usedPaidKey: false,
+      };
+    };
+
+    const res = await executeTwoStepTranslation(dummyAudio, {
+      targetLanguage: "English",
+      dictationPreset: "code_comment",
+      activeApp: "Cursor",
+      sourceTranscriber: mockSourceTranscriber,
+      textTranslator: mockTextTranslator,
+    });
+
+    expect(res.success).toBe(true);
+    expect(capturedOptions).toBeDefined();
+    expect(capturedOptions?.dictationPreset).toBe("code_comment");
+    expect(capturedOptions?.activeApp).toBe("Cursor");
+  });
+
   test("tokenExistsInText rejects https://example.com/api/v2 when searching for https://example.com/api", () => {
     expect(tokenExistsInText("https://example.com/api/v2", "https://example.com/api")).toBe(false);
   });

@@ -1,5 +1,5 @@
 import OpenAI, { toFile } from "openai";
-import { existsSync, readFileSync, appendFileSync, mkdirSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { exec } from "node:child_process";
@@ -101,7 +101,9 @@ export async function getActiveAppName(): Promise<string> {
         return cachedActiveAppName;
       }
     }
-  } catch {}
+  } catch (err) {
+    logger.debug({ err: String(err) }, "Failed to capture active app via native addon");
+  }
 
   try {
     const { stdout } = await execAsync(
@@ -110,7 +112,9 @@ export async function getActiveAppName(): Promise<string> {
     );
     cachedActiveAppName = stdout.trim() || "Unknown";
     lastActiveAppTime = now;
-  } catch {}
+  } catch (err) {
+    logger.debug({ err: String(err) }, "Failed to get active app via osascript");
+  }
   return cachedActiveAppName || "Unknown";
 }
 
@@ -336,7 +340,7 @@ function removeSpokenRepeats(text: string): string {
   const removeRepeats = (segment: string) => {
     let cleanedSegment = segment.replace(/\b(ဒီ|ဟို|အာ)[ \t]+\1\b/gi, "$1");
     cleanedSegment = cleanedSegment.replace(SAFE_REPEAT_WORD_REGEX, "$1");
-    return cleanedSegment.replace(/(?:^|[ \t]+)([^\s\.,\?!\:;။၊]+(?:[ \t]+[^\s\.,\?!\:;။၊]+){0,4})(?:[ \t]+\1)+(?=[ \t]|[\.,\?!\:;။၊]|$)/gi, (match, fragment) => {
+    return cleanedSegment.replace(/(?:^|[ \t]+)([^\s.,?!:;။၊]+(?:[ \t]+[^\s.,?!:;။၊]+){0,4})(?:[ \t]+\1)+(?=[ \t]|[.,?!:;။၊]|$)/gi, (match, fragment) => {
       const norm = fragment.trim().toLowerCase();
       if (norm === "that" || norm === "had") {
         return match;
@@ -351,7 +355,71 @@ function removeSpokenRepeats(text: string): string {
 
 export const BURMESE_UNICODE_REGEX = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/;
 
-export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean, targetLanguage?: string): string {
+const CASING_CONNECTORS = new Set([
+  "and", "or", "then", "so", "for", "with", "from", "where", "if", "when", "to", "in", "by"
+]);
+
+function parseCasingWords(phrase: string): { words: string[]; rest: string } {
+  const rawWords = phrase.trim().split(/\s+/);
+  const words: string[] = [];
+  let i = 0;
+  for (; i < Math.min(rawWords.length, 3); i++) {
+    const raw = rawWords[i];
+    if (!raw) break;
+    const w = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!w) break;
+    if (words.length > 0 && CASING_CONNECTORS.has(w)) break;
+    words.push(w);
+  }
+  const rest = rawWords.slice(i).join(" ");
+  return { words, rest: rest ? ` ${rest}` : "" };
+}
+
+export function sanitizeCodePresetText(text: string): string {
+  if (!text) return "";
+  let cleaned = text.trim();
+
+  // 1. Spoken casing commands transformation
+  cleaned = cleaned.replace(/\bcamel case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+    const { words, rest } = parseCasingWords(p1);
+    const first = words[0];
+    if (!first) return _m;
+    const camel = first + words.slice(1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+    return `\`${camel}\`${rest}`;
+  });
+
+  cleaned = cleaned.replace(/\bsnake case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+    const { words, rest } = parseCasingWords(p1);
+    if (words.length === 0) return _m;
+    return `\`${words.join("_")}\`${rest}`;
+  });
+
+  cleaned = cleaned.replace(/\bpascal case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+    const { words, rest } = parseCasingWords(p1);
+    if (words.length === 0) return _m;
+    const pascal = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+    return `\`${pascal}\`${rest}`;
+  });
+
+  cleaned = cleaned.replace(/\bupper case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+    const { words, rest } = parseCasingWords(p1);
+    if (words.length === 0) return _m;
+    return `\`${words.join("_").toUpperCase()}\`${rest}`;
+  });
+
+  cleaned = cleaned.replace(/\bkebab case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+    const { words, rest } = parseCasingWords(p1);
+    if (words.length === 0) return _m;
+    return `\`${words.join("-")}\`${rest}`;
+  });
+
+  // 2. Strip conversational intro preambles
+  cleaned = cleaned.replace(/^(Here is the (?:specification|spec|code comment|comment):)\s*/gi, "");
+
+  return cleaned;
+}
+
+export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean, _targetLanguage?: string): string {
   if (!text) return "";
 
   const effectivePreset = resolveEffectivePreset(preset, activeApp);
@@ -386,7 +454,7 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
 
   // 5. Dual-Layer Precision Morphological Anti-Hesitation Sanitizer
   // Targets standalone hesitation phonemes (အာ, ဟာ, အင်း, အင်, အမ်, အာ့) followed by punctuation, ellipses, or spaces
-  cleaned = cleaned.replace(/(?:^|\s+)(?:အာ+|ဟာ+|အင်း+|အင်+|အမ်+|အမ်း+|အာ့+)(?:[။\.\,\…\-\–\—\s]*)(?=\s|[။\.\,\…]|$)/g, " ");
+  cleaned = cleaned.replace(/(?:^|\s+)(?:အာ+|ဟာ+|အင်း+|အင်+|အမ်+|အမ်း+|အာ့+)(?:[။.,…\-–—\s]*)(?=\s|[။.,…]|$)/g, " ");
   cleaned = cleaned.replace(/^(ဟိုဟာလေ|ဟိုဟာ|အာ့ဆို|အာ့|အင်းး|အင်း|အမ်မ်|အမ်|ဒီဥစ္စာ|အာ)\s*,?\s*/gi, "");
   cleaned = cleaned.replace(/\s*(,\s*nd-sat|,\s*nd\s*sat|,\s*nd)\s*/gi, "");
   cleaned = cleaned.replace(/\b(like|you know)\s*,\s*/gi, "");
@@ -425,24 +493,29 @@ export function sanitizeTranscribedText(text: string, activeApp?: string, preset
       lowerApp.includes("ghostty") ||
       lowerApp.includes("alacritty")
     ) {
-      cleaned = cleaned.replace(/[။\.\?]+$/g, "").trim();
+      cleaned = cleaned.replace(/[။.?]+$/g, "").trim();
     }
   }
 
   // 11. Fix spacing around punctuation (remove spaces before punctuation, ensure single space after punctuation)
-  cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment.replace(/\s+([,\.\?\!\:;\u104E\u104F])/g, "$1"));
+  cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment.replace(/\s+([,.?!:;\u104E\u104F])/g, "$1"));
 
   // 12. Smart English Auto-Capitalization after sentence boundaries (Skip for URLs)
   if (!/^(https?:\/\/|ftp:\/\/|git@)/i.test(cleaned)) {
-    cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment.replace(/(^|\n\s*|\n\s*-\s*|[។\.\!\?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase()));
+    cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment.replace(/(^|\n\s*|\n\s*-\s*|[។.!?]\s+)([a-z])/g, (_match, prefix, char) => prefix + char.toUpperCase()));
   }
 
   // 13. Fix spacing around Burmese full stop (။) and Burmese comma (၊)
   cleaned = transformOutsideCodeRegions(cleaned, (segment) => segment
-    .replace(/။([^\s\n"'\)\]\}])/g, "။ $1")
-    .replace(/၊([^\s\n"'\)\]\}])/g, "၊ $1")
+    .replace(/။([^\s\n"')\]}])/g, "။ $1")
+    .replace(/၊([^\s\n"')\]}])/g, "၊ $1")
     .replace(/\s+။/g, "။")
     .replace(/\s+၊/g, "၊"));
+
+  // 14. Code Preset Transformations (casing commands, preamble stripping)
+  if (effectivePreset === "code_comment" && translateEnabled === true) {
+    cleaned = sanitizeCodePresetText(cleaned);
+  }
 
   // Dictionary is deliberately last: every provider receives the same local, exact result.
   return applyDictionary(cleaned.trim(), effectiveDictionaryEntries).trim();
@@ -636,7 +709,7 @@ export interface TranscribeOptions {
   activeApp?: string;
 }
 
-export function getPresetTemperature(preset?: DictationPreset): number {
+export function getPresetTemperature(_preset?: DictationPreset): number {
   return 0.0;
 }
 
@@ -696,7 +769,9 @@ async function transcribeGemini(
     if (!resolvedTargetLang) {
       resolvedTargetLang = cfg.targetLanguage || "English";
     }
-  } catch {}
+  } catch (err) {
+    logger.debug({ err: String(err) }, "Failed to load config for Gemini STT translation check");
+  }
   if (!resolvedTargetLang) {
     resolvedTargetLang = "English";
   }
@@ -780,7 +855,9 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
     const { loadConfig } = await import("./config.js");
     const cfg = loadConfig();
     hasPaidConfig = Boolean(cfg.geminiFallbackApiKey && cfg.geminiFallbackApiKey.trim());
-  } catch {}
+  } catch (err) {
+    logger.debug({ err: String(err) }, "Failed to check paid config for Gemini STT");
+  }
 
   const initialUsedPaidKey = isPaidClient || hasPaidConfig;
 

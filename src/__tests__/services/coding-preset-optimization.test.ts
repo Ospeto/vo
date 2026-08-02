@@ -2,8 +2,10 @@ import { describe, test, expect } from "bun:test";
 import {
   getPresetPromptInstructions,
   sanitizeTranscribedText,
+  sanitizeCodePresetText,
   resolveEffectivePreset,
 } from "../../services/stt.js";
+import { getCommentSyntaxForFile } from "../../services/two-step-translation.js";
 
 describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => {
   describe("1. Detect Mode (translateEnabled: false)", () => {
@@ -98,6 +100,32 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
 
       expect(detectInstructions).toContain("ZERO CONVERSATIONAL PREAMBLES & ZERO BOILERPLATE");
       expect(translateInstructions).toContain("ZERO BOILERPLATE & ZERO PREAMBLES");
+    });
+  });
+
+  describe("5. Spoken Casing Transforms & Language-Aware Comment Syntax", () => {
+    test("sanitizeCodePresetText converts spoken casing commands and strips preambles", () => {
+      const input = "Here is the specification: Check camel case user response and snake case created at";
+      const result = sanitizeCodePresetText(input);
+
+      expect(result).toBe("Check `userResponse` and `created_at`");
+      expect(result).not.toContain("Here is the specification:");
+    });
+
+    test("sanitizeTranscribedText invokes sanitizeCodePresetText when translateEnabled is true for code_comment preset", () => {
+      const input = "Here is the spec: Verify upper case api key for user";
+      const result = sanitizeTranscribedText(input, "Cursor", "code_comment", undefined, true, "English");
+
+      expect(result).toBe("Verify `API_KEY` for user");
+    });
+
+    test("getCommentSyntaxForFile resolves correct syntax per file extension", () => {
+      expect(getCommentSyntaxForFile(".py")).toBe("#");
+      expect(getCommentSyntaxForFile(".sh")).toBe("#");
+      expect(getCommentSyntaxForFile(".sql")).toBe("--");
+      expect(getCommentSyntaxForFile(".html")).toBe("<!-- ... -->");
+      expect(getCommentSyntaxForFile(".ts")).toBe("//");
+      expect(getCommentSyntaxForFile()).toBe("//");
     });
   });
 });
