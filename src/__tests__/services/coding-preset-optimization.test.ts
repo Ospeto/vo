@@ -119,11 +119,18 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
       expect(result).toBe("Verify `API_KEY` for user");
     });
 
+    test("sanitizeCodePresetText handles hyphenated input in casing commands", () => {
+      expect(sanitizeCodePresetText("kebab case user-card")).toBe("`user-card`");
+      expect(sanitizeCodePresetText("camel case user-card")).toBe("`userCard`");
+      expect(sanitizeCodePresetText("snake case user-card")).toBe("`user_card`");
+    });
+
     test("getCommentSyntaxForFile resolves correct syntax per file extension", () => {
       expect(getCommentSyntaxForFile(".py")).toBe("#");
       expect(getCommentSyntaxForFile(".sh")).toBe("#");
       expect(getCommentSyntaxForFile(".sql")).toBe("--");
-      expect(getCommentSyntaxForFile(".html")).toBe("<!-- ... -->");
+      expect(getCommentSyntaxForFile(".html")).toBe("<!--");
+      expect(getCommentSyntaxForFile(".css")).toBe("/*");
       expect(getCommentSyntaxForFile(".ts")).toBe("//");
       expect(getCommentSyntaxForFile()).toBe("//");
     });

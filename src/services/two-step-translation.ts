@@ -68,6 +68,7 @@ export interface TwoStepTranslationOptions {
   dictionaryEntries?: DictionaryEntry[];
   symbolScannerEnabled?: boolean;
   workspacePath?: string;
+  fileExtension?: string;
   targetLanguage?: string; // defaults to "English"
   sourceTimeoutMs?: number;
   translationTimeoutMs?: number;
@@ -150,7 +151,10 @@ export function getCommentSyntaxForFile(fileExtension?: string): string {
     return "--";
   }
   if (ext === "html" || ext === "xml" || ext === "svg") {
-    return "<!-- ... -->";
+    return "<!--";
+  }
+  if (ext === "css" || ext === "scss" || ext === "less") {
+    return "/*";
   }
   return "//";
 }
@@ -757,6 +761,7 @@ export async function executeTwoStepTranslation(
           dictationPreset: effectivePreset,
           activeApp: options.activeApp,
           workspacePath: options.workspacePath,
+          fileExtension: options.fileExtension,
           workspaceSymbols,
           abortSignal: stage2Controller.signal,
         }),
@@ -848,7 +853,7 @@ export async function executeTwoStepTranslation(
   const sanitizedFinalText = sanitizeTranscribedText(
     rawTranslatedText,
     options.activeApp,
-    options.dictationPreset,
+    effectivePreset,
     options.dictionaryEntries,
     true,
     targetLanguage

@@ -366,10 +366,11 @@ function parseCasingWords(phrase: string): { words: string[]; rest: string } {
   for (; i < Math.min(rawWords.length, 3); i++) {
     const raw = rawWords[i];
     if (!raw) break;
-    const w = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (!w) break;
-    if (words.length > 0 && CASING_CONNECTORS.has(w)) break;
-    words.push(w);
+    const cleanedWord = raw.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (!cleanedWord) break;
+    if (words.length > 0 && CASING_CONNECTORS.has(cleanedWord)) break;
+    const subWords = cleanedWord.split(/[-_]/).filter(Boolean);
+    words.push(...subWords);
   }
   const rest = rawWords.slice(i).join(" ");
   return { words, rest: rest ? ` ${rest}` : "" };
@@ -380,7 +381,7 @@ export function sanitizeCodePresetText(text: string): string {
   let cleaned = text.trim();
 
   // 1. Spoken casing commands transformation
-  cleaned = cleaned.replace(/\bcamel case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+  cleaned = cleaned.replace(/\bcamel case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
     const { words, rest } = parseCasingWords(p1);
     const first = words[0];
     if (!first) return _m;
@@ -388,26 +389,26 @@ export function sanitizeCodePresetText(text: string): string {
     return `\`${camel}\`${rest}`;
   });
 
-  cleaned = cleaned.replace(/\bsnake case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+  cleaned = cleaned.replace(/\bsnake case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
     const { words, rest } = parseCasingWords(p1);
     if (words.length === 0) return _m;
     return `\`${words.join("_")}\`${rest}`;
   });
 
-  cleaned = cleaned.replace(/\bpascal case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+  cleaned = cleaned.replace(/\bpascal case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
     const { words, rest } = parseCasingWords(p1);
     if (words.length === 0) return _m;
     const pascal = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
     return `\`${pascal}\`${rest}`;
   });
 
-  cleaned = cleaned.replace(/\bupper case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+  cleaned = cleaned.replace(/\bupper case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
     const { words, rest } = parseCasingWords(p1);
     if (words.length === 0) return _m;
     return `\`${words.join("_").toUpperCase()}\`${rest}`;
   });
 
-  cleaned = cleaned.replace(/\bkebab case ([a-zA-Z0-9_ ]+)\b/gi, (_m, p1) => {
+  cleaned = cleaned.replace(/\bkebab case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
     const { words, rest } = parseCasingWords(p1);
     if (words.length === 0) return _m;
     return `\`${words.join("-")}\`${rest}`;
