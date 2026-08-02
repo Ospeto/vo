@@ -1051,6 +1051,7 @@ export async function transcribeDetailed(
       symbolScannerEnabled,
       workspacePath,
       targetLanguage: effectiveTargetLang,
+      selectedText,
       abortSignal,
       activeApp,
     });

@@ -128,4 +128,41 @@ describe("P1 Two-Step Production Wiring & Integration Suite", () => {
       setGeminiClientForTests(null);
     }
   });
+
+  test("propagates selectedText into Stage 1 source options during two-step translation", async () => {
+    _resetGeminiClient();
+    const capturedContents: string[] = [];
+
+    setGeminiClientForTests({
+      models: {
+        generateContent: async (params: any) => {
+          const contentStr = typeof params.contents === "string"
+            ? params.contents
+            : JSON.stringify(params.contents || "");
+          capturedContents.push(contentStr);
+          if (capturedContents.length === 1) {
+            return { text: "Refactor `userId` function" };
+          } else {
+            return { text: "Refactor `userId` function cleanly" };
+          }
+        },
+      },
+    });
+
+    try {
+      const dummyAudio = new Uint8Array(2000).buffer;
+      const res = await transcribeDetailed(dummyAudio, {
+        provider: "gemini",
+        translateEnabled: true,
+        targetLanguage: "English",
+        selectedText: "const userId = getUserId();",
+      });
+
+      expect(res.text).toBe("Refactor `userId` function cleanly");
+      // Stage 1 prompt contents should include the selected text
+      expect(capturedContents[0]).toContain("const userId = getUserId();");
+    } finally {
+      setGeminiClientForTests(null);
+    }
+  });
 });

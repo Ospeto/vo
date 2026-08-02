@@ -62,6 +62,7 @@ export interface TwoStepTranslationOptions {
   translationTimeoutMs?: number;
   abortSignal?: AbortSignal;
   activeApp?: string;
+  selectedText?: string;
 
   // Dependency injection hooks for deterministic testing without network calls:
   sourceTranscriber?: (
@@ -510,6 +511,7 @@ export async function executeTwoStepTranslation(
       translateEnabled: false, // Force false for Step 1 recognition
       targetLanguage: targetLanguage,
       activeApp: options.activeApp,
+      selectedText: options.selectedText,
     };
 
     const transcriber =
