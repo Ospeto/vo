@@ -219,7 +219,9 @@ export function addHistoryEntry(
     const historyPath = getHistoryPath();
     writeFileSync(historyPath, JSON.stringify(updated, null, 2), { encoding: "utf-8", mode: 0o600 });
     ensureOwnerOnlyPermissions(historyPath);
-  } catch {}
+  } catch (err) {
+    // ignore write error
+  }
 
   return updated.slice(0, 5);
 }
@@ -232,10 +234,23 @@ export function clearHistory(): void {
     ensureOwnerOnlyPermissions(tempPath);
     renameSync(tempPath, historyPath);
 
+    const ledgerPath = getLedgerPath();
+    if (existsSync(ledgerPath)) {
+      const emptyLedger: CostLedger = { lifetimeCost: 0, monthlyCosts: {}, totalDictations: 0 };
+      writeFileSync(ledgerPath, JSON.stringify(emptyLedger, null, 2), { encoding: "utf-8", mode: 0o600 });
+      ensureOwnerOnlyPermissions(ledgerPath);
+    }
+
     const legacyDir = customHistoryDir ? join(dirname(dirname(customHistoryDir)), ".pi-voice") : LEGACY_DIR;
     const legacyPath = join(legacyDir, "history.json");
     if (existsSync(legacyPath)) {
-      try { unlinkSync(legacyPath); } catch {}
+      try {
+        unlinkSync(legacyPath);
+      } catch (err) {
+        // ignore legacy cleanup error
+      }
     }
-  } catch {}
+  } catch (err) {
+    // ignore clear history top-level error
+  }
 }

@@ -1059,9 +1059,26 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 		if (abortSignal?.aborted) {
 			throw new Error("Transcription aborted");
 		}
+		const primaryAbortController = new AbortController();
+		const fallbackAbortController = new AbortController();
+
+		const onCallerAbort = () => {
+			primaryAbortController.abort();
+			fallbackAbortController.abort();
+		};
+
+		if (abortSignal) {
+			if (abortSignal.aborted) {
+				onCallerAbort();
+			} else {
+				abortSignal.addEventListener("abort", onCallerAbort, { once: true });
+			}
+		}
+
 		try {
 			const runPrimary = async () => {
-				if (abortSignal?.aborted) throw new Error("Transcription aborted");
+				if (primaryAbortController.signal.aborted)
+					throw new Error("Transcription aborted");
 				const response = await client.models.generateContent({
 					model,
 					contents: [
@@ -1077,7 +1094,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 						systemInstruction: fullPrompt,
 						temperature: targetTemperature,
 						maxOutputTokens: 8192,
-						abortSignal,
+						abortSignal: primaryAbortController.signal,
 					},
 				});
 				const text = response.text?.trim() ?? "";
@@ -1087,16 +1104,6 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 			const primaryPromise = runPrimary();
 
 			let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
-			const fallbackAbortController = new AbortController();
-			if (abortSignal) {
-				if (abortSignal.aborted) fallbackAbortController.abort();
-				else
-					abortSignal.addEventListener(
-						"abort",
-						() => fallbackAbortController.abort(),
-						{ once: true },
-					);
-			}
 
 			if (fallbackClient && !paidFallbackInFlight) {
 				let timerId: ReturnType<typeof setTimeout> | undefined;
@@ -1155,6 +1162,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 							paidFallbackInFlight = trackedPaidRequest;
 							const fbResponse = await trackedPaidRequest;
 							const fbText = fbResponse.text?.trim() ?? "";
+							primaryAbortController.abort();
 							return { text: fbText, usedPaidKey: true };
 						} catch (fbErr: any) {
 							logger.warn(
@@ -1191,7 +1199,11 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 				winner = await Promise.race([resultPromise, timeoutPromise]);
 			} finally {
 				if (timeoutTimerId) clearTimeout(timeoutTimerId);
+				primaryAbortController.abort();
 				fallbackAbortController.abort();
+				if (abortSignal) {
+					abortSignal.removeEventListener("abort", onCallerAbort);
+				}
 			}
 			let text = winner.text;
 

@@ -27,6 +27,10 @@ export function _resetGeminiClient(): void {
   customTestFallbackClient = null;
 }
 
+export function resetClientCache(): void {
+  _resetGeminiClient();
+}
+
 export function resolveApiKeys(): string[] {
   let rawKeysString: string | undefined;
 

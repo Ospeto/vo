@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, clipboard, Notification, type IpcMainInvokeEvent } from "electron";
 import {
   validateIpcSenderPolicy,
@@ -458,7 +459,7 @@ async function executeUndoCommand(textLengthToUndo: number = 0) {
 }
 
 function handleVoiceUndoCheck(text: string): boolean {
-  const cleaned = text.toLowerCase().trim().replace(/[။\.\?!,"'“”‘’\-_]/g, "");
+  const cleaned = text.toLowerCase().trim().replace(/[။.?!,"'“”‘’\-_]/g, "");
   const words = cleaned.split(/\s+/).filter(Boolean);
 
   if (words.length > 3) return false;
@@ -983,33 +984,37 @@ function setupIpcHandlers() {
     )) return;
   });
 
-  ipcMain.on(IPC.RECORDING_START_READY, async (event, payload: { sequenceId: number; deviceStatus?: string }) => {
-    if (!validateIpcSender(event, IPC.RECORDING_START_READY)) return;
-    const seq = payload?.sequenceId;
-    const currentSnapshot = recordingLifecycle.snapshot();
-    if (!Number.isSafeInteger(seq) || seq !== currentSnapshot.sequenceId || (currentSnapshot.state !== "starting" && currentSnapshot.state !== "recording")) {
-      logger.warn({ seq, currentSnapshot }, "Received start-ready for invalid sequence or state");
-      return;
-    }
-
-    const deviceStatus = typeof payload?.deviceStatus === "string" && payload.deviceStatus.length > 0 && payload.deviceStatus.length < 256
-      ? payload.deviceStatus
-      : undefined;
-
-    if (deviceStatus) {
-      captureOrchestrator.setSequenceDeviceStatus(seq, deviceStatus);
-    }
-
-    if (currentSnapshot.state === "starting") {
-      await dictationCoordinator.acknowledgeStart(seq, true);
-    }
-
-    if (recordingLifecycle.snapshot().sequenceId === seq && currentState === "recording") {
-      const finalStatus = captureOrchestrator.getSequenceDeviceStatus(seq) || deviceStatus;
-      if (finalStatus) {
-        setState("recording", finalStatus);
+  ipcMain.on(IPC.RECORDING_START_READY, (event, payload: { sequenceId: number; deviceStatus?: string }) => {
+    void (async () => {
+      if (!validateIpcSender(event, IPC.RECORDING_START_READY)) return;
+      const seq = payload?.sequenceId;
+      const currentSnapshot = recordingLifecycle.snapshot();
+      if (!Number.isSafeInteger(seq) || seq !== currentSnapshot.sequenceId || (currentSnapshot.state !== "starting" && currentSnapshot.state !== "recording")) {
+        logger.warn({ seq, currentSnapshot }, "Received start-ready for invalid sequence or state");
+        return;
       }
-    }
+
+      const deviceStatus = typeof payload?.deviceStatus === "string" && payload.deviceStatus.length > 0 && payload.deviceStatus.length < 256
+        ? payload.deviceStatus
+        : undefined;
+
+      if (deviceStatus) {
+        captureOrchestrator.setSequenceDeviceStatus(seq, deviceStatus);
+      }
+
+      if (currentSnapshot.state === "starting") {
+        await dictationCoordinator.acknowledgeStart(seq, true);
+      }
+
+      if (recordingLifecycle.snapshot().sequenceId === seq && currentState === "recording") {
+        const finalStatus = captureOrchestrator.getSequenceDeviceStatus(seq) || deviceStatus;
+        if (finalStatus) {
+          setState("recording", finalStatus);
+        }
+      }
+    })().catch((err: any) => {
+      logger.error({ err: err?.message || String(err) }, "Error in RECORDING_START_READY handler");
+    });
   });
 
   ipcMain.on(IPC.RECORDING_START_FAILED, (event, payload: { sequenceId: number; error: string }) => {
@@ -1127,12 +1132,13 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.TEST_API_KEY, async (event, keyToTest?: string) => {
     enforceIpcSender(event, IPC.TEST_API_KEY);
-    const targetKey = keyToTest || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!targetKey) {
-      return { success: false, error: "No API Key provided" };
-    }
-
     try {
+      const validatedKey = z.string().min(1).max(256).optional().parse(keyToTest);
+      const targetKey = validatedKey || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!targetKey) {
+        return { success: false, error: "No API Key provided" };
+      }
+
       const keys = targetKey.split(/[,\n]+/).map((k) => k.trim()).filter((k) => k.length > 0 && !k.includes("your_"));
       const firstKey = keys[0] || targetKey.trim();
 
