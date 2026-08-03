@@ -1,6 +1,7 @@
 import type { DictationMode, RecordingLifecycleSnapshot } from "../shared/types.js";
 import { RecordingLifecycle } from "./recording-lifecycle.js";
 import { getHoldModeMinimumDuration, shouldEnsureMinimumDuration, SHORT_TAP_THRESHOLD_MS } from "./hold-mode-protections.js";
+import logger from "./logger.js";
 
 export type DictationTriggerMode = "dictate" | "edit";
 
@@ -138,11 +139,14 @@ export class DictationControlCoordinator {
       if (pressDuration < SHORT_TAP_THRESHOLD_MS && !liveFnDown && remainingDelay > 0) {
         const recordingSeqId = snap.sequenceId;
         if (this.shortTapTimer) clearTimeout(this.shortTapTimer);
-        this.shortTapTimer = setTimeout(async () => {
+        this.shortTapTimer = setTimeout(() => {
           this.shortTapTimer = null;
           const currentSnap = this.lifecycle.snapshot();
           if (currentSnap.sequenceId === recordingSeqId && currentSnap.state === "recording") {
-            await this.executeStop(true);
+            void this.executeStop(true).catch((err) => {
+              logger.error({ err: String(err) }, "Scheduled recording stop failed");
+              this.onCancelDictationFn("Failed to stop recording");
+            });
           }
         }, remainingDelay);
         return { accepted: true, action: "queued_stop", reason: "Short tap in Hold Mode: timer started for minimum duration" };
@@ -264,11 +268,14 @@ export class DictationControlCoordinator {
         if (remainingDelay > 0) {
           const recordingSeqId = this.lifecycle.snapshot().sequenceId;
           if (this.shortTapTimer) clearTimeout(this.shortTapTimer);
-          this.shortTapTimer = setTimeout(async () => {
+          this.shortTapTimer = setTimeout(() => {
             this.shortTapTimer = null;
             const snap = this.lifecycle.snapshot();
             if (snap.sequenceId === recordingSeqId && snap.state === "recording") {
-              await this.executeStop(ensureMinimumDuration);
+              void this.executeStop(ensureMinimumDuration).catch((err) => {
+                logger.error({ err: String(err) }, "Scheduled recording stop failed");
+                this.onCancelDictationFn("Failed to stop recording");
+              });
             }
           }, remainingDelay);
           return { accepted: true, action: "queued_stop", reason: "Pending physical stop delayed for minimum duration" };

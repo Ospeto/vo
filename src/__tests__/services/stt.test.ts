@@ -106,7 +106,11 @@ describe("transcribe", () => {
     setGeminiClientForTests(null);
     setGeminiFallbackClientForTests(null);
     if (fakeWhisperPath && existsSync(fakeWhisperPath)) {
-      try { rmSync(fakeWhisperPath, { force: true }); } catch {}
+      try {
+        rmSync(fakeWhisperPath, { force: true });
+      } catch (err) {
+        console.error("Failed to clean fake Whisper model", err);
+      }
       fakeWhisperPath = null;
     }
     for (const [key, val] of Object.entries(savedEnv)) {
@@ -143,6 +147,27 @@ describe("transcribe", () => {
       expect(mockFallbackGenerateContent).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.setTimeout = originalSetTimeout;
+      mockFallbackGenerateContent = null;
+      mockGenerateContent.mockImplementation(async () => ({ text: "gemini transcription" }));
+    }
+  });
+
+  test("retries paid fallback on a later model after a fast fallback failure", async () => {
+    let fallbackCalls = 0;
+    mockGenerateContent.mockImplementation(async (request: any = {}) => {
+      throw new Error(`primary failed for ${request.model || "unknown"}`);
+    });
+    mockFallbackGenerateContent = mock(({ model }: any) => {
+      fallbackCalls++;
+      throw new Error(`fallback failed for ${model}`);
+    });
+
+    try {
+      await expect(
+        transcribe(new ArrayBuffer(10), { provider: "gemini", translateEnabled: false }),
+      ).rejects.toThrow("All Gemini STT models failed");
+      expect(fallbackCalls).toBeGreaterThan(1);
+    } finally {
       mockFallbackGenerateContent = null;
       mockGenerateContent.mockImplementation(async () => ({ text: "gemini transcription" }));
     }

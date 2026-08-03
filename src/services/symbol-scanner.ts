@@ -10,7 +10,9 @@ export interface SymbolScanResult {
 
 interface CacheEntry {
   timestamp: number;
+  maxFiles: number;
   data: SymbolScanResult;
+  refreshing: boolean;
 }
 
 const CACHE_TTL_MS = 30_000; // 30 seconds
@@ -25,9 +27,21 @@ export function scanWorkspaceSymbols(workspacePath: string, maxFiles = 40): Symb
   }
 
   const cached = cache.get(workspacePath);
-  if (cached) {
-    if (Date.now() - cached.timestamp >= CACHE_TTL_MS) {
-      setTimeout(() => performWorkspaceScan(workspacePath, maxFiles), 0);
+  if (cached && maxFiles <= cached.maxFiles) {
+    if (Date.now() - cached.timestamp >= CACHE_TTL_MS && !cached.refreshing) {
+      const refreshEntry = cached;
+      refreshEntry.refreshing = true;
+      setTimeout(() => {
+        // A larger synchronous scan may have replaced this entry already.
+        if (cache.get(workspacePath) !== refreshEntry) return;
+        try {
+          performWorkspaceScan(workspacePath, refreshEntry.maxFiles);
+        } finally {
+          if (cache.get(workspacePath) === refreshEntry) {
+            refreshEntry.refreshing = false;
+          }
+        }
+      }, 0);
     }
     return cached.data;
   }
@@ -87,7 +101,12 @@ function performWorkspaceScan(workspacePath: string, maxFiles = 40): SymbolScanR
     fileNames: Array.from(fileNames).slice(0, 30),
   };
 
-  cache.set(workspacePath, { timestamp: Date.now(), data: result });
+  cache.set(workspacePath, {
+    timestamp: Date.now(),
+    maxFiles,
+    data: result,
+    refreshing: false,
+  });
   return result;
 }
 

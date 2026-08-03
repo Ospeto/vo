@@ -18,6 +18,20 @@ import logger from "./logger.js";
 
 export type DaemonCommand = "status" | "stop" | "show" | "shutdown" | "cancel" | "interrupt";
 
+const DAEMON_COMMANDS: ReadonlySet<string> = new Set([
+  "status",
+  "stop",
+  "show",
+  "shutdown",
+  "cancel",
+  "interrupt",
+]);
+const MAX_QUEUED_DAEMON_REQUESTS = 100;
+
+function isDaemonCommand(value: unknown): value is DaemonCommand {
+  return typeof value === "string" && DAEMON_COMMANDS.has(value);
+}
+
 export interface DaemonRequest {
   command: DaemonCommand;
   expectedPid?: number;
@@ -54,29 +68,62 @@ export function startDaemonServer(handler: CommandHandler): Promise<string> {
 
   server = createServer((conn) => {
     let buffer = "";
+    let queuedRequestCount = 0;
+    let pending = Promise.resolve();
+    const writeResponse = (response: DaemonResponse) => {
+      if (conn.destroyed) return;
+      try {
+        conn.write(JSON.stringify(response) + "\n");
+      } catch (err) {
+        logger.debug({ err: String(err) }, "Failed to write daemon response");
+      }
+    };
 
-    conn.on("data", async (data) => {
+    conn.on("data", (data) => {
       buffer += data.toString();
       if (Buffer.byteLength(buffer, "utf8") > 1024 * 1024) {
         logger.warn("DaemonIPC connection buffer exceeded 1MB limit; destroying connection");
-        conn.write(JSON.stringify({ ok: false, error: "Payload exceeds 1MB limit" }) + "\n");
+        writeResponse({ ok: false, error: "Payload exceeds 1MB limit" });
         conn.destroy();
         return;
       }
       const lines = buffer.split("\n");
       buffer = lines.pop()!; // keep incomplete line
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const req: DaemonRequest = JSON.parse(line);
-          const res = await handler(req.command);
-          conn.write(JSON.stringify(res) + "\n");
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          conn.write(JSON.stringify({ ok: false, error: msg }) + "\n");
-        }
+      const requestLines = lines.filter((line) => line.trim());
+      if (queuedRequestCount + requestLines.length > MAX_QUEUED_DAEMON_REQUESTS) {
+        logger.warn("DaemonIPC request queue exceeded limit; destroying connection");
+        writeResponse({ ok: false, error: "Too many queued requests" });
+        conn.destroy();
+        return;
       }
+      queuedRequestCount += requestLines.length;
+
+      // Preserve command order when multiple requests arrive while a handler awaits.
+      pending = pending.then(async () => {
+        try {
+          for (const line of requestLines) {
+            try {
+              const parsed: unknown = JSON.parse(line);
+              if (
+                typeof parsed !== "object" ||
+                parsed === null ||
+                !isDaemonCommand((parsed as { command?: unknown }).command)
+              ) {
+                throw new Error("Invalid daemon command");
+              }
+              const res = await handler((parsed as DaemonRequest).command);
+              writeResponse(res);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              writeResponse({ ok: false, error: msg });
+            }
+          }
+        } finally {
+          queuedRequestCount -= requestLines.length;
+        }
+      }).catch((err) => {
+        logger.warn({ err: String(err) }, "DaemonIPC request queue failed");
+      });
     });
 
     conn.on("error", () => {
@@ -86,7 +133,11 @@ export function startDaemonServer(handler: CommandHandler): Promise<string> {
 
   return new Promise<string>((resolve, reject) => {
     server!.once("listening", () => {
-      try { chmodSync(socketPath, 0o600); } catch {}
+      try {
+        chmodSync(socketPath, 0o600);
+      } catch (err) {
+        logger.warn({ socketPath, err: String(err) }, "Failed to secure daemon socket permissions");
+      }
       logger.info({ socketPath }, "DaemonIPC listening");
       resolve(socketPath);
     });

@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach, mock } from "bun:test";
 import { join } from "node:path";
 import { mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createServer, type Server } from "node:net";
+import { createConnection } from "node:net";
 
 // Mock logger
 mock.module("../../services/logger.js", () => ({
@@ -172,5 +172,83 @@ describe("daemon-ipc", () => {
     const res = await sendCommand("status", socketPath);
     expect(res.ok).toBe(true);
     expect(res.command).toBe("status");
+  });
+
+  test("rejects malformed and preserves order for pipelined requests", async () => {
+    const dir = makeTestDir();
+    cleanupDirs.push(dir);
+    currentTestSocketPath = join(dir, "daemon.sock");
+
+    const handler = async (cmd: string) => {
+      await new Promise((r) => setTimeout(r, cmd === "status" ? 20 : 0));
+      return { ok: true, command: cmd };
+    };
+    const socketPath = await startDaemonServer(handler);
+    const responses = await new Promise<any[]>((resolve, reject) => {
+      const received: any[] = [];
+      const conn = createConnection(socketPath);
+      let buffer = "";
+      const timer = setTimeout(() => {
+        conn.destroy();
+        reject(new Error("Timed out waiting for daemon responses"));
+      }, 1000);
+      conn.on("connect", () => {
+        conn.write('{"command":"not-a-command"}\n{"command":"status"}\n{"command":"show"}\n');
+      });
+      conn.on("data", (data) => {
+        buffer += data.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line) continue;
+          received.push(JSON.parse(line));
+          if (received.length === 3) {
+            clearTimeout(timer);
+            conn.end();
+            resolve(received);
+          }
+        }
+      });
+      conn.on("error", reject);
+    });
+
+    expect(responses[0]).toEqual({ ok: false, error: "Invalid daemon command" });
+    expect(responses[1]).toEqual({ ok: true, command: "status" });
+    expect(responses[2]).toEqual({ ok: true, command: "show" });
+  });
+
+  test("bounds queued requests per connection", async () => {
+    const dir = makeTestDir();
+    cleanupDirs.push(dir);
+    currentTestSocketPath = join(dir, "daemon.sock");
+
+    const handler = async () => {
+      await new Promise((r) => setTimeout(r, 100));
+      return { ok: true };
+    };
+    const socketPath = await startDaemonServer(handler);
+    const response = await new Promise<any>((resolve, reject) => {
+      const conn = createConnection(socketPath);
+      const timer = setTimeout(() => {
+        conn.destroy();
+        reject(new Error("Timed out waiting for queue limit response"));
+      }, 1000);
+      conn.on("connect", () => {
+        conn.write(Array.from({ length: 101 }, () => '{"command":"status"}\n').join(""));
+      });
+      conn.on("data", (data) => {
+        clearTimeout(timer);
+        const firstLine = data.toString().split("\n")[0];
+        if (!firstLine) {
+          reject(new Error("Daemon returned an empty response"));
+          return;
+        }
+        resolve(JSON.parse(firstLine));
+        conn.destroy();
+      });
+      conn.on("error", reject);
+    });
+
+    expect(response).toEqual({ ok: false, error: "Too many queued requests" });
   });
 });

@@ -1032,6 +1032,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 	// Model fallback chain: preferred model first
 	const modelsToTry = getFallbackModelChain(preferredModel, effectivePreset);
 	let paidFallbackInFlight: Promise<unknown> | null = null;
+	let paidFallbackAttempted = false;
 
 	const { getGeminiFallbackClient, isFallbackClient } = await import(
 		"./gemini-client.js"
@@ -1105,7 +1106,8 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 
 			let resultPromise: Promise<{ text: string; usedPaidKey: boolean }>;
 
-			if (fallbackClient && !paidFallbackInFlight) {
+			if (fallbackClient && !paidFallbackInFlight && !paidFallbackAttempted) {
+				paidFallbackAttempted = true;
 				let timerId: ReturnType<typeof setTimeout> | undefined;
 				const primaryDelayTimer = new Promise<never>((_, reject) => {
 					timerId = setTimeout(
@@ -1152,11 +1154,13 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 								},
 							});
 							const trackedPaidRequest = paidRequest.finally(() => {
-								if (
-									!fallbackAbortController.signal.aborted &&
-									paidFallbackInFlight === trackedPaidRequest
-								) {
+								// Clear settled requests even when timeout/cancellation aborted them;
+								// otherwise every later transcription skips paid fallback forever.
+								if (paidFallbackInFlight === trackedPaidRequest) {
 									paidFallbackInFlight = null;
+									if (!fallbackAbortController.signal.aborted) {
+										paidFallbackAttempted = false;
+									}
 								}
 							});
 							paidFallbackInFlight = trackedPaidRequest;
@@ -1165,6 +1169,11 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 							primaryAbortController.abort();
 							return { text: fbText, usedPaidKey: true };
 						} catch (fbErr: any) {
+							if (!fallbackAbortController.signal.aborted) {
+								// SDK can throw before returning a promise; allow a later
+								// model to retry the paid fallback in that case.
+								paidFallbackAttempted = false;
+							}
 							logger.warn(
 								{ model, fbErr: fbErr?.message },
 								"Paid Fallback Key also failed",
