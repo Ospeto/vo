@@ -356,7 +356,8 @@ function removeSpokenRepeats(text: string): string {
 export const BURMESE_UNICODE_REGEX = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/;
 
 const CASING_CONNECTORS = new Set([
-  "and", "or", "then", "so", "for", "with", "from", "where", "if", "when", "to", "in", "by"
+  "and", "or", "then", "so", "for", "with", "from", "where", "if", "when", "to", "in", "by",
+  "should", "will", "is", "was", "be", "are", "were", "must", "can", "could", "would", "has", "have", "does", "do", "used"
 ]);
 
 function parseCasingWords(phrase: string): { words: string[]; rest: string } {
@@ -378,46 +379,48 @@ function parseCasingWords(phrase: string): { words: string[]; rest: string } {
 
 export function sanitizeCodePresetText(text: string): string {
   if (!text) return "";
-  let cleaned = text.trim();
+  return transformOutsideCodeRegions(text.trim(), (segment) => {
+    let cleaned = segment;
 
-  // 1. Spoken casing commands transformation
-  cleaned = cleaned.replace(/\bcamel case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
-    const { words, rest } = parseCasingWords(p1);
-    const first = words[0];
-    if (!first) return _m;
-    const camel = first + words.slice(1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
-    return `\`${camel}\`${rest}`;
+    // 1. Spoken casing commands transformation
+    cleaned = cleaned.replace(/\bcamel case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+      const { words, rest } = parseCasingWords(p1);
+      const first = words[0];
+      if (!first) return _m;
+      const camel = first + words.slice(1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+      return `\`${camel}\`${rest}`;
+    });
+
+    cleaned = cleaned.replace(/\bsnake case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+      const { words, rest } = parseCasingWords(p1);
+      if (words.length === 0) return _m;
+      return `\`${words.join("_")}\`${rest}`;
+    });
+
+    cleaned = cleaned.replace(/\bpascal case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+      const { words, rest } = parseCasingWords(p1);
+      if (words.length === 0) return _m;
+      const pascal = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+      return `\`${pascal}\`${rest}`;
+    });
+
+    cleaned = cleaned.replace(/\bupper case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+      const { words, rest } = parseCasingWords(p1);
+      if (words.length === 0) return _m;
+      return `\`${words.join("_").toUpperCase()}\`${rest}`;
+    });
+
+    cleaned = cleaned.replace(/\bkebab case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+      const { words, rest } = parseCasingWords(p1);
+      if (words.length === 0) return _m;
+      return `\`${words.join("-")}\`${rest}`;
+    });
+
+    // 2. Strip conversational intro preambles
+    cleaned = cleaned.replace(/^(Here is the (?:specification|spec|code comment|comment):)\s*/gi, "");
+
+    return cleaned;
   });
-
-  cleaned = cleaned.replace(/\bsnake case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
-    const { words, rest } = parseCasingWords(p1);
-    if (words.length === 0) return _m;
-    return `\`${words.join("_")}\`${rest}`;
-  });
-
-  cleaned = cleaned.replace(/\bpascal case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
-    const { words, rest } = parseCasingWords(p1);
-    if (words.length === 0) return _m;
-    const pascal = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
-    return `\`${pascal}\`${rest}`;
-  });
-
-  cleaned = cleaned.replace(/\bupper case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
-    const { words, rest } = parseCasingWords(p1);
-    if (words.length === 0) return _m;
-    return `\`${words.join("_").toUpperCase()}\`${rest}`;
-  });
-
-  cleaned = cleaned.replace(/\bkebab case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
-    const { words, rest } = parseCasingWords(p1);
-    if (words.length === 0) return _m;
-    return `\`${words.join("-")}\`${rest}`;
-  });
-
-  // 2. Strip conversational intro preambles
-  cleaned = cleaned.replace(/^(Here is the (?:specification|spec|code comment|comment):)\s*/gi, "");
-
-  return cleaned;
 }
 
 export function sanitizeTranscribedText(text: string, activeApp?: string, preset?: DictationPreset, dictionaryEntries?: DictionaryEntry[], translateEnabled?: boolean, _targetLanguage?: string): string {
@@ -700,6 +703,7 @@ export interface TranscribeOptions {
   dictationPreset?: DictationPreset;
   translateEnabled?: boolean;
   targetLanguage?: string;
+  fileExtension?: string;
   customVocabulary?: string[];
   presetVocabulary?: Partial<Record<DictationPreset, string[]>>;
   dictionaryEntries?: DictionaryEntry[];

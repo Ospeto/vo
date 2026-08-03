@@ -123,6 +123,14 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
       expect(sanitizeCodePresetText("kebab case user-card")).toBe("`user-card`");
       expect(sanitizeCodePresetText("camel case user-card")).toBe("`userCard`");
       expect(sanitizeCodePresetText("snake case user-card")).toBe("`user_card`");
+      expect(sanitizeCodePresetText("kebab case user-card should be used")).toBe("`user-card` should be used");
+    });
+
+    test("sanitizeCodePresetText skips existing backticked regions without doubling backticks", () => {
+      const input = "Use `camel case user response` exactly";
+      const result = sanitizeCodePresetText(input);
+      expect(result).toBe("Use `camel case user response` exactly");
+      expect(result).not.toContain("``");
     });
 
     test("getCommentSyntaxForFile resolves correct syntax per file extension", () => {
