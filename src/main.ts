@@ -1132,13 +1132,13 @@ function setupIpcHandlers() {
 
   ipcMain.handle(IPC.TEST_API_KEY, async (event, keyToTest?: string) => {
     enforceIpcSender(event, IPC.TEST_API_KEY);
-    const validatedKey = z.string().min(1).max(256).optional().parse(keyToTest);
-    const targetKey = validatedKey || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!targetKey) {
-      return { success: false, error: "No API Key provided" };
-    }
-
     try {
+      const validatedKey = z.string().min(1).max(256).optional().parse(keyToTest);
+      const targetKey = validatedKey || currentConfig.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!targetKey) {
+        return { success: false, error: "No API Key provided" };
+      }
+
       const keys = targetKey.split(/[,\n]+/).map((k) => k.trim()).filter((k) => k.length > 0 && !k.includes("your_"));
       const firstKey = keys[0] || targetKey.trim();
 

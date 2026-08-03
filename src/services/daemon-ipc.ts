@@ -57,7 +57,7 @@ export function startDaemonServer(handler: CommandHandler): Promise<string> {
 
     conn.on("data", async (data) => {
       buffer += data.toString();
-      if (buffer.length > 1024 * 1024) {
+      if (Buffer.byteLength(buffer, "utf8") > 1024 * 1024) {
         logger.warn("DaemonIPC connection buffer exceeded 1MB limit; destroying connection");
         conn.write(JSON.stringify({ ok: false, error: "Payload exceeds 1MB limit" }) + "\n");
         conn.destroy();
