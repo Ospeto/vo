@@ -16,7 +16,6 @@ const gainValue = document.getElementById("gainValue") as HTMLElement;
 const meterFill = document.getElementById("meterFill") as HTMLElement;
 const modelSelect = document.getElementById("modelSelect") as HTMLSelectElement;
 const chimeBtn = document.getElementById("chimeBtn") as HTMLButtonElement;
-const historyContainer = document.getElementById("historyContainer") as HTMLElement;
 const clearHistoryBtn = document.getElementById("clearHistoryBtn") as HTMLButtonElement;
 const configBtn = document.getElementById("configBtn") as HTMLButtonElement;
 const translateToggleBtn = document.getElementById("translateToggleBtn") as HTMLButtonElement;
@@ -111,12 +110,14 @@ async function populateAudioDevices(selectedDeviceId?: string) {
       }
     });
 
-    micDeviceSelect.innerHTML = "";
+    micDeviceSelect.textContent = "";
     micDeviceSelect.appendChild(fragment);
     if (selectedDeviceId) {
       micDeviceSelect.value = selectedDeviceId;
     }
-  } catch {}
+  } catch (err) {
+    console.error("Failed to populate audio devices", err);
+  }
 }
 
 if (typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === "function") {
@@ -164,7 +165,9 @@ function playStartChime() {
     osc2.start(now);
     osc1.stop(now + 0.1);
     osc2.stop(now + 0.1);
-  } catch {}
+  } catch (err) {
+    console.error("Failed to play start chime", err);
+  }
 }
 
 function playBassyEndChime() {
@@ -194,7 +197,9 @@ function playBassyEndChime() {
     osc2.start(now);
     osc1.stop(now + 0.14);
     osc2.stop(now + 0.14);
-  } catch {}
+  } catch (err) {
+    console.error("Failed to play end chime", err);
+  }
 }
 
 function playMechanicalClickSound() {
@@ -236,7 +241,9 @@ function playMechanicalClickSound() {
 
     thockOsc.start(now + 0.003);
     thockOsc.stop(now + 0.045);
-  } catch {}
+  } catch (err) {
+    console.error("Failed to play click sound", err);
+  }
 }
 
 let animationFrameId: number | null = null;
@@ -498,7 +505,7 @@ function showDictionaryError(message = "") {
 
 function renderDictionaryEntries(highlightId?: string) {
   if (!dictionaryEntriesContainer) return;
-  dictionaryEntriesContainer.innerHTML = "";
+  dictionaryEntriesContainer.textContent = "";
 
   if (vocabTotalCountBadge) {
     vocabTotalCountBadge.textContent = `${dictionaryEntries.length} Entries`;
@@ -684,7 +691,7 @@ export function getPresetVocabMapForTest() {
 export function renderPersonNames() {
   const container = personNamesContainer || document.getElementById("personNamesContainer");
   if (!container) return;
-  container.innerHTML = "";
+  container.textContent = "";
 
   const badge = personNamesCountBadge || document.getElementById("personNamesCountBadge");
   if (badge) {
@@ -748,7 +755,7 @@ export function renderVocabTags() {
   if (!container || !presetSelect) return;
   const currentPreset = presetSelect.value;
   const terms = currentPresetVocabMap[currentPreset] || [];
-  container.innerHTML = "";
+  container.textContent = "";
 
   if (terms.length === 0) {
     const emptySpan = document.createElement("span");
@@ -812,7 +819,7 @@ export async function renderHistory() {
     const emptyDiv = document.createElement("div");
     emptyDiv.className = "history-empty";
     emptyDiv.textContent = "No recent dictations";
-    historyContainer.innerHTML = "";
+    historyContainer.textContent = "";
     historyContainer.appendChild(emptyDiv);
     return;
   }
@@ -870,7 +877,7 @@ export async function renderHistory() {
     fragment.appendChild(el);
   });
 
-  historyContainer.innerHTML = "";
+  historyContainer.textContent = "";
   historyContainer.appendChild(fragment);
 }
 
@@ -910,7 +917,11 @@ if (api?.onAudioLevelUpdate) {
 
 const cleanupSettingsSubscriptions = () => {
   for (const unsub of settingsUnsubscribes) {
-    try { unsub(); } catch {}
+    try {
+      unsub();
+    } catch (err) {
+      console.error("Failed to remove settings subscription", err);
+    }
   }
   settingsUnsubscribes = [];
 };
@@ -1432,4 +1443,6 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-initUI();
+void initUI().catch((err) => {
+  console.error("Failed to initialize settings UI", err);
+});

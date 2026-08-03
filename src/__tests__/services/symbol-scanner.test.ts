@@ -18,7 +18,9 @@ describe("symbol-scanner", () => {
     clearSymbolCache();
     try {
       rmSync(testDir, { recursive: true, force: true });
-    } catch {}
+    } catch (err) {
+      console.error("Failed to clean symbol scanner test directory", err);
+    }
   });
 
   test("returns empty result for invalid or root path", () => {
@@ -67,5 +69,19 @@ describe("symbol-scanner", () => {
     clearSymbolCache();
     const third = scanWorkspaceSymbols(testDir);
     expect(third.symbols).toContain("secondFunction");
+  });
+
+  test("rescans when caller requests a larger file bound", () => {
+    const srcDir = join(testDir, "src");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(join(srcDir, "alpha.ts"), "export function firstFunction() {}", "utf-8");
+    writeFileSync(join(srcDir, "beta.ts"), "export function secondFunction() {}", "utf-8");
+
+    const first = scanWorkspaceSymbols(testDir, 1);
+    expect(first.fileNames).toHaveLength(1);
+
+    const expanded = scanWorkspaceSymbols(testDir, 2);
+    expect(expanded.fileNames).toHaveLength(2);
+    expect(expanded.symbols).toContain("secondFunction");
   });
 });
