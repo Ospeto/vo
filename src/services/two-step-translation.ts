@@ -83,7 +83,7 @@ export interface TwoStepTranslationOptions {
   ) => Promise<TranscriptionResult>;
   textTranslator?: (
     sourceText: string,
-    options: any
+    options: TextTranslatorOptions
   ) => Promise<{ text: string; modelUsed?: string; usedPaidKey?: boolean }>;
 }
 
