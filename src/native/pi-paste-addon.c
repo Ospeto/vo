@@ -117,7 +117,9 @@ static napi_value inject(napi_env env, napi_callback_info info) {
     CGEventRef up = CGEventCreateKeyboardEvent(source, (CGKeyCode)9, false);
     if (!down || !up) { if (down) CFRelease(down); if (up) CFRelease(up); CFRelease(source); return reason_result(env, "injection_rejected"); }
     CGEventSetFlags(down, kCGEventFlagMaskCommand); CGEventSetFlags(up, kCGEventFlagMaskCommand);
+#ifndef PI_PASTE_TEST_MODE
     CGEventPost(kCGHIDEventTap, down); CGEventPost(kCGHIDEventTap, up);
+#endif
     CFRelease(down); CFRelease(up); CFRelease(source);
     napi_value result; napi_create_object(env, &result); napi_value ok; napi_get_boolean(env, true, &ok); napi_set_named_property(env, result, "ok", ok); napi_set_named_property(env, result, "reason", string_value(env, "injection_requested")); return result;
 }

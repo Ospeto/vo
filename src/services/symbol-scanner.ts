@@ -68,7 +68,9 @@ function performWorkspaceScan(workspacePath: string, maxFiles = 40): SymbolScanR
             try {
               const content = readFileSync(fullPath, "utf-8");
               extractSymbolsFromContent(content, symbols);
-            } catch {}
+            } catch (err) {
+              // ignore unreadable file
+            }
           }
         }
       }
