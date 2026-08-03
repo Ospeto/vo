@@ -1130,7 +1130,13 @@ describe("Two-Step Mixed Burmese/English Translation Path (PR 2)", () => {
     expect(prompt.systemInstruction).toContain("INLINE BACKTICKS FOR SYMBOLS");
     expect(prompt.systemInstruction).toContain("Active Application: Cursor");
     expect(prompt.systemInstruction).toContain("Active Workspace Symbols: loadUser, userId");
-    expect(prompt.systemInstruction).toContain("//");
+    expect(prompt.systemInstruction).toContain("// Validate user auth token");
+
+    const htmlPrompt = buildTextTranslatorPrompt("comment test", { dictationPreset: "code_comment", fileExtension: ".html" });
+    expect(htmlPrompt.systemInstruction).toContain("<!-- Validate user auth token -->");
+
+    const cssPrompt = buildTextTranslatorPrompt("comment test", { dictationPreset: "code_comment", fileExtension: ".css" });
+    expect(cssPrompt.systemInstruction).toContain("/* Validate user auth token */");
   });
 
   test("executeTwoStepTranslation passes dictationPreset, activeApp, and workspaceSymbols down to textTranslator", async () => {

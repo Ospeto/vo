@@ -1080,6 +1080,7 @@ export async function transcribeDetailed(
   const presetVocabulary = typeof providerOrOptions === "object" ? providerOrOptions.presetVocabulary : {};
   const symbolScannerEnabled = typeof providerOrOptions === "object" ? providerOrOptions.symbolScannerEnabled ?? true : true;
   const workspacePath = typeof providerOrOptions === "object" ? providerOrOptions.workspacePath : undefined;
+  const fileExtension = typeof providerOrOptions === "object" ? providerOrOptions.fileExtension : undefined;
   const translateEnabled = typeof providerOrOptions === "object" ? providerOrOptions.translateEnabled : undefined;
   const targetLanguage = typeof providerOrOptions === "object" ? providerOrOptions.targetLanguage : undefined;
   const selectedText = typeof providerOrOptions === "object" ? providerOrOptions.selectedText : undefined;
@@ -1132,6 +1133,7 @@ export async function transcribeDetailed(
       dictionaryEntries,
       symbolScannerEnabled,
       workspacePath,
+      fileExtension,
       targetLanguage: effectiveTargetLang,
       selectedText,
       abortSignal,
