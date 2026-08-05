@@ -43,6 +43,18 @@ function getReleaseCodes(binding: KeyBinding): number[] {
  * is invalidated by the system. FnHook performs non-prompting runtime trust checks
  * and ensures safe, idempotent teardown at VO's lifecycle edge so an invalid tap
  * is stopped and unhooked without freezing or crashing the application.
+ *
+ * Hot-path contract: key handlers must stay TCC-free. libuiohook's Darwin tap
+ * callback synchronously handshakes with VO's main thread on every keydown
+ * (unicode-lookup via dispatch_sync_f / main-runloop cond wait). Any work the
+ * main thread does per-keystroke delays that handshake; sustained delay trips
+ * kCGEventTapDisabledByTimeout and libuiohook's re-enable loop, which stalls
+ * HID delivery for every app (uiohook-napi#47, libuiohook#184). Calling
+ * systemPreferences.isTrustedAccessibilityClient() per key also creates a
+ * teardown path reachable from inside a tap callback: stop() joins the hook
+ * thread while the hook thread waits on the main thread -> main/hook deadlock.
+ * Trust is therefore polled off-path on a 1s non-prompting timer; a lost poll
+ * stops the tap within a second without ever touching the key hot path.
  */
 export class FnHook {
   public isFnDown = false;
@@ -124,8 +136,11 @@ export class FnHook {
     this.trustLost = false;
 
     this.keydownHandler = (e: UiohookKeyboardEvent) => {
-      if (!this.checkTrust()) return;
-
+      // ponytail: no checkTrust() here - trust is polled off-path by the 1s timer.
+      // A per-key TCC call (added in #60) runs on the main thread for EVERY system
+      // keystroke and can invoke stop() from inside a tap callback, which joins the
+      // hook thread -> deadlock (see class doc). Trust loss is detected by the timer
+      // within 1s; the tap is then torn down idempotently.
       if (e.keycode === UiohookKey.Escape) {
         this.callbacks.onCancel?.();
         return;
@@ -133,13 +148,13 @@ export class FnHook {
 
       if (this.activeMode !== null) return; // already active, ignore repeats
 
-      // 1. Check Dictation Key Binding
+      // 1. Check Dictation Key Binding (booleans; equality is exact)
       if (
         e.keycode === this.binding.keycode &&
-        !e.ctrlKey === !this.binding.ctrl &&
-        !e.shiftKey === !this.binding.shift &&
-        !e.altKey === !this.binding.alt &&
-        !e.metaKey === !this.binding.meta
+        e.ctrlKey === this.binding.ctrl &&
+        e.shiftKey === this.binding.shift &&
+        e.altKey === this.binding.alt &&
+        e.metaKey === this.binding.meta
       ) {
         this.activeMode = "dictate";
         this.isFnDown = true;
@@ -151,10 +166,10 @@ export class FnHook {
       if (
         this.editBinding &&
         e.keycode === this.editBinding.keycode &&
-        !e.ctrlKey === !this.editBinding.ctrl &&
-        !e.shiftKey === !this.editBinding.shift &&
-        !e.altKey === !this.editBinding.alt &&
-        !e.metaKey === !this.editBinding.meta
+        e.ctrlKey === this.editBinding.ctrl &&
+        e.shiftKey === this.editBinding.shift &&
+        e.altKey === this.editBinding.alt &&
+        e.metaKey === this.editBinding.meta
       ) {
         this.activeMode = "edit";
         this.isFnDown = true;
@@ -164,8 +179,6 @@ export class FnHook {
     };
 
     this.keyupHandler = (e: UiohookKeyboardEvent) => {
-      if (!this.checkTrust()) return;
-
       if (this.activeMode === null) return;
 
       const currentMode = this.activeMode;
@@ -215,12 +228,16 @@ export class FnHook {
     if (this.keydownHandler) {
       try {
         uIOhook.off("keydown", this.keydownHandler);
-      } catch {}
+      } catch {
+        // Best-effort detach: listener may already be gone on native teardown.
+      }
     }
     if (this.keyupHandler) {
       try {
         uIOhook.off("keyup", this.keyupHandler);
-      } catch {}
+      } catch {
+        // Best-effort detach: listener may already be gone on native teardown.
+      }
     }
     this.keydownHandler = null;
     this.keyupHandler = null;

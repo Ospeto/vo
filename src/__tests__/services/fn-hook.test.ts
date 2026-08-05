@@ -34,7 +34,6 @@ mock.module("electron", () => ({
 type KeyCallback = (event: any) => void;
 const keydownCallbacks: KeyCallback[] = [];
 const keyupCallbacks: KeyCallback[] = [];
-let uiohookStarted = false;
 
 const mockUIOhook = {
   on: mock((event: string, cb: KeyCallback) => {
@@ -47,10 +46,10 @@ const mockUIOhook = {
     if (index >= 0) callbacks.splice(index, 1);
   }),
   start: mock(() => {
-    uiohookStarted = true;
+    // native tap lifecycle is exercised live; unit tests only observe calls
   }),
   stop: mock(() => {
-    uiohookStarted = false;
+    // see start
   }),
 };
 
@@ -108,7 +107,6 @@ describe("FnHook", () => {
   beforeEach(() => {
     keydownCallbacks.length = 0;
     keyupCallbacks.length = 0;
-    uiohookStarted = false;
     mockUIOhook.on.mockClear();
     mockUIOhook.off.mockClear();
     mockUIOhook.start.mockClear();
@@ -305,7 +303,7 @@ describe("FnHook", () => {
   test("runtime trust loss triggers onTrustLost callback and stops uIOhook cleanly", async () => {
     const { systemPreferences } = await import("electron");
     let trustedMock = true;
-    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation((prompt: boolean) => trustedMock);
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => trustedMock);
 
     const onTrustLost = mock(() => {});
     const binding = { keycode: 20, ctrl: false, shift: false, alt: false, meta: false };
@@ -334,10 +332,10 @@ describe("FnHook", () => {
     (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
   });
 
-  test("key event discards execution and stops hook if trust lost at runtime", async () => {
+  test("key events stay off the TCC hot path: no trust check or teardown from key handlers", async () => {
     const { systemPreferences } = await import("electron");
     let trustedMock = true;
-    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation((prompt?: boolean) => trustedMock);
+    (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => trustedMock);
 
     const onFnDown = mock(() => {});
     const onTrustLost = mock(() => {});
@@ -345,15 +343,27 @@ describe("FnHook", () => {
     const hook = createHook({ onFnDown, onFnUp: mock(() => {}), onTrustLost }, binding, "t");
 
     hook.start();
+    // start() performs exactly one (prompting) trust check
+    (systemPreferences.isTrustedAccessibilityClient as any).mockClear();
 
-    // Revoke permission before key down
+    // Key events must never trigger TCC calls on the main thread: libuiohook's
+    // Darwin tap handshakes with the main thread on every keydown, so per-key TCC
+    // round-trips feed kCGEventTapDisabledByTimeout storms and allow stop()
+    // (which joins the hook thread) to be reached from inside a tap callback,
+    // deadlocking main <-> hook. Trust loss is detected by the 1s off-path poll.
+    simulateKeyDown(20, {});
+    simulateKeyUp(20);
+    expect(onFnDown).toHaveBeenCalledTimes(1);
+    expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
+    expect(hook.isStarted()).toBe(true);
+
+    // Even with trust already revoked, a key event does not stop the hook or
+    // invoke teardown from the event path - the poll owns that transition.
     trustedMock = false;
     simulateKeyDown(20, {});
-
-    expect(onFnDown).not.toHaveBeenCalled();
-    expect(hook.isStarted()).toBe(false);
-    expect(onTrustLost).toHaveBeenCalledTimes(1);
-    expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(false);
+    expect(onTrustLost).not.toHaveBeenCalled();
+    expect(hook.isStarted()).toBe(true);
+    expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
 
     hook.stop();
     (systemPreferences.isTrustedAccessibilityClient as any).mockImplementation(() => true);
