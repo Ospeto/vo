@@ -80,16 +80,15 @@ static napi_value capture(napi_env env, napi_callback_info info) {
 }
 
 static int target_matches(napi_env env, napi_value expected) {
-    napi_value bundleValue, appValue, pidValue, windowValue;
-    char expectedBundle[512] = {0}, expectedApp[512] = {0}; int32_t expectedPid = 0; uint32_t expectedWindow = 0;
+    napi_value bundleValue, appValue, pidValue;
+    char expectedBundle[512] = {0}, expectedApp[512] = {0}; int32_t expectedPid = 0;
     size_t length = 0;
     if (napi_get_named_property(env, expected, "bundleId", &bundleValue) != napi_ok || napi_get_value_string_utf8(env, bundleValue, expectedBundle, sizeof(expectedBundle), &length) != napi_ok ||
         napi_get_named_property(env, expected, "appName", &appValue) != napi_ok || napi_get_value_string_utf8(env, appValue, expectedApp, sizeof(expectedApp), &length) != napi_ok ||
-        napi_get_named_property(env, expected, "pid", &pidValue) != napi_ok || napi_get_value_int32(env, pidValue, &expectedPid) != napi_ok ||
-        napi_get_named_property(env, expected, "windowId", &windowValue) != napi_ok || napi_get_value_uint32(env, windowValue, &expectedWindow) != napi_ok) return 0;
+        napi_get_named_property(env, expected, "pid", &pidValue) != napi_ok || napi_get_value_int32(env, pidValue, &expectedPid) != napi_ok) return 0;
     char bundle[512] = {0}, name[512] = {0}, title[1024] = {0}; int pid = 0; uint32_t windowId = 0;
     if (!capture_native(bundle, sizeof(bundle), name, sizeof(name), &pid, &windowId, title, sizeof(title))) return 0;
-    return strcmp(bundle, expectedBundle) == 0 && strcmp(name, expectedApp) == 0 && pid == expectedPid;
+    return strcasecmp(bundle, expectedBundle) == 0 && strcasecmp(name, expectedApp) == 0 && pid == expectedPid;
 }
 
 static napi_value authorize(napi_env env, napi_callback_info info) {
