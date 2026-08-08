@@ -588,8 +588,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* History Section */
 .history-section {
-	padding: 3px 6px 2px;
-	border-top: 1px solid var(--line);
+	padding: 4px 6px;
 }
 .history-header {
 	display: flex;
@@ -620,19 +619,46 @@ input[type="range"]::-webkit-slider-thumb {
 .history-list {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	max-height: 52px;
+	gap: 4px;
+	max-height: 160px;
 	overflow-y: auto;
 }
 .history-item {
 	position: relative;
-	padding: 3px 5px;
-	border-radius: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 8px;
+	border-radius: 6px;
 	background: rgba(255, 255, 255, 0.03);
 	border: 1px solid rgba(255, 255, 255, 0.05);
-	font-size: 10px;
+	font-size: 11px;
 	cursor: pointer;
+	gap: 8px;
 	transition: all 0.15s ease;
+}
+.history-content-group {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+.copy-btn {
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	color: var(--on-surface-variant);
+	font-size: 10px;
+	font-weight: 500;
+	padding: 2px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: all 0.15s ease;
+}
+.copy-btn:hover {
+	color: #ffffff;
+	background: rgba(45, 212, 191, 0.2);
+	border-color: rgba(45, 212, 191, 0.4);
 }
 .history-item:hover {
 	background: rgba(45, 212, 191, 0.08);
@@ -655,7 +681,7 @@ input[type="range"]::-webkit-slider-thumb {
 	margin: 0;
 	padding: 5px 8px;
 	border-top: 1px solid var(--line);
-	background: rgba(0, 0, 0, 0.18);
+	background: transparent;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
