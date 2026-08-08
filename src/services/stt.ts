@@ -951,7 +951,7 @@ async function transcribeGemini(
 	);
 	const effectivePreset =
 		resolvedPreset === "translate" ? "careful" : resolvedPreset;
-	if (resolvedPreset === "translate") {
+	if (resolvedPreset === "translate" && translateEnabled !== false) {
 		isTranslationActive = true;
 	}
 	const presetHint = getPresetPromptInstructions(
