@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { calculatePopoverPosition } from "../../services/popover-position.js";
 import { getPresetPromptInstructions, getPresetTemperature, resolveEffectivePreset, getFallbackModelChain } from "../../services/stt.js";
 import { configFileSchema } from "../../services/config.js";
 import { addHistoryEntry, getHistoryEntries, clearHistory, setHistoryDirForTests } from "../../services/history-service.js";
@@ -94,22 +95,6 @@ export function calculateAudioIntensity(samples: Float32Array, gain: number = 1.
   return { rmsDb: Number(rmsDb.toFixed(1)), percentage, isSilent };
 }
 
-export function calculatePopoverPosition(
-  trayBounds: { x: number; y: number; width: number; height: number },
-  popoverDim: { width: number; height: number },
-  screenBounds: { width: number; height: number }
-) {
-  const trayCenterX = trayBounds.x + trayBounds.width / 2;
-  let targetX = Math.round(trayCenterX - popoverDim.width / 2);
-  const targetY = Math.round(trayBounds.y + trayBounds.height + 4);
-
-  if (targetX < 10) targetX = 10;
-  if (targetX + popoverDim.width > screenBounds.width - 10) {
-    targetX = screenBounds.width - popoverDim.width - 10;
-  }
-
-  return { x: targetX, y: targetY, width: popoverDim.width, height: popoverDim.height };
-}
 
 export function validateHotkeyCombination(hotkeyStr: string): { isValid: boolean; reason?: string } {
   const normalized = hotkeyStr.toLowerCase().trim();
@@ -221,7 +206,7 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
     test("centers popover window horizontally under tray icon", () => {
       const trayBounds = { x: 500, y: 0, width: 30, height: 24 };
       const popoverDim = { width: 360, height: 480 };
-      const screenBounds = { width: 1440, height: 900 };
+      const screenBounds = { x: 0, y: 0, width: 1440, height: 900 };
 
       const pos = calculatePopoverPosition(trayBounds, popoverDim, screenBounds);
       expect(pos.x).toBe(335);
