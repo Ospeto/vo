@@ -89,7 +89,7 @@ static int target_matches(napi_env env, napi_value expected) {
         napi_get_named_property(env, expected, "windowId", &windowValue) != napi_ok || napi_get_value_uint32(env, windowValue, &expectedWindow) != napi_ok) return 0;
     char bundle[512] = {0}, name[512] = {0}, title[1024] = {0}; int pid = 0; uint32_t windowId = 0;
     if (!capture_native(bundle, sizeof(bundle), name, sizeof(name), &pid, &windowId, title, sizeof(title))) return 0;
-    return strcmp(bundle, expectedBundle) == 0 && strcmp(name, expectedApp) == 0 && pid == expectedPid && windowId == expectedWindow;
+    return strcmp(bundle, expectedBundle) == 0 && strcmp(name, expectedApp) == 0 && pid == expectedPid;
 }
 
 static napi_value authorize(napi_env env, napi_callback_info info) {

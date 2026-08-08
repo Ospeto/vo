@@ -1,377 +1,750 @@
 import { describe, expect, test } from "bun:test";
-import { POST_INJECTION_CLIPBOARD_HOLD_MS, SafePasteService, createClipboardPort, createMacSafePasteService, parseTargetLine, type ClipboardSnapshot, type SafePasteDiagnostic, type TargetIdentity } from "../../services/safe-paste.js";
+import {
+	POST_INJECTION_CLIPBOARD_HOLD_MS,
+	SafePasteService,
+	createClipboardPort,
+	createMacSafePasteService,
+	parseTargetLine,
+	sameTarget,
+	type ClipboardSnapshot,
+	type TargetIdentity,
+} from "../../services/safe-paste.js";
 import type { NativePasteAddon } from "../../services/native-paste-addon.js";
 import { loadNativePasteAddon } from "../../services/native-paste-addon.js";
-import { parseGypAssignment, parseDefine, validateElectronHeaderMetadata } from "../../../scripts/native-header-validation.ts";
+import {
+	parseGypAssignment,
+	parseDefine,
+	validateElectronHeaderMetadata,
+} from "../../../scripts/native-header-validation.ts";
 
-const target = (overrides: Partial<TargetIdentity> = {}): TargetIdentity => ({ bundleId: "com.example.editor", appName: "Editor", pid: 42, windowId: 7, windowTitle: "Document", ...overrides });
+const target = (overrides: Partial<TargetIdentity> = {}): TargetIdentity => ({
+	bundleId: "com.example.editor",
+	appName: "Editor",
+	pid: 42,
+	windowId: 7,
+	windowTitle: "Document",
+	...overrides,
+});
 const clipboardFixture = (events: string[] = []) => ({
-  value: "old",
-  readText() { return this.value; },
-  writeText(value: string) { events.push("write"); this.value = value; },
-  snapshot() { events.push("snapshot"); return { text: this.value, formats: [] }; },
-  restore(snapshot: ClipboardSnapshot) { events.push("restore"); this.value = snapshot.text ?? ""; },
+	value: "old",
+	readText() {
+		return this.value;
+	},
+	writeText(value: string) {
+		events.push("write");
+		this.value = value;
+	},
+	snapshot() {
+		events.push("snapshot");
+		return { text: this.value, formats: [] };
+	},
+	restore(snapshot: ClipboardSnapshot) {
+		events.push("restore");
+		this.value = snapshot.text ?? "";
+	},
 });
 
 describe("SafePasteService", () => {
-  test("uses only the direct synchronous native paste contract", async () => {
-    const source = await Bun.file(new URL("../../services/safe-paste.ts", import.meta.url)).text();
-    for (const forbidden of ["timeout", "deadline", "terminationVerified", "Promise.race", "Date.now() + 1000"]) expect(source).not.toContain(forbidden);
-    expect(source).not.toContain("injectPaste(this.capturedTarget,");
-  });
-  test("production paste sources use a direct synchronous native contract", async () => {
-    const source = await Bun.file(new URL("../../services/safe-paste.ts", import.meta.url)).text();
-    const addonSource = await Bun.file(new URL("../../services/native-paste-addon.ts", import.meta.url)).text();
-    expect(source).not.toContain("setImmediate");
-    expect(source).not.toContain("MaybePromise");
-    expect(addonSource).not.toContain("setImmediate");
-    for (const forbidden of ["node:child_process", "child_process", "execFile", "exec(", "spawn(", "pi-paste", "bin/pi-paste"]) {
-      expect(source).not.toContain(forbidden);
-      expect(addonSource).not.toContain(forbidden);
-    }
-  });
+	test("uses only the direct synchronous native paste contract", async () => {
+		const source = await Bun.file(
+			new URL("../../services/safe-paste.ts", import.meta.url),
+		).text();
+		for (const forbidden of [
+			"timeout",
+			"deadline",
+			"terminationVerified",
+			"Promise.race",
+			"Date.now() + 1000",
+		])
+			expect(source).not.toContain(forbidden);
+		expect(source).not.toContain("injectPaste(this.capturedTarget,");
+	});
+	test("production paste sources use a direct synchronous native contract", async () => {
+		const source = await Bun.file(
+			new URL("../../services/safe-paste.ts", import.meta.url),
+		).text();
+		const addonSource = await Bun.file(
+			new URL("../../services/native-paste-addon.ts", import.meta.url),
+		).text();
+		expect(source).not.toContain("setImmediate");
+		expect(source).not.toContain("MaybePromise");
+		expect(addonSource).not.toContain("setImmediate");
+		for (const forbidden of [
+			"node:child_process",
+			"child_process",
+			"execFile",
+			"exec(",
+			"spawn(",
+			"pi-paste",
+			"bin/pi-paste",
+		]) {
+			expect(source).not.toContain(forbidden);
+			expect(addonSource).not.toContain(forbidden);
+		}
+	});
 
-  test("packaged Electron smoke requires capture, authorization, mismatch rejection, and dry-run success", async () => {
-    const serviceSource = await Bun.file(new URL("../../services/safe-paste.ts", import.meta.url)).text();
-    expect(serviceSource).toContain("authorize");
-    expect(serviceSource).toContain("inject");
-    expect(serviceSource).toContain("target_mismatch");
-  });
+	test("packaged Electron smoke requires capture, authorization, mismatch rejection, and dry-run success", async () => {
+		const serviceSource = await Bun.file(
+			new URL("../../services/safe-paste.ts", import.meta.url),
+		).text();
+		expect(serviceSource).toContain("authorize");
+		expect(serviceSource).toContain("inject");
+		expect(serviceSource).toContain("target_mismatch");
+	});
 
-  test("production addon has no compile-time smoke fixture exports", async () => {
-    const addonSource = await Bun.file(new URL("../../native/pi-paste-addon.c", import.meta.url)).text();
-    expect(addonSource).toContain("#ifdef PI_PASTE_TEST_MODE");
-    expect(addonSource).toContain("#endif");
-    expect(addonSource.indexOf("#ifdef PI_PASTE_TEST_MODE")).toBeLessThan(addonSource.indexOf("napi_set_named_property(env, exports, \"smokeFixture\""));
-  });
+	test("production addon has no compile-time smoke fixture exports", async () => {
+		const addonSource = await Bun.file(
+			new URL("../../native/pi-paste-addon.c", import.meta.url),
+		).text();
+		expect(addonSource).toContain("#ifdef PI_PASTE_TEST_MODE");
+		expect(addonSource).toContain("#endif");
+		expect(addonSource.indexOf("#ifdef PI_PASTE_TEST_MODE")).toBeLessThan(
+			addonSource.indexOf(
+				'napi_set_named_property(env, exports, "smokeFixture"',
+			),
+		);
+	});
 
-  test("packaged smoke selects a distinct test-only addon artifact", async () => {
-    const buildSource = await Bun.file(new URL("../../../scripts/build-native-paste-addon.ts", import.meta.url)).text();
-    expect(buildSource).toContain("pi-paste-smoke.node");
-    expect(buildSource).toContain("PI_PASTE_TEST_MODE");
-  });
+	test("packaged smoke selects a distinct test-only addon artifact", async () => {
+		const buildSource = await Bun.file(
+			new URL("../../../scripts/build-native-paste-addon.ts", import.meta.url),
+		).text();
+		expect(buildSource).toContain("pi-paste-smoke.node");
+		expect(buildSource).toContain("PI_PASTE_TEST_MODE");
+	});
 
-  test("native build provisions exact Electron headers without private cache assumptions", async () => {
-    const buildSource = await Bun.file(new URL("../../../scripts/build-native-paste-addon.ts", import.meta.url)).text();
-    expect(buildSource).toContain("https://artifacts.electronjs.org/headers/dist/v40.8.5/node-v40.8.5-headers.tar.gz");
-    expect(buildSource).toContain("932782802be7f6a2277a2b6d48f1c0fc3b20a1cbdadf767ae110763463cd3f9a");
-    expect(buildSource).toContain("--nodedir");
-    expect(buildSource).toContain("electronPackage.version");
-    expect(buildSource).toContain("ELECTRON_HEADERS");
-    expect(buildSource).not.toContain("bunx");
-    expect(buildSource).not.toContain("node-gyp install");
-  });
+	test("native build provisions exact Electron headers without private cache assumptions", async () => {
+		const buildSource = await Bun.file(
+			new URL("../../../scripts/build-native-paste-addon.ts", import.meta.url),
+		).text();
+		expect(buildSource).toContain(
+			"https://artifacts.electronjs.org/headers/dist/v40.8.5/node-v40.8.5-headers.tar.gz",
+		);
+		expect(buildSource).toContain(
+			"932782802be7f6a2277a2b6d48f1c0fc3b20a1cbdadf767ae110763463cd3f9a",
+		);
+		expect(buildSource).toContain("--nodedir");
+		expect(buildSource).toContain("electronPackage.version");
+		expect(buildSource).toContain("ELECTRON_HEADERS");
+		expect(buildSource).not.toContain("bunx");
+		expect(buildSource).not.toContain("node-gyp install");
+	});
 
-  test("executes exact header metadata validation for valid, missing, malformed, duplicate, conflicting, and commented declarations", () => {
-    const validConfig = "{\n 'built_with_electron': 1,\n 'using_electron_config_gypi': 1,\n 'node_module_version': 143,\n}";
-    const validVersion = "#define NODE_MAJOR_VERSION 24\n#define NODE_MINOR_VERSION 14\n#define NODE_PATCH_VERSION 0\n";
-    expect(parseGypAssignment(validConfig, "built_with_electron")).toBe(1);
-    expect(parseDefine(validVersion, "NODE_MAJOR_VERSION")).toBe(24);
-    expect(validateElectronHeaderMetadata(validConfig, validVersion)).toBe(true);
-    for (const config of ["", "{\n 'built_with_electron': nope,\n}", "{\n 'built_with_electron': 1,\n 'built_with_electron': 1,\n}", "{\n 'built_with_electron': 1,\n 'built_with_electron': 2,\n}"]) {
-      expect(parseGypAssignment(config, "built_with_electron")).toBeNull();
-    }
-    expect(parseGypAssignment("# 'built_with_electron': 1\n{\n 'built_with_electron': 1,\n}", "built_with_electron")).toBe(1);
-    for (const version of ["", "#define NODE_MAJOR_VERSION nope\n", "#define NODE_MAJOR_VERSION 24\n#define NODE_MAJOR_VERSION 24\n", "#define NODE_MAJOR_VERSION 24\n#define NODE_MAJOR_VERSION 25\n"]) {
-      expect(parseDefine(version, "NODE_MAJOR_VERSION")).toBeNull();
-    }
-    expect(parseDefine("/* #define NODE_MAJOR_VERSION 24 */\n#define NODE_MAJOR_VERSION 24\n", "NODE_MAJOR_VERSION")).toBe(24);
-    expect(validateElectronHeaderMetadata("{\n 'built_with_electron': 1,\n 'using_electron_config_gypi': 1,\n 'node_module_version': 142,\n}", validVersion)).toBe(false);
-  });
+	test("executes exact header metadata validation for valid, missing, malformed, duplicate, conflicting, and commented declarations", () => {
+		const validConfig =
+			"{\n 'built_with_electron': 1,\n 'using_electron_config_gypi': 1,\n 'node_module_version': 143,\n}";
+		const validVersion =
+			"#define NODE_MAJOR_VERSION 24\n#define NODE_MINOR_VERSION 14\n#define NODE_PATCH_VERSION 0\n";
+		expect(parseGypAssignment(validConfig, "built_with_electron")).toBe(1);
+		expect(parseDefine(validVersion, "NODE_MAJOR_VERSION")).toBe(24);
+		expect(validateElectronHeaderMetadata(validConfig, validVersion)).toBe(
+			true,
+		);
+		for (const config of [
+			"",
+			"{\n 'built_with_electron': nope,\n}",
+			"{\n 'built_with_electron': 1,\n 'built_with_electron': 1,\n}",
+			"{\n 'built_with_electron': 1,\n 'built_with_electron': 2,\n}",
+		]) {
+			expect(parseGypAssignment(config, "built_with_electron")).toBeNull();
+		}
+		expect(
+			parseGypAssignment(
+				"# 'built_with_electron': 1\n{\n 'built_with_electron': 1,\n}",
+				"built_with_electron",
+			),
+		).toBe(1);
+		for (const version of [
+			"",
+			"#define NODE_MAJOR_VERSION nope\n",
+			"#define NODE_MAJOR_VERSION 24\n#define NODE_MAJOR_VERSION 24\n",
+			"#define NODE_MAJOR_VERSION 24\n#define NODE_MAJOR_VERSION 25\n",
+		]) {
+			expect(parseDefine(version, "NODE_MAJOR_VERSION")).toBeNull();
+		}
+		expect(
+			parseDefine(
+				"/* #define NODE_MAJOR_VERSION 24 */\n#define NODE_MAJOR_VERSION 24\n",
+				"NODE_MAJOR_VERSION",
+			),
+		).toBe(24);
+		expect(
+			validateElectronHeaderMetadata(
+				"{\n 'built_with_electron': 1,\n 'using_electron_config_gypi': 1,\n 'node_module_version': 142,\n}",
+				validVersion,
+			),
+		).toBe(false);
+	});
 
-  test("pins the Electron ABI and declares node-gyp directly", async () => {
-    const packageJson = await Bun.file(new URL("../../../package.json", import.meta.url)).json() as { devDependencies: Record<string, string> };
-    expect(packageJson.devDependencies.electron).toBe("40.8.5");
-    expect(packageJson.devDependencies["node-gyp"]).toBe("12.4.0");
-  });
+	test("pins the Electron ABI and declares node-gyp directly", async () => {
+		const packageJson = (await Bun.file(
+			new URL("../../../package.json", import.meta.url),
+		).json()) as { devDependencies: Record<string, string> };
+		expect(packageJson.devDependencies.electron).toBe("40.8.5");
+		expect(packageJson.devDependencies["node-gyp"]).toBe("12.4.0");
+	});
 
-  test("smoke authorization and smoke results use native matching, not hard-coded JS values", async () => {
-    const nativeSource = await Bun.file(new URL("../../native/pi-paste-addon.c", import.meta.url)).text();
-    const serviceSource = await Bun.file(new URL("../../services/safe-paste.ts", import.meta.url)).text();
-    const authorize = nativeSource.slice(nativeSource.indexOf("static napi_value authorize"), nativeSource.indexOf("static napi_value inject"));
-    expect(authorize).toContain("target_matches");
-    expect(serviceSource).toContain("addon.authorize");
-    expect(serviceSource).toContain("addon.inject");
-  });
+	test("smoke authorization and smoke results use native matching, not hard-coded JS values", async () => {
+		const nativeSource = await Bun.file(
+			new URL("../../native/pi-paste-addon.c", import.meta.url),
+		).text();
+		const serviceSource = await Bun.file(
+			new URL("../../services/safe-paste.ts", import.meta.url),
+		).text();
+		const authorize = nativeSource.slice(
+			nativeSource.indexOf("static napi_value authorize"),
+			nativeSource.indexOf("static napi_value inject"),
+		);
+		expect(authorize).toContain("target_matches");
+		expect(serviceSource).toContain("addon.authorize");
+		expect(serviceSource).toContain("addon.inject");
+	});
 
-  test("packaged smoke requires native capture and exact native failure reasons", async () => {
-    const serviceSource = await Bun.file(new URL("../../services/safe-paste.ts", import.meta.url)).text();
-    expect(serviceSource).toContain("target_unavailable");
-    expect(serviceSource).toContain("target_mismatch");
-    expect(serviceSource).toContain("injection_requested");
-  });
+	test("packaged smoke requires native capture and exact native failure reasons", async () => {
+		const serviceSource = await Bun.file(
+			new URL("../../services/safe-paste.ts", import.meta.url),
+		).text();
+		expect(serviceSource).toContain("target_unavailable");
+		expect(serviceSource).toContain("target_mismatch");
+		expect(serviceSource).toContain("injection_requested");
+	});
 
-  test("normal addon service operation has no child-process invocation boundary", async () => {
-    const source = await Bun.file(new URL("../../services/safe-paste.ts", import.meta.url)).text();
-    expect(source).not.toMatch(/(?:execFile|exec|spawn|child_process|pi-paste)/);
-    const addon: NativePasteAddon = { selfCheck: () => true, capture: () => ({ ok: true, ...target() }), authorize: () => ({ ok: true }), inject: () => ({ ok: true, reason: "injection_requested" }) };
-    const service = createMacSafePasteService(addon, clipboardFixture());
-    service.captureTarget();
-    expect(await service.paste("hello")).toEqual({ ok: true, reason: "injection_requested" });
-  });
+	test("normal addon service operation has no child-process invocation boundary", async () => {
+		const source = await Bun.file(
+			new URL("../../services/safe-paste.ts", import.meta.url),
+		).text();
+		expect(source).not.toMatch(
+			/(?:execFile|exec|spawn|child_process|pi-paste)/,
+		);
+		const addon: NativePasteAddon = {
+			selfCheck: () => true,
+			capture: () => ({ ok: true, ...target() }),
+			authorize: () => ({ ok: true }),
+			inject: () => ({ ok: true, reason: "injection_requested" }),
+		};
+		const service = createMacSafePasteService(addon, clipboardFixture());
+		service.captureTarget();
+		expect(await service.paste("hello")).toEqual({
+			ok: true,
+			reason: "injection_requested",
+		});
+	});
 
-  test("dry-run injection is non-invasive and reports a request without posting", async () => {
-    let posted = false;
-    const addon = {
-      selfCheck: () => true,
-      capture: () => ({ ok: true, ...target() }),
-      authorize: () => ({ ok: true as const }),
-      inject: (_target: TargetIdentity, options?: { dryRun?: boolean }) => options?.dryRun ? { ok: true as const, reason: "injection_requested" as const } : (posted = true, { ok: true as const, reason: "injection_requested" as const }),
-    };
-    const result = addon.inject(target(), { dryRun: true });
-    expect(result).toEqual({ ok: true, reason: "injection_requested" });
-    expect(posted).toBe(false);
-  });
+	test("dry-run injection is non-invasive and reports a request without posting", async () => {
+		let posted = false;
+		const addon = {
+			selfCheck: () => true,
+			capture: () => ({ ok: true, ...target() }),
+			authorize: () => ({ ok: true as const }),
+			inject: (_target: TargetIdentity, options?: { dryRun?: boolean }) =>
+				options?.dryRun
+					? { ok: true as const, reason: "injection_requested" as const }
+					: ((posted = true),
+						{ ok: true as const, reason: "injection_requested" as const }),
+		};
+		const result = addon.inject(target(), { dryRun: true });
+		expect(result).toEqual({ ok: true, reason: "injection_requested" });
+		expect(posted).toBe(false);
+	});
 
-  test("uses the in-process addon in authorization and injection order", async () => {
-    const events: string[] = [];
-    const addon: NativePasteAddon = {
-      selfCheck: () => true,
-      capture: () => ({ ok: true, ...target() }),
-      authorize: () => { events.push("authorize"); return { ok: true }; },
-      inject: () => { events.push("inject"); return { ok: true, reason: "injection_requested" }; },
-    };
-    const service = createMacSafePasteService(addon, clipboardFixture(events));
-    service.captureTarget();
-    expect(await service.paste("transcript")).toEqual({ ok: true, reason: "injection_requested" });
-    expect(events).toEqual(["authorize", "write", "inject", "write"]);
-  });
+	test("uses the in-process addon in authorization and injection order", async () => {
+		const events: string[] = [];
+		const addon: NativePasteAddon = {
+			selfCheck: () => true,
+			capture: () => ({ ok: true, ...target() }),
+			authorize: () => {
+				events.push("authorize");
+				return { ok: true };
+			},
+			inject: () => {
+				events.push("inject");
+				return { ok: true, reason: "injection_requested" };
+			},
+		};
+		const service = createMacSafePasteService(addon, clipboardFixture(events));
+		service.captureTarget();
+		expect(await service.paste("transcript")).toEqual({
+			ok: true,
+			reason: "injection_requested",
+		});
+		expect(events).toEqual(["authorize", "write", "inject", "write"]);
+	});
 
-  test("reports guarded addon load failure without touching clipboard", async () => {
-    const clipboard = clipboardFixture();
-    const service = createMacSafePasteService(null, clipboard);
-    service.captureTarget();
-    expect(await service.paste("secret")).toEqual({ ok: false, reason: "native_unavailable" });
-    expect(clipboard.value).toBe("old");
-  });
+	test("reports guarded addon load failure without touching clipboard", async () => {
+		const clipboard = clipboardFixture();
+		const service = createMacSafePasteService(null, clipboard);
+		service.captureTarget();
+		expect(await service.paste("secret")).toEqual({
+			ok: false,
+			reason: "native_unavailable",
+		});
+		expect(clipboard.value).toBe("old");
+	});
 
-  test("guards a missing addon load without throwing during import", () => {
-    expect(loadNativePasteAddon("/definitely/missing/pi-paste.node")).toBeNull();
-  });
+	test("guards a missing addon load without throwing during import", () => {
+		expect(
+			loadNativePasteAddon("/definitely/missing/pi-paste.node"),
+		).toBeNull();
+	});
 
-  test("calls native injection directly and restores after an actual native failure", async () => {
-    const events: string[] = [];
-    const received: TargetIdentity[] = [];
-    const service = new SafePasteService(
-      () => target(),
-      async (expected) => { received.push(expected); throw Object.assign(new Error("native failure"), { reason: "injection_failed" }); },
-      clipboardFixture(events),
-      async () => {},
-    );
-    service.captureTarget();
-    expect(await service.paste("secret")).toEqual({ ok: false, reason: "injection_failed" });
-    expect(received).toEqual([target()]);
-    expect(events).toEqual(["snapshot", "write", "snapshot", "snapshot", "restore"]);
-  });
+	test("calls native injection directly and restores after an actual native failure", async () => {
+		const events: string[] = [];
+		const received: TargetIdentity[] = [];
+		const service = new SafePasteService(
+			() => target(),
+			async (expected) => {
+				received.push(expected);
+				throw Object.assign(new Error("native failure"), {
+					reason: "injection_failed",
+				});
+			},
+			clipboardFixture(events),
+			async () => {},
+		);
+		service.captureTarget();
+		expect(await service.paste("secret")).toEqual({
+			ok: false,
+			reason: "injection_failed",
+		});
+		expect(received).toEqual([target()]);
+		expect(events).toEqual([
+			"snapshot",
+			"write",
+			"snapshot",
+			"snapshot",
+			"restore",
+		]);
+	});
 
-  test("holds the written transcript readable until the clipboard is restored", async () => {
-    const events: string[] = [];
-    let releaseHold!: () => void;
-    const hold = new Promise<void>((resolve) => { releaseHold = resolve; });
-    const clipboard = clipboardFixture(events);
-    const service = new SafePasteService(
-      () => target(),
-      async () => { events.push("inject"); },
-      clipboard,
-      async () => {},
-      undefined,
-      async (durationMs) => { events.push(`hold:${durationMs}`); await hold; },
-    );
-    service.captureTarget();
-    const paste = service.paste("transcript");
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(clipboard.value).toBe("transcript");
-    expect(events).toEqual(["snapshot", "write", "snapshot", "inject", `hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`]);
-    let resolved = false;
-    void paste.then(() => { resolved = true; });
-    await Promise.resolve();
-    expect(resolved).toBe(false);
-    releaseHold();
-    expect(await paste).toEqual({ ok: true, reason: "injection_requested" });
-    expect(events).toEqual(["snapshot", "write", "snapshot", "inject", `hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`, "snapshot", "restore"]);
-    expect(clipboard.value).toBe("old");
-  });
+	test("holds the written transcript readable until the clipboard is restored", async () => {
+		const events: string[] = [];
+		let releaseHold!: () => void;
+		const hold = new Promise<void>((resolve) => {
+			releaseHold = resolve;
+		});
+		const clipboard = clipboardFixture(events);
+		const service = new SafePasteService(
+			() => target(),
+			async () => {
+				events.push("inject");
+			},
+			clipboard,
+			async () => {},
+			undefined,
+			async (durationMs) => {
+				events.push(`hold:${durationMs}`);
+				await hold;
+			},
+		);
+		service.captureTarget();
+		const paste = service.paste("transcript");
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(clipboard.value).toBe("transcript");
+		expect(events).toEqual([
+			"snapshot",
+			"write",
+			"snapshot",
+			"inject",
+			`hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`,
+		]);
+		let resolved = false;
+		void paste.then(() => {
+			resolved = true;
+		});
+		await Promise.resolve();
+		expect(resolved).toBe(false);
+		releaseHold();
+		expect(await paste).toEqual({ ok: true, reason: "injection_requested" });
+		expect(events).toEqual([
+			"snapshot",
+			"write",
+			"snapshot",
+			"inject",
+			`hold:${POST_INJECTION_CLIPBOARD_HOLD_MS}`,
+			"snapshot",
+			"restore",
+		]);
+		expect(clipboard.value).toBe("old");
+	});
 
-  test("restores immediately without a hold when injection fails", async () => {
-    const events: string[] = [];
-    let held = false;
-    const service = new SafePasteService(
-      () => target(),
-      async () => { throw Object.assign(new Error("native failure"), { reason: "injection_failed" }); },
-      clipboardFixture(events),
-      async () => {},
-      undefined,
-      async () => { held = true; },
-    );
-    service.captureTarget();
-    expect(await service.paste("transcript")).toEqual({ ok: false, reason: "injection_failed" });
-    expect(events).toEqual(["snapshot", "write", "snapshot", "snapshot", "restore"]);
-    expect(held).toBe(false);
-  });
+	test("restores immediately without a hold when injection fails", async () => {
+		const events: string[] = [];
+		let held = false;
+		const service = new SafePasteService(
+			() => target(),
+			async () => {
+				throw Object.assign(new Error("native failure"), {
+					reason: "injection_failed",
+				});
+			},
+			clipboardFixture(events),
+			async () => {},
+			undefined,
+			async () => {
+				held = true;
+			},
+		);
+		service.captureTarget();
+		expect(await service.paste("transcript")).toEqual({
+			ok: false,
+			reason: "injection_failed",
+		});
+		expect(events).toEqual([
+			"snapshot",
+			"write",
+			"snapshot",
+			"snapshot",
+			"restore",
+		]);
+		expect(held).toBe(false);
+	});
 
-  test("returns clipboard_restore_failed when restoration throws", async () => {
-    const clipboard = clipboardFixture();
-    clipboard.restore = () => { throw new Error("restore failed"); };
-    const service = new SafePasteService(() => target(), async () => {}, clipboard);
-    service.captureTarget();
-    expect(await service.paste("hello")).toEqual({ ok: false, reason: "clipboard_restore_failed" });
-  });
+	test("returns clipboard_restore_failed when restoration throws", async () => {
+		const clipboard = clipboardFixture();
+		clipboard.restore = () => {
+			throw new Error("restore failed");
+		};
+		const service = new SafePasteService(
+			() => target(),
+			async () => {},
+			clipboard,
+		);
+		service.captureTarget();
+		expect(await service.paste("hello")).toEqual({
+			ok: false,
+			reason: "clipboard_restore_failed",
+		});
+	});
 
-  test("preserves target/app/PID/window-only matching", async () => {
-    let current = target();
-    const clipboard = clipboardFixture();
-    const service = new SafePasteService(() => current, async () => {}, clipboard);
-    service.captureTarget();
-    current = target({ windowId: 8 });
-    expect(await service.paste("secret")).toEqual({ ok: false, reason: "target_mismatch" });
-    expect(clipboard.value).toBe("old");
-  });
+	test("authorizes same-process window ID shifts while preserving bundle/app/PID process matching", async () => {
+		let current = target();
+		const clipboard = clipboardFixture();
+		const service = new SafePasteService(
+			() => current,
+			async () => {},
+			clipboard,
+		);
+		service.captureTarget();
+		current = target({ windowId: 8, windowTitle: "Different Window Title" });
+		expect(await service.paste("secret")).toEqual({
+			ok: true,
+			reason: "injection_requested",
+		});
 
-  test("restores the clipboard when cancellation happens after writing but before injection", async () => {
-    let isCurrent = true;
-    let value = "old";
-    let injected = false;
-    const events: string[] = [];
-    const clipboard = {
-      readText: () => value,
-      writeText: (text: string) => { events.push("write"); value = text; isCurrent = false; },
-      snapshot: () => { events.push("snapshot"); return { text: value, formats: [] }; },
-      restore: (snapshot: ClipboardSnapshot) => { events.push("restore"); value = snapshot.text ?? ""; },
-    };
-    const service = new SafePasteService(() => target(), async () => { injected = true; }, clipboard, async () => {});
-    service.captureTarget();
+		// Different app/bundleId/PID must still be rejected as target_mismatch
+		service.captureTarget();
+		current = target({ bundleId: "com.other.app" });
+		expect(await service.paste("secret")).toEqual({
+			ok: false,
+			reason: "target_mismatch",
+		});
 
-    expect(await service.paste("secret", () => isCurrent)).toEqual({ ok: false, reason: "target_mismatch" });
-    expect(value).toBe("old");
-    expect(injected).toBe(false);
-    expect(events).toEqual(["snapshot", "write", "snapshot", "snapshot", "restore"]);
-  });
+		service.captureTarget();
+		current = target({ pid: 99 });
+		expect(await service.paste("secret")).toEqual({
+			ok: false,
+			reason: "target_mismatch",
+		});
 
-  test("parses optional non-authoritative title without widening target policy", () => {
-    expect(parseTargetLine("com.example.editor\tEditor\t42\t7\t\n")).toEqual({ ...target(), windowTitle: undefined });
-    expect(parseTargetLine("com.example.editor\tEditor\t42\t7\tDocument\textra\n")).toBeNull();
-  });
+		service.captureTarget();
+		current = target({ appName: "OtherApp" });
+		expect(await service.paste("secret")).toEqual({
+			ok: false,
+			reason: "target_mismatch",
+		});
+	});
 
-  test("restores standard clipboard data through the adapter", () => {
-    let text = "before";
-    const port = createClipboardPort({ readText: () => text, writeText: (value: string) => { text = value; } });
-    const snapshot = port.snapshot();
-    port.writeText("during");
-    port.restore(snapshot);
-    expect(text).toBe("before");
-  });
+	test("restores the clipboard when cancellation happens after writing but before injection", async () => {
+		let isCurrent = true;
+		let value = "old";
+		let injected = false;
+		const events: string[] = [];
+		const clipboard = {
+			readText: () => value,
+			writeText: (text: string) => {
+				events.push("write");
+				value = text;
+				isCurrent = false;
+			},
+			snapshot: () => {
+				events.push("snapshot");
+				return { text: value, formats: [] };
+			},
+			restore: (snapshot: ClipboardSnapshot) => {
+				events.push("restore");
+				value = snapshot.text ?? "";
+			},
+		};
+		const service = new SafePasteService(
+			() => target(),
+			async () => {
+				injected = true;
+			},
+			clipboard,
+			async () => {},
+		);
+		service.captureTarget();
 
-  test("fails closed when custom formats cannot be restored exactly", async () => {
-    const clipboard = {
-      value: "old",
-      readText() { return this.value; },
-      writeText(value: string) { this.value = value; },
-      availableFormats: () => ["text/plain", "application/x-private"],
-      readBuffer: () => Buffer.from([1, 2, 3]),
-      snapshot() { return { text: this.value, formats: [{ format: "application/x-private", data: Buffer.from([1, 2, 3]) }] }; },
-      restore() { throw new Error("not expected"); },
-    };
-    let injected = false;
-    const service = new SafePasteService(() => target(), async () => { injected = true; }, createClipboardPort(clipboard));
-    service.captureTarget();
-    expect(await service.paste("secret")).toEqual({ ok: false, reason: "clipboard_restore_failed" });
-    expect(injected).toBe(false);
-  });
+		expect(await service.paste("secret", () => isCurrent)).toEqual({
+			ok: false,
+			reason: "target_mismatch",
+		});
+		expect(value).toBe("old");
+		expect(injected).toBe(false);
+		expect(events).toEqual([
+			"snapshot",
+			"write",
+			"snapshot",
+			"snapshot",
+			"restore",
+		]);
+	});
 
-  describe("Controllable lifecycle barriers in SafePasteService.paste", () => {
-    test("invalidation at authorization barrier prevents snapshot, write, and injection", async () => {
-      let isCurrent = true;
-      const events: string[] = [];
-      const clipboard = {
-        readText: () => "old",
-        writeText: (t: string) => { events.push("write"); },
-        snapshot: () => { events.push("snapshot"); return { text: "old", formats: [] }; },
-        restore: () => { events.push("restore"); },
-      };
-      const service = new SafePasteService(
-        () => target(),
-        async () => { events.push("inject"); },
-        clipboard,
-        async () => { events.push("authorize"); isCurrent = false; }
-      );
-      service.captureTarget();
+	test("parses optional non-authoritative title without widening target policy", () => {
+		expect(parseTargetLine("com.example.editor\tEditor\t42\t7\t\n")).toEqual({
+			...target(),
+			windowTitle: undefined,
+		});
+		expect(
+			parseTargetLine("com.example.editor\tEditor\t42\t7\tDocument\textra\n"),
+		).toBeNull();
+	});
 
-      const res = await service.paste("text", () => isCurrent);
-      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
-      expect(events).toEqual(["authorize"]);
-    });
+	test("restores standard clipboard data through the adapter", () => {
+		let text = "before";
+		const port = createClipboardPort({
+			readText: () => text,
+			writeText: (value: string) => {
+				text = value;
+			},
+		});
+		const snapshot = port.snapshot();
+		port.writeText("during");
+		port.restore(snapshot);
+		expect(text).toBe("before");
+	});
 
-    test("invalidation at snapshot barrier prevents write and injection", async () => {
-      let isCurrent = true;
-      const events: string[] = [];
-      const clipboard = {
-        readText: () => "old",
-        writeText: (t: string) => { events.push("write"); },
-        snapshot: () => { events.push("snapshot"); isCurrent = false; return { text: "old", formats: [] }; },
-        restore: () => { events.push("restore"); },
-      };
-      const service = new SafePasteService(
-        () => target(),
-        async () => { events.push("inject"); },
-        clipboard,
-        async () => { events.push("authorize"); }
-      );
-      service.captureTarget();
+	test("fails closed when custom formats cannot be restored exactly", async () => {
+		const clipboard = {
+			value: "old",
+			readText() {
+				return this.value;
+			},
+			writeText(value: string) {
+				this.value = value;
+			},
+			availableFormats: () => ["text/plain", "application/x-private"],
+			readBuffer: () => Buffer.from([1, 2, 3]),
+			snapshot() {
+				return {
+					text: this.value,
+					formats: [
+						{ format: "application/x-private", data: Buffer.from([1, 2, 3]) },
+					],
+				};
+			},
+			restore() {
+				throw new Error("not expected");
+			},
+		};
+		let injected = false;
+		const service = new SafePasteService(
+			() => target(),
+			async () => {
+				injected = true;
+			},
+			createClipboardPort(clipboard),
+		);
+		service.captureTarget();
+		expect(await service.paste("secret")).toEqual({
+			ok: false,
+			reason: "clipboard_restore_failed",
+		});
+		expect(injected).toBe(false);
+	});
 
-      const res = await service.paste("text", () => isCurrent);
-      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
-      expect(events).toEqual(["authorize", "snapshot"]);
-    });
+	describe("Controllable lifecycle barriers in SafePasteService.paste", () => {
+		test("invalidation at authorization barrier prevents snapshot, write, and injection", async () => {
+			let isCurrent = true;
+			const events: string[] = [];
+			const clipboard = {
+				readText: () => "old",
+				writeText: (_t: string) => {
+					events.push("write");
+				},
+				snapshot: () => {
+					events.push("snapshot");
+					return { text: "old", formats: [] };
+				},
+				restore: () => {
+					events.push("restore");
+				},
+			};
+			const service = new SafePasteService(
+				() => target(),
+				async () => {
+					events.push("inject");
+				},
+				clipboard,
+				async () => {
+					events.push("authorize");
+					isCurrent = false;
+				},
+			);
+			service.captureTarget();
 
-    test("invalidation at clipboard write barrier prevents write and injection", async () => {
-      let isCurrent = true;
-      const events: string[] = [];
-      const clipboard = {
-        readText: () => "old",
-        writeText: (t: string) => { events.push("write"); },
-        snapshot: () => {
-          events.push("snapshot");
-          isCurrent = false; // Invalidate right after snapshot, before write
-          return { text: "old", formats: [] };
-        },
-        restore: () => { events.push("restore"); },
-      };
-      const service = new SafePasteService(
-        () => target(),
-        async () => { events.push("inject"); },
-        clipboard,
-        async () => { events.push("authorize"); }
-      );
-      service.captureTarget();
+			const res = await service.paste("text", () => isCurrent);
+			expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+			expect(events).toEqual(["authorize"]);
+		});
 
-      const res = await service.paste("text", () => isCurrent);
-      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
-      expect(events).toEqual(["authorize", "snapshot"]);
-    });
+		test("invalidation at snapshot barrier prevents write and injection", async () => {
+			let isCurrent = true;
+			const events: string[] = [];
+			const clipboard = {
+				readText: () => "old",
+				writeText: (_t: string) => {
+					events.push("write");
+				},
+				snapshot: () => {
+					events.push("snapshot");
+					isCurrent = false;
+					return { text: "old", formats: [] };
+				},
+				restore: () => {
+					events.push("restore");
+				},
+			};
+			const service = new SafePasteService(
+				() => target(),
+				async () => {
+					events.push("inject");
+				},
+				clipboard,
+				async () => {
+					events.push("authorize");
+				},
+			);
+			service.captureTarget();
 
-    test("invalidation at native injection barrier prevents injection and restores clipboard", async () => {
-      let isCurrent = true;
-      const events: string[] = [];
-      let clipboardValue = "old";
-      const clipboard = {
-        readText: () => clipboardValue,
-        writeText: (t: string) => { events.push("write"); clipboardValue = t; isCurrent = false; },
-        snapshot: () => { events.push("snapshot"); return { text: clipboardValue, formats: [] }; },
-        restore: (s: ClipboardSnapshot) => { events.push("restore"); clipboardValue = s.text ?? ""; },
-      };
-      const service = new SafePasteService(
-        () => target(),
-        async () => { events.push("inject"); },
-        clipboard,
-        async () => { events.push("authorize"); }
-      );
-      service.captureTarget();
+			const res = await service.paste("text", () => isCurrent);
+			expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+			expect(events).toEqual(["authorize", "snapshot"]);
+		});
 
-      const res = await service.paste("text", () => isCurrent);
-      expect(res).toEqual({ ok: false, reason: "target_mismatch" });
-      expect(events).toEqual(["authorize", "snapshot", "write", "snapshot", "snapshot", "restore"]);
-      expect(clipboardValue).toBe("old");
-    });
-  });
+		test("invalidation at clipboard write barrier prevents write and injection", async () => {
+			let isCurrent = true;
+			const events: string[] = [];
+			const clipboard = {
+				readText: () => "old",
+				writeText: (_t: string) => {
+					events.push("write");
+				},
+				snapshot: () => {
+					events.push("snapshot");
+					isCurrent = false; // Invalidate right after snapshot, before write
+					return { text: "old", formats: [] };
+				},
+				restore: () => {
+					events.push("restore");
+				},
+			};
+			const service = new SafePasteService(
+				() => target(),
+				async () => {
+					events.push("inject");
+				},
+				clipboard,
+				async () => {
+					events.push("authorize");
+				},
+			);
+			service.captureTarget();
+
+			const res = await service.paste("text", () => isCurrent);
+			expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+			expect(events).toEqual(["authorize", "snapshot"]);
+		});
+
+		test("invalidation at native injection barrier prevents injection and restores clipboard", async () => {
+			let isCurrent = true;
+			const events: string[] = [];
+			let clipboardValue = "old";
+			const clipboard = {
+				readText: () => clipboardValue,
+				writeText: (t: string) => {
+					events.push("write");
+					clipboardValue = t;
+					isCurrent = false;
+				},
+				snapshot: () => {
+					events.push("snapshot");
+					return { text: clipboardValue, formats: [] };
+				},
+				restore: (s: ClipboardSnapshot) => {
+					events.push("restore");
+					clipboardValue = s.text ?? "";
+				},
+			};
+			const service = new SafePasteService(
+				() => target(),
+				async () => {
+					events.push("inject");
+				},
+				clipboard,
+				async () => {
+					events.push("authorize");
+				},
+			);
+			service.captureTarget();
+
+			const res = await service.paste("text", () => isCurrent);
+			expect(res).toEqual({ ok: false, reason: "target_mismatch" });
+			expect(events).toEqual([
+				"authorize",
+				"snapshot",
+				"write",
+				"snapshot",
+				"snapshot",
+				"restore",
+			]);
+			expect(clipboardValue).toBe("old");
+		});
+	});
+
+	describe("sameTarget", () => {
+		test("returns true for same-process targets even if windowId or windowTitle shifts", () => {
+			const a = target({ windowId: 100, windowTitle: "Window 1" });
+			const b = target({ windowId: 200, windowTitle: "Window 2" });
+			expect(sameTarget(a, b)).toBe(true);
+		});
+
+		test("normalizes bundleId and appName case and whitespace", () => {
+			const a = target({
+				bundleId: "  COM.EXAMPLE.EDITOR  ",
+				appName: "  EDITOR  ",
+			});
+			const b = target({ bundleId: "com.example.editor", appName: "editor" });
+			expect(sameTarget(a, b)).toBe(true);
+		});
+
+		test("returns false for cross-application target switches", () => {
+			const base = target();
+			expect(sameTarget(base, target({ bundleId: "com.apple.terminal" }))).toBe(
+				false,
+			);
+			expect(sameTarget(base, target({ appName: "Terminal" }))).toBe(false);
+			expect(sameTarget(base, target({ pid: 9999 }))).toBe(false);
+		});
+
+		test("returns false when either target is invalid", () => {
+			const base = target();
+			const invalidPid = { ...base, pid: -1 };
+			const invalidWindow = { ...base, windowId: 0 };
+			expect(sameTarget(base, invalidPid)).toBe(false);
+			expect(sameTarget(base, invalidWindow)).toBe(false);
+			expect(sameTarget(invalidPid, base)).toBe(false);
+		});
+	});
 });
