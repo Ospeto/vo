@@ -101,7 +101,7 @@ export function calculatePopoverPosition(
 ) {
   const trayCenterX = trayBounds.x + trayBounds.width / 2;
   let targetX = Math.round(trayCenterX - popoverDim.width / 2);
-  let targetY = Math.round(trayBounds.y + trayBounds.height + 4);
+  const targetY = Math.round(trayBounds.y + trayBounds.height + 4);
 
   if (targetX < 10) targetX = 10;
   if (targetX + popoverDim.width > screenBounds.width - 10) {
@@ -226,6 +226,18 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       const pos = calculatePopoverPosition(trayBounds, popoverDim, screenBounds);
       expect(pos.x).toBe(335);
       expect(pos.y).toBe(28);
+    });
+
+    test("centers compact 280x420 popover window under tray icon", () => {
+      const trayBounds = { x: 500, y: 0, width: 40, height: 24 };
+      const popoverDim = { width: 280, height: 420 };
+      const screenBounds = { x: 0, y: 0, width: 1440, height: 900 };
+
+      const pos = calculatePopoverPosition(trayBounds, popoverDim, screenBounds);
+      expect(pos.x).toBe(380); // (500 + 20) - 140 = 380
+      expect(pos.y).toBe(28);  // 24 + 4 = 28
+      expect(pos.width).toBe(280);
+      expect(pos.height).toBe(420);
     });
   });
 
