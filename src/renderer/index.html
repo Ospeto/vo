@@ -18,7 +18,7 @@
     >
       <!-- Header -->
       <header
-        class="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-black/20 shrink-0"
+        class="flex items-center justify-between px-4 py-2.5 border-b border-white/5 shrink-0"
       >
         <div class="flex items-center gap-2">
           <svg
@@ -112,9 +112,9 @@
                     >Translate</span
                   >
                   <span
-                    id="translateSubtext"
-                    class="text-[10px] text-accent font-medium"
-                    >English to Spanish</span
+                    id="translate-lang-display"
+                    class="text-[10px] text-on-surface-variant font-medium"
+                    >None</span
                   >
                 </div>
               </div>
@@ -131,16 +131,16 @@
                 class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                 aria-label="Translate Setting"
               >
-                <option value="none">None (Disabled)</option>
-                <option value="Spanish">English to Spanish</option>
-                <option value="French">English to French</option>
-                <option value="German">English to German</option>
-                <option value="Japanese">English to Japanese</option>
-                <option value="Burmese">English to Burmese</option>
-                <option value="Chinese">English to Chinese</option>
-                <option value="Korean">English to Korean</option>
-                <option value="Thai">English to Thai</option>
-                <option value="English">English to English</option>
+                <option value="none">None</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Burmese">Burmese (မြန်မာ)</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Korean">Korean</option>
+                <option value="Thai">Thai</option>
+                <option value="English">English</option>
               </select>
             </div>
 
@@ -411,19 +411,36 @@
           ></canvas>
         </div>
 
-        <!-- Hidden history section to preserve API compatibility -->
-        <div class="history-section hidden">
-          <button id="clearHistoryBtn" type="button" class="hidden">
-            Clear
-          </button>
-          <div id="historyContainer" class="hidden"></div>
-        </div>
+        <div class="h-px bg-white/5 mx-4"></div>
+
+        <!-- History Section -->
+        <section class="history-section flex flex-col px-2">
+          <div class="flex items-center justify-between px-2 pb-2">
+            <div
+              class="text-[10px] font-semibold tracking-wider text-on-surface-variant uppercase"
+            >
+              History
+            </div>
+            <button
+              id="clearHistoryBtn"
+              type="button"
+              class="text-[10px] text-accent hover:text-white transition-colors border-0 bg-transparent cursor-pointer font-medium"
+              title="Clear transcription history"
+            >
+              Clear
+            </button>
+          </div>
+          <div
+            id="historyContainer"
+            class="history-list flex flex-col gap-1 max-h-[160px] overflow-y-auto px-1"
+          ></div>
+        </section>
       </main>
 
       <!-- Footer Status Bar -->
       <footer
         id="footerStatus"
-        class="mt-auto border-t border-white/5 bg-black/20 backdrop-blur-md px-4 py-3 flex justify-between items-center shrink-0 cursor-pointer hover:bg-white/5 transition-colors"
+        class="mt-auto border-t border-white/5 px-4 py-3 flex justify-between items-center shrink-0 cursor-pointer hover:bg-white/5 transition-colors"
       >
         <div class="flex items-center gap-3">
           <div

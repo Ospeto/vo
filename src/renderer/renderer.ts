@@ -37,9 +37,9 @@ const translateToggleBtn = document.getElementById(
 const translateSelect = document.getElementById(
 	"translateSelect",
 ) as HTMLSelectElement;
-const translateSubtext = document.getElementById(
-	"translateSubtext",
-) as HTMLElement;
+const translateLangDisplay = (document.getElementById(
+	"translate-lang-display",
+) || document.getElementById("translateSubtext")) as HTMLElement;
 const chimeRow = document.getElementById("chimeRow") as HTMLElement;
 let currentTargetLanguage = "Spanish";
 
@@ -839,9 +839,14 @@ function updateChimeBtnUI() {
 	}
 }
 
+function getLanguageDisplayName(lang: string): string {
+	if (lang === "Burmese") return "Burmese (မြန်မာ)";
+	return lang;
+}
+
 function updateTranslateBtnUI() {
 	const subtext =
-		translateSubtext || document.getElementById("translateSubtext");
+		translateLangDisplay || document.getElementById("translate-lang-display");
 	const selectEl =
 		translateSelect ||
 		(document.getElementById("translateSelect") as HTMLSelectElement);
@@ -854,7 +859,7 @@ function updateTranslateBtnUI() {
 			translateToggleBtn.title = "Auto-Translation: Enabled";
 		}
 		if (subtext) {
-			subtext.textContent = `English to ${targetLang}`;
+			subtext.textContent = getLanguageDisplayName(targetLang);
 			subtext.className = "text-[10px] text-accent font-medium";
 		}
 		if (selectEl) {
@@ -1045,6 +1050,9 @@ export async function renderHistory() {
 		const el = document.createElement("div");
 		el.className = "history-item";
 
+		const contentGroup = document.createElement("div");
+		contentGroup.className = "history-content-group";
+
 		const textEl = document.createElement("div");
 		textEl.className = "history-text";
 		textEl.textContent = item.text;
@@ -1067,8 +1075,22 @@ export async function renderHistory() {
 
 		metaEl.textContent = `${timeStr} · ${item.activeApp || "App"}`;
 
-		el.title = "Click to copy text to clipboard";
-		el.addEventListener("click", async () => {
+		contentGroup.appendChild(textEl);
+		contentGroup.appendChild(metaEl);
+
+		const copyBtn = document.createElement("button");
+		copyBtn.type = "button";
+		copyBtn.className = "copy-btn";
+		copyBtn.title = "Copy to clipboard";
+		copyBtn.setAttribute("aria-label", "Copy to clipboard");
+		copyBtn.textContent = "Copy";
+
+		let copyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+		const handleCopy = async (e?: Event) => {
+			if (e) {
+				e.stopPropagation();
+			}
 			try {
 				if (
 					!navigator.clipboard ||
@@ -1077,23 +1099,39 @@ export async function renderHistory() {
 					throw new Error("Clipboard API unavailable");
 				}
 				await navigator.clipboard.writeText(item.text);
-				const originalText = metaEl.textContent;
-				metaEl.textContent = "";
-				const copiedSpan = document.createElement("span");
-				copiedSpan.style.color = "#2dd4bf";
-				copiedSpan.style.fontWeight = "600";
-				copiedSpan.textContent = "✓ Copied to clipboard!";
-				metaEl.appendChild(copiedSpan);
-				setTimeout(() => {
-					metaEl.textContent = originalText;
+				if (copyTimeout) {
+					clearTimeout(copyTimeout);
+				}
+				copyBtn.textContent = "✓ Copied";
+				const originalMetaText = `${timeStr} · ${item.activeApp || "App"}`;
+				metaEl.textContent = "✓ Copied to clipboard!";
+				metaEl.style.color = "#2dd4bf";
+				copyTimeout = setTimeout(() => {
+					copyBtn.textContent = "Copy";
+					metaEl.textContent = originalMetaText;
+					metaEl.style.color = "";
+					copyTimeout = null;
 				}, 1200);
 			} catch (err) {
 				console.error("Failed to copy history item:", err);
 			}
+		};
+
+		copyBtn.addEventListener("click", handleCopy);
+
+		el.setAttribute("tabindex", "0");
+		el.setAttribute("role", "button");
+		el.title = "Click to copy text to clipboard";
+		el.addEventListener("click", handleCopy);
+		el.addEventListener("keydown", (e: KeyboardEvent) => {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				handleCopy();
+			}
 		});
 
-		el.appendChild(textEl);
-		el.appendChild(metaEl);
+		el.appendChild(contentGroup);
+		el.appendChild(copyBtn);
 		fragment.appendChild(el);
 	});
 
