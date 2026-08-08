@@ -506,7 +506,7 @@ function handleVoiceUndoCheck(text: string): boolean {
 
 
 
-const POPOVER_SIZE = { width: 390, height: 720 } as const;
+const POPOVER_SIZE = { width: 280, height: 420 } as const;
 
 function createPopoverWindow() {
   popoverWindow = new BrowserWindow({
