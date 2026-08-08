@@ -29,6 +29,9 @@ const mockElectronObj = {
       if (event === "closed") this.closedHandler = handler;
     }
     once() {}
+    removeAllListeners() {
+      this.closedHandler = null;
+    }
   },
   ipcMain: { on: mock(() => {}), handle: mock(() => {}) },
   Tray: class MockTray {
@@ -60,8 +63,8 @@ const {
 } = await import("../../services/runtime-state.js");
 const { default: logger, isFileLoggingActive } = await import("../../services/logger.js");
 const { stopDaemonServer, startDaemonServer } = await import("../../services/daemon-ipc.js");
-const { gracefulShutdown, _resetShutdownStateForTests, handleFatalProcessError, captureOrchestrator, runStartupSequence } = await import("../../main.js");
-import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
+const { gracefulShutdown, _resetShutdownStateForTests, handleFatalProcessError, handleSignalTermination, captureOrchestrator, runStartupSequence } = await import("../../main.js");
+import type { RecordingLifecycle } from "../../services/recording-lifecycle.js";
 
 const testStateDir = join(
   tmpdir(),
@@ -89,7 +92,9 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
     setRuntimeStateDirectoryForTests(null);
     try {
       rmSync(testStateDir, { recursive: true, force: true });
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
     _resetShutdownStateForTests();
   });
 
@@ -238,7 +243,7 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
       } catch (err: any) {
         expect(err.code).toBe("EEXIST");
       }
-      try { unlinkSync(tmpPath); } catch {}
+      try { unlinkSync(tmpPath); } catch (_err) {}
 
       expect(existsSync(stateFile)).toBe(true);
       const content = JSON.parse(readFileSync(stateFile, "utf-8"));
@@ -532,6 +537,52 @@ describe("VO Remediation PR-12: Startup, Shutdown, Logger & Runtime State Suite"
 
       await gracefulShutdown();
       expect(lifecycle.snapshot().state).toBe("idle");
+    });
+  });
+
+  describe("7. Signal Termination & Disk Cleanup Resilience Suite", () => {
+    test("handleSignalTermination cleanly triggers gracefulShutdown and cleans runtime state for SIGINT and SIGTERM", async () => {
+      saveRuntimeState(testStateDir);
+      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
+
+      await handleSignalTermination("SIGINT");
+      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(false);
+
+      _resetShutdownStateForTests();
+      saveRuntimeState(testStateDir);
+      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
+
+      await handleSignalTermination("SIGTERM");
+      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(false);
+    });
+
+    test("gracefulShutdown guarantees removeRuntimeState disk cleanup even if intermediate shutdown steps raise errors", async () => {
+      saveRuntimeState(testStateDir);
+      expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(true);
+
+      const origTeardown = captureOrchestrator.teardownCaptureWindow.bind(captureOrchestrator);
+      captureOrchestrator.teardownCaptureWindow = () => Promise.reject(new Error("Simulated teardown failure"));
+
+      try {
+        await gracefulShutdown();
+        expect(existsSync(join(testStateDir, "runtime-state.json"))).toBe(false);
+      } finally {
+        captureOrchestrator.teardownCaptureWindow = origTeardown;
+      }
+    });
+
+    test("captureOrchestrator.teardownCaptureWindow and abortActiveFlow abort STT AbortController and invalidate pasteCoordinator", async () => {
+      const controller = captureOrchestrator.createSTTAbortController();
+      expect(controller.signal.aborted).toBe(false);
+
+      captureOrchestrator.abortActiveFlow();
+      expect(controller.signal.aborted).toBe(true);
+
+      const controller2 = captureOrchestrator.createSTTAbortController();
+      expect(controller2.signal.aborted).toBe(false);
+
+      await captureOrchestrator.teardownCaptureWindow();
+      expect(controller2.signal.aborted).toBe(true);
     });
   });
 });

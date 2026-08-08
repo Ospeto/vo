@@ -34,6 +34,31 @@ import logger from "./services/logger.js";
 
 // Global process exception handlers
 let isFatalShuttingDown = false;
+let isSignalShuttingDown = false;
+
+export async function handleSignalTermination(signal: string) {
+  logger.info({ signal }, `Received signal: ${signal}`);
+  if (isSignalShuttingDown || isFatalShuttingDown) return;
+  isSignalShuttingDown = true;
+
+  try {
+    await gracefulShutdown();
+  } catch (shutdownErr: any) {
+    logger.error({ err: shutdownErr?.message || String(shutdownErr), signal }, "Error during signal termination cleanup");
+  } finally {
+    if (process.env.NODE_ENV !== "test" && !isFatalShuttingDown) {
+      process.exit(0);
+    }
+  }
+}
+
+process.on("SIGINT", () => {
+  handleSignalTermination("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+  handleSignalTermination("SIGTERM");
+});
 
 export async function handleFatalProcessError(type: string, err: any) {
   const msg = err?.message || String(err);
@@ -1310,81 +1335,95 @@ export function gracefulShutdown(): Promise<void> {
   shutdownPromise = (async () => {
     logger.info("Shutting down...");
 
-    pasteCoordinator.invalidate();
-    abortSelectionCapture();
-
     try {
-      captureOrchestrator.abortActiveFlow();
-    } catch (err: any) {
-      logger.warn({ err: err?.message || String(err) }, "Error aborting active capture flow during shutdown");
-    }
-
-    try {
-      dictationCoordinator?.reset();
-    } catch {}
-
-    const currentSeq = recordingLifecycle.snapshot().sequenceId;
-    recordingLifecycle.reset();
-
-    try {
-      await withBoundedWait(captureOrchestrator.teardownCaptureWindow(), 2000);
-    } catch (err: any) {
-      logger.warn({ err: err?.message || String(err) }, "Error tearing down capture window during shutdown");
-    }
-
-    try {
-      restoreCapturedSelection(currentSeq);
-    } catch (err: any) {
-      logger.warn({ err: err?.message || String(err) }, "Error restoring selection during shutdown");
-    }
-
-    if (stoppingSafetyTimer) {
-      clearTimeout(stoppingSafetyTimer);
-      stoppingSafetyTimer = null;
-    }
-    if (hudHideTimer) {
-      clearTimeout(hudHideTimer);
-      hudHideTimer = null;
-    }
-    if (errorResetTimer) {
-      clearTimeout(errorResetTimer);
-      errorResetTimer = null;
-    }
-    if (trayResetTimer) {
-      clearTimeout(trayResetTimer);
-      trayResetTimer = null;
-    }
-
-    if (hudWindow && !hudWindow.isDestroyed()) {
-      try { hudWindow.destroy(); } catch {}
-      hudWindow = null;
-    }
-
-    if (popoverWindow && !popoverWindow.isDestroyed()) {
-      try { popoverWindow.destroy(); } catch {}
-      popoverWindow = null;
-    }
-
-    if (tray) {
-      try { tray.destroy(); } catch {}
-      tray = null;
-    }
-
-    if (hotkeyService) {
       try {
-        await withBoundedWait(hotkeyService.stop(), 1000);
+        pasteCoordinator.invalidate();
+      } catch (_err) {
+        // ignore
+      }
+      try {
+        abortSelectionCapture();
+      } catch (_err) {
+        // ignore
+      }
+
+      try {
+        captureOrchestrator.abortActiveFlow();
       } catch (err: any) {
-        logger.warn({ err: err?.message || String(err) }, "Error stopping hotkeys during shutdown");
+        logger.warn({ err: err?.message || String(err) }, "Error aborting active capture flow during shutdown");
+      }
+
+      try {
+        dictationCoordinator?.reset();
+      } catch {}
+
+      const currentSeq = recordingLifecycle.snapshot().sequenceId;
+      recordingLifecycle.reset();
+
+      try {
+        await withBoundedWait(captureOrchestrator.teardownCaptureWindow(), 2000);
+      } catch (err: any) {
+        logger.warn({ err: err?.message || String(err) }, "Error tearing down capture window during shutdown");
+      }
+
+      try {
+        restoreCapturedSelection(currentSeq);
+      } catch (err: any) {
+        logger.warn({ err: err?.message || String(err) }, "Error restoring selection during shutdown");
+      }
+
+      if (stoppingSafetyTimer) {
+        clearTimeout(stoppingSafetyTimer);
+        stoppingSafetyTimer = null;
+      }
+      if (hudHideTimer) {
+        clearTimeout(hudHideTimer);
+        hudHideTimer = null;
+      }
+      if (errorResetTimer) {
+        clearTimeout(errorResetTimer);
+        errorResetTimer = null;
+      }
+      if (trayResetTimer) {
+        clearTimeout(trayResetTimer);
+        trayResetTimer = null;
+      }
+
+      if (hudWindow && !hudWindow.isDestroyed()) {
+        try { hudWindow.destroy(); } catch {}
+        hudWindow = null;
+      }
+
+      if (popoverWindow && !popoverWindow.isDestroyed()) {
+        try { popoverWindow.destroy(); } catch {}
+        popoverWindow = null;
+      }
+
+      if (tray) {
+        try { tray.destroy(); } catch {}
+        tray = null;
+      }
+
+      if (hotkeyService) {
+        try {
+          await withBoundedWait(hotkeyService.stop(), 1000);
+        } catch (err: any) {
+          logger.warn({ err: err?.message || String(err) }, "Error stopping hotkeys during shutdown");
+        }
+      }
+
+      try {
+        await withBoundedWait(stopDaemonServer(), 1000);
+      } catch (err: any) {
+        logger.warn({ err: err?.message || String(err) }, "Error stopping daemon server during shutdown");
+      }
+    } finally {
+      try {
+        removeRuntimeState();
+      } catch (err: any) {
+        logger.warn({ err: err?.message || String(err) }, "Error removing runtime state during shutdown");
       }
     }
-
-    try {
-      await withBoundedWait(stopDaemonServer(), 1000);
-    } catch (err: any) {
-      logger.warn({ err: err?.message || String(err) }, "Error stopping daemon server during shutdown");
-    }
-
-    removeRuntimeState();
     logger.info("Graceful shutdown complete.");
   })();
 
@@ -1394,6 +1433,7 @@ export function gracefulShutdown(): Promise<void> {
 export function _resetShutdownStateForTests(): void {
   shutdownPromise = null;
   isFatalShuttingDown = false;
+  isSignalShuttingDown = false;
   isQuitting = false;
 }
 

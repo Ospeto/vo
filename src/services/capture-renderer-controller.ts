@@ -140,12 +140,16 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     if (win && !this.options.isDestroyed(win)) {
       try {
         this.options.destroyWindow(win);
-      } catch {}
+      } catch (_err) {
+        // ignore
+      }
     }
     if (pendingWin && pendingWin !== win && !this.options.isDestroyed(pendingWin)) {
       try {
         this.options.destroyWindow(pendingWin);
-      } catch {}
+      } catch (_err) {
+        // ignore
+      }
     }
   }
 
@@ -161,13 +165,19 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
           if (this.session.isAvailable(contents)) {
             try {
               this.options.sendIpc(contents, IPC.CANCEL_RECORDING);
-            } catch {}
+            } catch (_err) {
+              // ignore
+            }
           }
           try {
             this.session.detach(contents);
-          } catch {}
+          } catch (_err) {
+            // ignore
+          }
         }
-      } catch {}
+      } catch (_err) {
+        // ignore
+      }
     }
 
     if (pendingWin && pendingWin !== win) {
@@ -176,9 +186,13 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
         if (pendingContents) {
           try {
             this.session.detach(pendingContents);
-          } catch {}
+          } catch (_err) {
+            // ignore
+          }
         }
-      } catch {}
+      } catch (_err) {
+        // ignore
+      }
     }
 
     let closedPromise: Promise<void> | null = null;

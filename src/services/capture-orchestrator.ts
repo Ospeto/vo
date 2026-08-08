@@ -105,6 +105,9 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
 	}
 
 	public async teardownCaptureWindow(timeoutMs: number = 2000): Promise<void> {
+		this.abortSelectionCapture();
+		this.abortSTT();
+		this.pasteCoordinator.invalidate();
 		await this.controller.teardownCaptureWindow(timeoutMs);
 	}
 

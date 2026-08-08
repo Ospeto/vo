@@ -1,4 +1,4 @@
-import { IPC, type RecordingFormat, type CaptureElectronAPI, type CaptureConfigPayload } from "../shared/types.js";
+import type { RecordingFormat, CaptureElectronAPI, CaptureConfigPayload } from "../shared/types.js";
 import {
   analyzePcmFrame,
   SpeechEndpointDetector,
@@ -57,7 +57,7 @@ let autoEndpointTriggered = false;
 let finalizedRecordingGeneration = -1;
 let tornDownGeneration = -1;
 let activeMimeType: string | null = null;
-let activeFallbackDeviceStatus: string | undefined = undefined;
+let activeFallbackDeviceStatus: string | undefined ;
 
 let sessionMaxAbs = 0;
 let sessionClippedSamples = 0;
@@ -107,7 +107,10 @@ export function resetAudioStateForTest(): void {
 
 export function teardownAudio(generation?: number): void {
   const targetGen = generation ?? recordingGeneration;
-  if (generation !== undefined && (targetGen > recordingGeneration || tornDownGeneration === targetGen)) {
+  if (generation !== undefined && targetGen > recordingGeneration) {
+    return;
+  }
+  if (tornDownGeneration === targetGen) {
     return;
   }
   tornDownGeneration = targetGen;
@@ -128,24 +131,34 @@ export function teardownAudio(generation?: number): void {
       if (rec.state !== "inactive") {
         rec.stop();
       }
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
   }
 
   if (mediaStream) {
     try {
-      mediaStream.getAudioTracks().forEach((track) => {
+      const tracks = typeof mediaStream.getTracks === "function" ? mediaStream.getTracks() : mediaStream.getAudioTracks();
+      tracks.forEach((track) => {
         track.onended = null;
         try {
           track.stop();
-        } catch {}
+        } catch (_err) {
+          // ignore
+        }
       });
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
     mediaStream = null;
   }
 
-  try { gainNode?.disconnect(); } catch {}
-  try { analyserNode?.disconnect(); } catch {}
-  try { compressorNode?.disconnect(); } catch {}
+  try { gainNode?.disconnect(); } catch (_err) { // ignore
+  }
+  try { analyserNode?.disconnect(); } catch (_err) { // ignore
+  }
+  try { compressorNode?.disconnect(); } catch (_err) { // ignore
+  }
   gainNode = null;
   analyserNode = null;
   compressorNode = null;
@@ -153,9 +166,11 @@ export function teardownAudio(generation?: number): void {
   if (audioCtx) {
     try {
       if (audioCtx.state !== "closed") {
-        void audioCtx.close();
+        audioCtx.close().catch(() => {});
       }
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
     audioCtx = null;
   }
 
@@ -195,16 +210,21 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
   let localRecorder: MediaRecorder | null = null;
 
   const cleanupLocals = () => {
-    try { localGainNode?.disconnect(); } catch {}
-    try { localAnalyserNode?.disconnect(); } catch {}
-    try { localCompressorNode?.disconnect(); } catch {}
+    try { localGainNode?.disconnect(); } catch (_err) { // ignore
+    }
+    try { localAnalyserNode?.disconnect(); } catch (_err) { // ignore
+    }
+    try { localCompressorNode?.disconnect(); } catch (_err) { // ignore
+    }
     if (localAudioCtx && localAudioCtx.state !== "closed") {
-      try { void localAudioCtx.close(); } catch {}
+      try { localAudioCtx.close().catch(() => {}); } catch (_err) { // ignore
+      }
     }
     if (localStream) {
       localStream.getAudioTracks().forEach((track) => {
         track.onended = null;
-        try { track.stop(); } catch {}
+        try { track.stop(); } catch (_err) { // ignore
+        }
       });
     }
   };
@@ -344,7 +364,8 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
           if (mediaRecorder.state !== "inactive") {
             mediaRecorder.stop();
           }
-        } catch {}
+        } catch (_err) { // ignore
+        }
         mediaRecorder = null;
       }
 
@@ -354,15 +375,20 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
             track.onended = null;
             try {
               track.stop();
-            } catch {}
+            } catch (_err) { // ignore
+            }
           });
-        } catch {}
+        } catch (_err) { // ignore
+        }
         mediaStream = null;
       }
 
-      try { gainNode?.disconnect(); } catch {}
-      try { analyserNode?.disconnect(); } catch {}
-      try { compressorNode?.disconnect(); } catch {}
+      try { gainNode?.disconnect(); } catch (_err) { // ignore
+      }
+      try { analyserNode?.disconnect(); } catch (_err) { // ignore
+      }
+      try { compressorNode?.disconnect(); } catch (_err) { // ignore
+      }
       gainNode = null;
       analyserNode = null;
       compressorNode = null;
@@ -370,9 +396,10 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
       if (audioCtx) {
         try {
           if (audioCtx.state !== "closed") {
-            void audioCtx.close();
+            audioCtx.close().catch(() => {});
           }
-        } catch {}
+        } catch (_err) { // ignore
+        }
         audioCtx = null;
       }
     }
@@ -664,7 +691,8 @@ export function cleanupCaptureSubscriptions(): void {
   for (const unsub of captureUnsubscribes) {
     try {
       unsub();
-    } catch {}
+    } catch (_err) { // ignore
+    }
   }
   captureUnsubscribes = [];
 
@@ -701,7 +729,7 @@ export function registerCaptureListeners(winOverride?: any): void {
   }
 
   if (api?.onStartRecording) {
-    const unsub = api.onStartRecording(async (format: RecordingFormat, inputGain: number, sequenceId: number) => {
+    const unsub = api.onStartRecording(async (_format: RecordingFormat, inputGain: number, sequenceId: number) => {
       const generation = ++recordingGeneration;
       activeSequenceId = sequenceId;
       stopRequestedDuringStartup = false;
