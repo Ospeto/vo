@@ -139,26 +139,12 @@ export class CaptureRendererController<TSender = any, TWindow = any> {
     this.pendingCaptureWindow = null;
     if (win && !this.options.isDestroyed(win)) {
       try {
-        if (typeof (win as any).removeAllListeners === "function") {
-          (win as any).removeAllListeners();
-        }
-      } catch (_err) {
-        // ignore
-      }
-      try {
         this.options.destroyWindow(win);
       } catch (_err) {
         // ignore
       }
     }
     if (pendingWin && pendingWin !== win && !this.options.isDestroyed(pendingWin)) {
-      try {
-        if (typeof (pendingWin as any).removeAllListeners === "function") {
-          (pendingWin as any).removeAllListeners();
-        }
-      } catch (_err) {
-        // ignore
-      }
       try {
         this.options.destroyWindow(pendingWin);
       } catch (_err) {

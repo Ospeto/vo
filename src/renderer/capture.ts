@@ -1,4 +1,4 @@
-import { IPC, type RecordingFormat, type CaptureElectronAPI, type CaptureConfigPayload } from "../shared/types.js";
+import type { RecordingFormat, CaptureElectronAPI, CaptureConfigPayload } from "../shared/types.js";
 import {
   analyzePcmFrame,
   SpeechEndpointDetector,
@@ -210,16 +210,21 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
   let localRecorder: MediaRecorder | null = null;
 
   const cleanupLocals = () => {
-    try { localGainNode?.disconnect(); } catch {}
-    try { localAnalyserNode?.disconnect(); } catch {}
-    try { localCompressorNode?.disconnect(); } catch {}
+    try { localGainNode?.disconnect(); } catch (_err) { // ignore
+    }
+    try { localAnalyserNode?.disconnect(); } catch (_err) { // ignore
+    }
+    try { localCompressorNode?.disconnect(); } catch (_err) { // ignore
+    }
     if (localAudioCtx && localAudioCtx.state !== "closed") {
-      try { void localAudioCtx.close(); } catch {}
+      try { localAudioCtx.close().catch(() => {}); } catch (_err) { // ignore
+      }
     }
     if (localStream) {
       localStream.getAudioTracks().forEach((track) => {
         track.onended = null;
-        try { track.stop(); } catch {}
+        try { track.stop(); } catch (_err) { // ignore
+        }
       });
     }
   };
@@ -359,7 +364,8 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
           if (mediaRecorder.state !== "inactive") {
             mediaRecorder.stop();
           }
-        } catch {}
+        } catch (_err) { // ignore
+        }
         mediaRecorder = null;
       }
 
@@ -369,15 +375,20 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
             track.onended = null;
             try {
               track.stop();
-            } catch {}
+            } catch (_err) { // ignore
+            }
           });
-        } catch {}
+        } catch (_err) { // ignore
+        }
         mediaStream = null;
       }
 
-      try { gainNode?.disconnect(); } catch {}
-      try { analyserNode?.disconnect(); } catch {}
-      try { compressorNode?.disconnect(); } catch {}
+      try { gainNode?.disconnect(); } catch (_err) { // ignore
+      }
+      try { analyserNode?.disconnect(); } catch (_err) { // ignore
+      }
+      try { compressorNode?.disconnect(); } catch (_err) { // ignore
+      }
       gainNode = null;
       analyserNode = null;
       compressorNode = null;
@@ -385,9 +396,10 @@ async function setupAudioPipeline(inputGain: number, sequenceId: number, generat
       if (audioCtx) {
         try {
           if (audioCtx.state !== "closed") {
-            void audioCtx.close();
+            audioCtx.close().catch(() => {});
           }
-        } catch {}
+        } catch (_err) { // ignore
+        }
         audioCtx = null;
       }
     }
@@ -679,7 +691,8 @@ export function cleanupCaptureSubscriptions(): void {
   for (const unsub of captureUnsubscribes) {
     try {
       unsub();
-    } catch {}
+    } catch (_err) { // ignore
+    }
   }
   captureUnsubscribes = [];
 
@@ -716,7 +729,7 @@ export function registerCaptureListeners(winOverride?: any): void {
   }
 
   if (api?.onStartRecording) {
-    const unsub = api.onStartRecording(async (format: RecordingFormat, inputGain: number, sequenceId: number) => {
+    const unsub = api.onStartRecording(async (_format: RecordingFormat, inputGain: number, sequenceId: number) => {
       const generation = ++recordingGeneration;
       activeSequenceId = sequenceId;
       stopRequestedDuringStartup = false;

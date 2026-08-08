@@ -38,7 +38,7 @@ let isSignalShuttingDown = false;
 
 export async function handleSignalTermination(signal: string) {
   logger.info({ signal }, `Received signal: ${signal}`);
-  if (isSignalShuttingDown) return;
+  if (isSignalShuttingDown || isFatalShuttingDown) return;
   isSignalShuttingDown = true;
 
   try {
@@ -46,7 +46,7 @@ export async function handleSignalTermination(signal: string) {
   } catch (shutdownErr: any) {
     logger.error({ err: shutdownErr?.message || String(shutdownErr), signal }, "Error during signal termination cleanup");
   } finally {
-    if (process.env.NODE_ENV !== "test") {
+    if (process.env.NODE_ENV !== "test" && !isFatalShuttingDown) {
       process.exit(0);
     }
   }
@@ -1336,8 +1336,16 @@ export function gracefulShutdown(): Promise<void> {
     logger.info("Shutting down...");
 
     try {
-      pasteCoordinator.invalidate();
-      abortSelectionCapture();
+      try {
+        pasteCoordinator.invalidate();
+      } catch (_err) {
+        // ignore
+      }
+      try {
+        abortSelectionCapture();
+      } catch (_err) {
+        // ignore
+      }
 
       try {
         captureOrchestrator.abortActiveFlow();

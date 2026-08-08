@@ -29,6 +29,9 @@ const mockElectronObj = {
       if (event === "closed") this.closedHandler = handler;
     }
     once() {}
+    removeAllListeners() {
+      this.closedHandler = null;
+    }
   },
   ipcMain: { on: mock(() => {}), handle: mock(() => {}) },
   Tray: class MockTray {
