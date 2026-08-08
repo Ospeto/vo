@@ -511,7 +511,7 @@ describe("VO Remediation PR-10: Audio Teardown and Acknowledgements Suite", () =
   test("12. Integration: START_RECORDING_READY received during deferred selection capture succeeds without abort", async () => {
     const lifecycle = new RecordingLifecycle();
     let sentChannel = "";
-    let stateHistory: string[] = [];
+    const stateHistory: string[] = [];
 
     const orchestrator = new CaptureOrchestrator({
       createWindow: () => ({ webContents: { id: 1 }, isDestroyed: () => false, destroy: () => {} }),
@@ -577,5 +577,21 @@ describe("VO Remediation PR-10: Audio Teardown and Acknowledgements Suite", () =
 
     orchestrator.markCaptureInactive(100);
     expect(orchestrator.isCaptureActive(101)).toBe(false);
+  });
+
+  test("14. teardownAudio idempotency: repeated teardownAudio calls stop tracks, disconnect nodes, close AudioContext without errors", async () => {
+    await startRecordingHandler?.("webm", 1.0, 1401);
+    const stream = createdStreams[createdStreams.length - 1];
+    expect(stream).toBeDefined();
+    const track = stream!.tracks[0];
+
+    expect(() => {
+      teardownAudio();
+      teardownAudio();
+      teardownAudio(1401);
+    }).not.toThrow();
+
+    expect(track!.stopCount).toBe(1);
+    await new Promise((r) => setTimeout(r, 0));
   });
 });

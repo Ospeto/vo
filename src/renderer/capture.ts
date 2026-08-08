@@ -57,7 +57,7 @@ let autoEndpointTriggered = false;
 let finalizedRecordingGeneration = -1;
 let tornDownGeneration = -1;
 let activeMimeType: string | null = null;
-let activeFallbackDeviceStatus: string | undefined = undefined;
+let activeFallbackDeviceStatus: string | undefined ;
 
 let sessionMaxAbs = 0;
 let sessionClippedSamples = 0;
@@ -107,7 +107,10 @@ export function resetAudioStateForTest(): void {
 
 export function teardownAudio(generation?: number): void {
   const targetGen = generation ?? recordingGeneration;
-  if (generation !== undefined && (targetGen > recordingGeneration || tornDownGeneration === targetGen)) {
+  if (generation !== undefined && targetGen > recordingGeneration) {
+    return;
+  }
+  if (tornDownGeneration === targetGen) {
     return;
   }
   tornDownGeneration = targetGen;
@@ -128,24 +131,34 @@ export function teardownAudio(generation?: number): void {
       if (rec.state !== "inactive") {
         rec.stop();
       }
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
   }
 
   if (mediaStream) {
     try {
-      mediaStream.getAudioTracks().forEach((track) => {
+      const tracks = typeof mediaStream.getTracks === "function" ? mediaStream.getTracks() : mediaStream.getAudioTracks();
+      tracks.forEach((track) => {
         track.onended = null;
         try {
           track.stop();
-        } catch {}
+        } catch (_err) {
+          // ignore
+        }
       });
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
     mediaStream = null;
   }
 
-  try { gainNode?.disconnect(); } catch {}
-  try { analyserNode?.disconnect(); } catch {}
-  try { compressorNode?.disconnect(); } catch {}
+  try { gainNode?.disconnect(); } catch (_err) { // ignore
+  }
+  try { analyserNode?.disconnect(); } catch (_err) { // ignore
+  }
+  try { compressorNode?.disconnect(); } catch (_err) { // ignore
+  }
   gainNode = null;
   analyserNode = null;
   compressorNode = null;
@@ -153,9 +166,11 @@ export function teardownAudio(generation?: number): void {
   if (audioCtx) {
     try {
       if (audioCtx.state !== "closed") {
-        void audioCtx.close();
+        audioCtx.close().catch(() => {});
       }
-    } catch {}
+    } catch (_err) {
+      // ignore
+    }
     audioCtx = null;
   }
 
