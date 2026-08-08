@@ -524,11 +524,11 @@ export async function initUI() {
 		translateEnabled = config.translateEnabled ?? false;
 		if (config.targetLanguage) {
 			currentTargetLanguage = config.targetLanguage;
+			if (targetLanguageSelect) {
+				targetLanguageSelect.value = config.targetLanguage;
+			}
 		}
 		updateTranslateBtnUI();
-		if (targetLanguageSelect && config.targetLanguage) {
-			targetLanguageSelect.value = config.targetLanguage;
-		}
 
 		if (config.customVocabulary) {
 			currentCustomVocab = [...config.customVocabulary];
@@ -846,7 +846,7 @@ function updateTranslateBtnUI() {
 		translateSelect ||
 		(document.getElementById("translateSelect") as HTMLSelectElement);
 	const targetLang =
-		targetLanguageSelect?.value || currentTargetLanguage || "Spanish";
+		currentTargetLanguage || targetLanguageSelect?.value || "Spanish";
 
 	if (translateEnabled) {
 		if (translateToggleBtn) {
@@ -1341,11 +1341,21 @@ translateSelect?.addEventListener("change", async () => {
 
 targetLanguageSelect?.addEventListener("change", async () => {
 	const selectedLang = targetLanguageSelect.value;
-	const updatedConfig = await getSettingsApi()?.saveConfig({
-		targetLanguage: selectedLang,
-	});
-	if (updatedConfig && updatedConfig.targetLanguage && targetLanguageSelect) {
-		targetLanguageSelect.value = updatedConfig.targetLanguage;
+	currentTargetLanguage = selectedLang;
+	updateTranslateBtnUI();
+	try {
+		const updatedConfig = await getSettingsApi()?.saveConfig({
+			targetLanguage: selectedLang,
+		});
+		if (updatedConfig && updatedConfig.targetLanguage) {
+			currentTargetLanguage = updatedConfig.targetLanguage;
+			if (targetLanguageSelect) {
+				targetLanguageSelect.value = updatedConfig.targetLanguage;
+			}
+			updateTranslateBtnUI();
+		}
+	} catch (err) {
+		console.error("Failed to save target language config", err);
 	}
 });
 

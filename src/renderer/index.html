@@ -137,6 +137,9 @@
                 <option value="German">English to German</option>
                 <option value="Japanese">English to Japanese</option>
                 <option value="Burmese">English to Burmese</option>
+                <option value="Chinese">English to Chinese</option>
+                <option value="Korean">English to Korean</option>
+                <option value="Thai">English to Thai</option>
                 <option value="English">English to English</option>
               </select>
             </div>
@@ -226,7 +229,7 @@
 
             <button
               type="button"
-              class="preset-pill-btn flex items-center gap-3 px-2 py-2 bg-primary/10 text-primary rounded-lg cursor-pointer transition-colors text-left border-0"
+              class="preset-pill-btn flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg cursor-pointer group transition-colors text-left border-0 bg-transparent"
               data-preset="code_comment"
               title="Coding Mode: Syntax-friendly & inline comments"
             >
@@ -244,7 +247,10 @@
                 <polyline points="4 17 10 11 4 5"></polyline>
                 <line x1="12" y1="19" x2="20" y2="19"></line>
               </svg>
-              <span class="preset-pill-label font-medium">Coding</span>
+              <span
+                class="preset-pill-label text-on-surface-variant group-hover:text-white transition-colors"
+                >Coding</span
+              >
             </button>
           </div>
           <!-- Hidden fallback select for headless/testing -->
@@ -287,15 +293,17 @@
 
             <button
               type="button"
-              class="model-pill-btn flex items-center gap-3 px-2 py-2 bg-primary/10 text-primary rounded-lg cursor-pointer transition-colors text-left border-0"
+              class="model-pill-btn flex items-center gap-3 px-2 py-2 hover:bg-white/5 rounded-lg cursor-pointer group transition-colors text-left border-0 bg-transparent"
               data-model="gemini-3.5-flash-lite"
               data-label="Medium (3.5 Flash Lite)"
               title="Medium Level: 3.5 Flash Lite - Balanced Speed"
             >
-              <span class="model-num text-[12px] font-mono w-4 text-center"
+              <span
+                class="model-num text-[12px] font-mono text-on-surface-variant w-4 text-center group-hover:text-white transition-colors"
                 >2</span
               >
-              <span class="model-pill-label font-medium"
+              <span
+                class="model-pill-label text-on-surface-variant group-hover:text-white transition-colors"
                 >Medium (3.5 Flash Lite)</span
               >
             </button>

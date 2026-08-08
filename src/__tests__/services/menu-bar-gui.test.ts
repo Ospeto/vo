@@ -284,9 +284,9 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
 			expect(pos.y).toBe(28);
 		});
 
-		test("centers compact 280x420 popover window under tray icon", () => {
+		test("centers 340x520 popover window under tray icon", () => {
 			const trayBounds = { x: 500, y: 0, width: 40, height: 24 };
-			const popoverDim = { width: 280, height: 420 };
+			const popoverDim = { width: 340, height: 520 };
 			const screenBounds = { x: 0, y: 0, width: 1440, height: 900 };
 
 			const pos = calculatePopoverPosition(
@@ -294,10 +294,10 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
 				popoverDim,
 				screenBounds,
 			);
-			expect(pos.x).toBe(380); // (500 + 20) - 140 = 380
+			expect(pos.x).toBe(350); // (500 + 20) - 170 = 350
 			expect(pos.y).toBe(28); // 24 + 4 = 28
-			expect(pos.width).toBe(280);
-			expect(pos.height).toBe(420);
+			expect(pos.width).toBe(340);
+			expect(pos.height).toBe(520);
 		});
 	});
 
