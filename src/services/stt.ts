@@ -1463,7 +1463,7 @@ export async function transcribeDetailed(
 		appPresetMappings,
 	);
 	const effectivePreset = rawPreset === "translate" ? "careful" : rawPreset;
-	if (rawPreset === "translate") {
+	if (rawPreset === "translate" && translateEnabled !== false) {
 		isTranslationActive = true;
 	}
 

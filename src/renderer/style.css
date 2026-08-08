@@ -147,14 +147,20 @@ body {
 .text-center { text-align: center; }
 .text-right { text-align: right; }
 .text-left { text-align: left; }
+.border { border-style: solid; border-width: 1px; }
+.border-b { border-bottom-style: solid; border-bottom-width: 1px; }
+.border-t { border-top-style: solid; border-top-width: 1px; }
 .border-0 { border: 0; }
 .bg-transparent { background-color: transparent; }
+.bg-on-surface-variant { background-color: #a0a0a0; }
+.opacity-80 { opacity: 0.8; }
 .text-white { color: #ffffff; }
 .bg-\[\#00c853\] { background-color: #00c853; }
 .shadow-\[0_0_8px_rgba\(0\,200\,83\,0\.5\)\] { box-shadow: 0 0 8px rgba(0, 200, 83, 0.5); }
 .shadow-\[0_10px_40px_rgba\(0\,0\,0\,0\.5\)\] { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
 .backdrop-blur-md { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .hover\:bg-white\/5:hover { background-color: rgba(255, 255, 255, 0.05); }
+.hover\:text-white:hover { color: #ffffff; }
 .group:hover .group-hover\:text-white { color: #ffffff; }
 .group:hover .group-hover\:bg-white\/20 { background-color: rgba(255, 255, 255, 0.2); }
 
