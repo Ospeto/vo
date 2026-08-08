@@ -400,6 +400,23 @@ describe("transcribe", () => {
       expect(mockGenerateContent).toHaveBeenCalledTimes(2);
     });
 
+    test("explicit translateEnabled: false bypasses two-step translation even if rawPreset is 'translate'", async () => {
+      const { transcribeDetailed } = await import("../../services/stt.js");
+      mockGenerateContent.mockImplementationOnce(async () => ({
+        text: "မင်္ဂလာပါ",
+      }));
+
+      const data = new ArrayBuffer(10);
+      const res = await transcribeDetailed(data, {
+        provider: "gemini",
+        dictationPreset: "translate",
+        translateEnabled: false,
+      });
+
+      expect(res.text).toBe("မင်္ဂလာပါ");
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    });
+
     test("aborts translation flow when abortSignal is aborted", async () => {
       const { transcribeDetailed } = await import("../../services/stt.js");
       const controller = new AbortController();
