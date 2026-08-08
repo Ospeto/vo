@@ -19,6 +19,10 @@ const chimeBtn = document.getElementById("chimeBtn") as HTMLButtonElement;
 const clearHistoryBtn = document.getElementById("clearHistoryBtn") as HTMLButtonElement;
 const configBtn = document.getElementById("configBtn") as HTMLButtonElement;
 const translateToggleBtn = document.getElementById("translateToggleBtn") as HTMLButtonElement;
+const translateSelect = document.getElementById("translateSelect") as HTMLSelectElement;
+const translateSubtext = document.getElementById("translateSubtext") as HTMLElement;
+const chimeRow = document.getElementById("chimeRow") as HTMLElement;
+let currentTargetLanguage = "Spanish";
 
 // Settings Modal Elements
 const settingsModal = document.getElementById("settingsModal") as HTMLElement;
@@ -407,6 +411,9 @@ export async function initUI() {
     audioChimesEnabled = config.audioChimesEnabled ?? true;
     updateChimeBtnUI();
     translateEnabled = config.translateEnabled ?? false;
+    if (config.targetLanguage) {
+      currentTargetLanguage = config.targetLanguage;
+    }
     updateTranslateBtnUI();
     if (targetLanguageSelect && config.targetLanguage) {
       targetLanguageSelect.value = config.targetLanguage;
@@ -651,24 +658,51 @@ function renderAppRules() {
 let translateEnabled = false;
 
 function updateChimeBtnUI() {
-  if (!chimeBtn) return;
+  const chimeRowEl = chimeRow || document.getElementById("chimeRow");
   if (audioChimesEnabled) {
-    chimeBtn.classList.add("active");
-    chimeBtn.title = "Audio Chimes: Enabled";
+    if (chimeBtn) {
+      chimeBtn.classList.add("active");
+      chimeBtn.title = "Audio Chimes: Enabled";
+    }
+    chimeRowEl?.classList.add("chime-active");
   } else {
-    chimeBtn.classList.remove("active");
-    chimeBtn.title = "Audio Chimes: Muted";
+    if (chimeBtn) {
+      chimeBtn.classList.remove("active");
+      chimeBtn.title = "Audio Chimes: Muted";
+    }
+    chimeRowEl?.classList.remove("chime-active");
   }
 }
 
 function updateTranslateBtnUI() {
-  if (!translateToggleBtn) return;
+  const subtext = translateSubtext || document.getElementById("translateSubtext");
+  const selectEl = translateSelect || (document.getElementById("translateSelect") as HTMLSelectElement);
+  const targetLang = targetLanguageSelect?.value || currentTargetLanguage || "Spanish";
+
   if (translateEnabled) {
-    translateToggleBtn.classList.add("translate-active");
-    translateToggleBtn.title = "Auto-Translation: Enabled";
+    if (translateToggleBtn) {
+      translateToggleBtn.classList.add("translate-active");
+      translateToggleBtn.title = "Auto-Translation: Enabled";
+    }
+    if (subtext) {
+      subtext.textContent = `English to ${targetLang}`;
+      subtext.className = "text-[10px] text-accent font-medium";
+    }
+    if (selectEl) {
+      selectEl.value = targetLang;
+    }
   } else {
-    translateToggleBtn.classList.remove("translate-active");
-    translateToggleBtn.title = "Auto-Translation: Disabled";
+    if (translateToggleBtn) {
+      translateToggleBtn.classList.remove("translate-active");
+      translateToggleBtn.title = "Auto-Translation: Disabled";
+    }
+    if (subtext) {
+      subtext.textContent = "None";
+      subtext.className = "text-[10px] text-on-surface-variant font-medium";
+    }
+    if (selectEl) {
+      selectEl.value = "none";
+    }
   }
 }
 
@@ -1055,16 +1089,49 @@ chimeBtn?.addEventListener("click", async () => {
   await getSettingsApi()?.saveConfig({ audioChimesEnabled });
 });
 
+chimeRow?.addEventListener("click", async (e) => {
+  if (e.target && (e.target as HTMLElement).closest("#chimeBtn")) return;
+  audioChimesEnabled = !audioChimesEnabled;
+  updateChimeBtnUI();
+  if (audioChimesEnabled) {
+    playBassyEndChime();
+  }
+  await getSettingsApi()?.saveConfig({ audioChimesEnabled });
+});
+
 translateToggleBtn?.addEventListener("click", async () => {
   translateEnabled = !translateEnabled;
   updateTranslateBtnUI();
   if (translateEnabled) {
     playMechanicalClickSound();
   }
-  const updatedConfig = await getSettingsApi()?.saveConfig({ translateEnabled });
+  const patch = translateEnabled
+    ? { translateEnabled: true, targetLanguage: currentTargetLanguage }
+    : { translateEnabled: false };
+  const updatedConfig = await getSettingsApi()?.saveConfig(patch);
   if (updatedConfig && updatedConfig.translateEnabled !== undefined) {
     translateEnabled = updatedConfig.translateEnabled;
+    if (updatedConfig.targetLanguage) {
+      currentTargetLanguage = updatedConfig.targetLanguage;
+    }
     updateTranslateBtnUI();
+  }
+});
+
+translateSelect?.addEventListener("change", async () => {
+  const val = translateSelect.value;
+  if (val === "none") {
+    translateEnabled = false;
+    updateTranslateBtnUI();
+    playMechanicalClickSound();
+    await getSettingsApi()?.saveConfig({ translateEnabled: false });
+  } else {
+    translateEnabled = true;
+    currentTargetLanguage = val;
+    if (targetLanguageSelect) targetLanguageSelect.value = val;
+    updateTranslateBtnUI();
+    playMechanicalClickSound();
+    await getSettingsApi()?.saveConfig({ translateEnabled: true, targetLanguage: val });
   }
 });
 
@@ -1082,6 +1149,15 @@ clearHistoryBtn?.addEventListener("click", async () => {
 });
 
 configBtn?.addEventListener("click", () => {
+  if (settingsModal) {
+    settingsModal.classList.remove("hidden");
+    renderPersonNames();
+    renderVocabTags();
+    renderDictionaryEntries();
+  }
+});
+
+document.getElementById("footerStatus")?.addEventListener("click", () => {
   if (settingsModal) {
     settingsModal.classList.remove("hidden");
     renderPersonNames();

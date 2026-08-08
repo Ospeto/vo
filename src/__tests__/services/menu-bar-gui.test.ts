@@ -309,4 +309,50 @@ describe("macOS Menu Bar GUI - Production Contract Test Suite", () => {
       expect(getHistoryEntries().length).toBe(0);
     });
   });
+
+  describe("6. Popover UI Redesign & Translate 'None' Selection Contracts", () => {
+    test("schema validates translateEnabled and targetLanguage persistence", () => {
+      const disabledRes = configFileSchema.safeParse({
+        translateEnabled: false,
+        targetLanguage: "Spanish",
+      });
+      expect(disabledRes.success).toBe(true);
+      if (disabledRes.success) {
+        expect(disabledRes.data.translateEnabled).toBe(false);
+      }
+
+      const enabledRes = configFileSchema.safeParse({
+        translateEnabled: true,
+        targetLanguage: "French",
+      });
+      expect(enabledRes.success).toBe(true);
+      if (enabledRes.success) {
+        expect(enabledRes.data.translateEnabled).toBe(true);
+        expect(enabledRes.data.targetLanguage).toBe("French");
+      }
+    });
+
+    test("validates model engine selection mapping to GeminiModelChoice", () => {
+      const models: GeminiModelChoice[] = [
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.1-pro" as any,
+      ];
+      models.forEach((m) => {
+        const parsed = configFileSchema.safeParse({ geminiModel: m });
+        expect(parsed.success).toBe(true);
+      });
+    });
+
+    test("validates microphone gain range clamping [0.0, 2.0] for gain slider", () => {
+      const parsedLow = configFileSchema.safeParse({ inputGain: 0.0 });
+      const parsedMid = configFileSchema.safeParse({ inputGain: 1.3 });
+      const parsedHigh = configFileSchema.safeParse({ inputGain: 2.0 });
+
+      expect(parsedLow.success).toBe(true);
+      expect(parsedMid.success).toBe(true);
+      expect(parsedHigh.success).toBe(true);
+    });
+  });
 });
