@@ -1225,9 +1225,18 @@ describe("Two-Step Mixed Burmese/English Translation Path (PR 2)", () => {
 			"CRITICAL CODE PRESET DIRECTIVES",
 		);
 		expect(prompt.systemInstruction).toContain(
-			"CONCISE ENGINEERING IMPERATIVES",
+			"AI AGENT PROMPT STRUCTURING",
 		);
-		expect(prompt.systemInstruction).toContain("INLINE BACKTICKS FOR SYMBOLS");
+		expect(prompt.systemInstruction).toContain(
+			"INTENT KEYWORD MAPPING",
+		);
+		expect(prompt.systemInstruction).toContain(
+			"CONCISE TECHNICAL IMPERATIVES & FILLER STRIPPING",
+		);
+		expect(prompt.systemInstruction).toContain(
+			"Pi, Cursor, Antigravity, Claude Code",
+		);
+		expect(prompt.systemInstruction).toContain("INLINE BACKTICKS FOR SYMBOLS & IDENTIFIERS");
 		expect(prompt.systemInstruction).toContain("Active Application: Cursor");
 		expect(prompt.systemInstruction).toContain(
 			"Active Workspace Symbols: loadUser, userId",

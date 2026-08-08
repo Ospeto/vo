@@ -277,35 +277,38 @@ export function getPresetPromptInstructions(
 			if (translateEnabled) {
 				return `
 Preset Mode: SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION (TRANSLATION MODE).
-Translate the developer's spoken Burmese/English dictation directly into clean, precise, professional English technical specifications optimized for AI coding assistants (Cursor / Antigravity / Claude / Copilot).
+Translate the developer's spoken Burmese/English dictation directly into clean, precise, professional English technical specifications optimized for AI coding assistants (Pi / Cursor / Antigravity / Claude Code / Copilot).
 
 CORE DIRECTIVES:
-1. FAITHFUL TRANSLATION & ZERO IMPROVISATION: Translate spoken Burmese/English directly into clean technical English specifications. Do NOT invent unmentioned requirements, unsaid state management, unsaid code blocks, or extra architectural steps. Output ONLY what the user explicitly dictated.
-2. CONCISE IMPERATIVE STRUCTURING: Convert spoken intent into clear, direct English engineering specifications and imperatives (e.g., "user id မပါရင် ဘာမှမလုပ်ဘဲ ပြန်ထွက်" -> "Return early if userId is null or undefined").
-3. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers:
+1. AI AGENT PROMPT STRUCTURING: Convert informal spoken Burmese/English dictation into clean, direct technical specifications and imperatives (Goal, Target, Action, Constraints) optimized for AI coding assistants (Pi, Cursor, Antigravity, Claude Code).
+2. INTENT KEYWORD MAPPING: Map spoken intent keywords ("refactor", "fix bug", "add test", "clean up", "why is this failing", "optimize") into structured, actionable engineering directives.
+3. CONCISE TECHNICAL IMPERATIVES & FILLER STRIPPING: Convert spoken thoughts into direct software engineering imperatives (e.g., "user id မပါရင် ဘာမှမလုပ်ဘဲ ပြန်ထွက်" -> "Return early if userId is null or undefined"). Strip conversational filler ("uh", "I think", "maybe like", "let's see", "you know") while keeping technical intent exact.
+4. FAITHFUL TRANSLATION & ZERO IMPROVISATION: Translate spoken Burmese/English directly into clean technical English specifications. Do NOT invent unmentioned requirements, unsaid state management, unsaid code blocks, or extra architectural steps. Output ONLY what the user explicitly dictated.
+5. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers as secondary formatting:
    - "camel case user id" -> userId
    - "snake case created at" -> created_at
    - "pascal case user response" -> UserResponse
    - "upper case api key" -> API_KEY
    - "kebab case user-card" -> user-card
-4. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the specification:"), or raw dictation repeats be included.
-5. ZERO BOILERPLATE & ZERO PREAMBLES: Output NO conversational intros, commentary, or unrequested code blocks. Return ONLY clean technical specifications ready for AI coding agents.
+6. STRICT ENGLISH ONLY (ZERO BURMESE SCRIPT): Output ONLY pure English text. Under NO circumstances should any Burmese script, Burmese characters (မြန်မာစာ), conversational preambles ("Here is the specification:"), or raw dictation repeats be included.
+7. ZERO BOILERPLATE & ZERO PREAMBLES: Output NO conversational intros, commentary, or unrequested code blocks. Return ONLY clean technical specifications ready for AI coding agents.
 `.trim();
 			}
 			return `
 Preset Mode: SYSTEMATIC CODE DICTATION & TECHNICAL INSTRUCTION (DETECT MODE).
-Transcribe spoken audio (Burmese or English) faithfully in its original spoken language. Apply syntax-friendly code formatting, identifier casing, inline backticks, and code comments. Do NOT force English translation.
+Transcribe spoken audio (Burmese or English) faithfully in its original spoken language. Format dictation into clean, structured technical commands or code comments optimized for AI coding assistants (Pi / Cursor / Antigravity / Claude Code / Copilot). Do NOT force English translation.
 
 CORE DIRECTIVES:
 1. FAITHFUL TRANSCRIPTION IN ORIGINAL LANGUAGE: Transcribe spoken Burmese text in clean Burmese script (မြန်မာစာ) and spoken English technical terms in exact English. Do NOT forcibly translate spoken Burmese into English when translation mode is inactive.
-2. SYNTAX-FRIENDLY CODE FORMATTING & COMMENTS: Apply syntax-friendly code formatting, inline backticks for code symbols (\`userId\`, \`created_at\`), and inline code comment structure (# or //) where dictated.
-3. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers:
+2. AI AGENT PROMPT STRUCTURING & INTENT MAPPING: Format informal spoken dictation into structured technical directives or code comments (# or //). Map spoken engineering intents ("refactor", "fix bug", "add test", "clean up", "why is this failing") into clean directives while stripping spoken filler ("uh", "I think", "maybe like", "let's see").
+3. SYNTAX-FRIENDLY CODE FORMATTING & COMMENTS: Apply syntax-friendly code formatting, inline backticks for code symbols (\`userId\`, \`created_at\`), and inline code comment structure (# or //) where dictated.
+4. SPOKEN IDENTIFIER FORMATTING: Convert spoken variable naming cues into precise code identifiers as secondary formatting:
    - "camel case user id" -> userId
    - "snake case created at" -> created_at
    - "pascal case user response" -> UserResponse
    - "upper case api key" -> API_KEY
    - "kebab case user-card" -> user-card
-4. ZERO CONVERSATIONAL PREAMBLES & ZERO BOILERPLATE: Output NO conversational intros (e.g. "Here is the specification:"), NO unrequested boilerplate code generation, and NO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding agents.
+5. ZERO CONVERSATIONAL PREAMBLES & ZERO BOILERPLATE: Output NO conversational intros (e.g. "Here is the specification:"), NO unrequested boilerplate code generation, and NO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding agents.
 `.trim();
 		case "translate":
 			return `
@@ -993,7 +996,7 @@ async function transcribeGemini(
 			: `\nTRANSLATION DIRECTIVE: Translation mode is INACTIVE. Maintain original language of selected text and spoken dictation. Do NOT force translation to ${resolvedTargetLang} unless spoken audio explicitly dictates a translation target.`;
 
 		const codeDirective = isCodePreset
-			? `\nCODING PRESET DIRECTIVE: Coding mode is ACTIVE. Apply syntax-friendly code formatting, identifier casing ("camel case user id" -> userId, "snake case created at" -> created_at, "pascal case user response" -> UserResponse), inline backticks, or inline code comments as requested. Ensure ZERO conversational preambles ("Here is the specification:") and ZERO unrequested code block boilerplate.`
+			? `\nCODING PRESET DIRECTIVE: Coding mode is ACTIVE. Convert informal spoken Burmese/English dictation into clean, direct technical specifications and imperatives optimized for AI coding assistants (Pi, Cursor, Antigravity, Claude Code). Apply syntax-friendly code formatting, inline backticks, or inline code comments as requested. Convert spoken variable naming cues as secondary formatting. Ensure ZERO conversational preambles ("Here is the specification:") and ZERO unrequested code block boilerplate.`
 			: "";
 
 		sttBasePrompt = `You are an expert AI Dual-Mode Voice Editor and Dictation Assistant. Your task is to analyze the spoken audio together with the provided [SELECTED TEXT].${translationDirective}${codeDirective}
@@ -1009,10 +1012,10 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 		userPromptText = `[SELECTED TEXT]:\n${formattedSelectedText}\n\nSPOKEN AUDIO: Listen to the audio. If it's an editing/refactoring/translation command, transform the selected text. If it's new dictation content, transcribe the new audio directly. Output ONLY the final text.`;
 	} else if (isCodePreset) {
 		if (isTranslationActive) {
-			sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting. Ensure ZERO conversational preambles ("Here is the specification:"), ZERO unrequested boilerplate code generation, and ZERO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding assistants (Cursor, Antigravity, Claude, Copilot).`;
+			sttBasePrompt = `You are an expert real-time Speech Translator and Code Specification Architect. Your single imperative task is to listen to the spoken audio and output ONLY its clean, technical translation into ${resolvedTargetLang} with software engineering specification formatting. Convert informal spoken Burmese/English dictation into clean, direct technical specifications and imperatives (Goal, Target, Action, Constraints) optimized for AI coding assistants (Pi, Cursor, Antigravity, Claude Code). Ensure ZERO conversational preambles ("Here is the specification:"), ZERO unrequested boilerplate code generation, and ZERO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding assistants (Pi, Cursor, Antigravity, Claude Code).`;
 			userPromptText = `Translate the spoken audio into clear technical specifications in ${resolvedTargetLang}. Output ONLY clean specifications without conversational intros or boilerplate code blocks.`;
 		} else {
-			sttBasePrompt = `You are an expert real-time Speech Dictation and Code Specification Architect. Your single imperative task is to listen to the spoken audio (in Burmese, English, or technical code terms) and transcribe/format it accurately in its original spoken language with syntax-friendly formatting, technical identifier spellings ("camel case user id" -> userId, "snake case created at" -> created_at, "pascal case user response" -> UserResponse), inline backticks, and inline code comment structure. Preserve the spoken language (Burmese or English) faithfully. Ensure ZERO conversational preambles ("Here is the specification:"), ZERO unrequested boilerplate code generation, and ZERO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding assistants.`;
+			sttBasePrompt = `You are an expert real-time Speech Dictation and Code Specification Architect. Your single imperative task is to listen to the spoken audio (in Burmese, English, or technical code terms) and transcribe/format it accurately in its original spoken language with syntax-friendly formatting, technical directives, inline backticks, and inline code comment structure. Format dictation into clean, structured technical commands or code comments optimized for AI coding assistants (Pi, Cursor, Antigravity, Claude Code). Preserve the spoken language (Burmese or English) faithfully. Ensure ZERO conversational preambles ("Here is the specification:"), ZERO unrequested boilerplate code generation, and ZERO arbitrary rewriting. Output ONLY clean, direct prompts/specifications or inline code comments ready for AI coding assistants.`;
 			userPromptText =
 				"Transcribe the spoken audio with syntax-friendly technical code formatting in its original spoken language. Do NOT force translation unless auto-translation is active.";
 		}
