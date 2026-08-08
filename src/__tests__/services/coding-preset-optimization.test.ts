@@ -19,6 +19,9 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
 				"Transcribe spoken audio (Burmese or English) faithfully in its original spoken language",
 			);
 			expect(instructions).toContain("Do NOT force English translation");
+			expect(instructions).toContain("AI AGENT PROMPT STRUCTURING & INTENT MAPPING");
+			expect(instructions).toContain("Pi / Cursor / Antigravity / Claude Code");
+			expect(instructions).toContain('"refactor", "fix bug", "add test", "clean up", "why is this failing"');
 			expect(instructions).toContain('"camel case user id" -> userId');
 			expect(instructions).toContain('"snake case created at" -> created_at');
 			expect(instructions).toContain(
@@ -75,7 +78,11 @@ describe("Coding Preset Optimization & Vibe Coding Suite (code_comment)", () => 
 			expect(instructions).toContain(
 				"Translate the developer's spoken Burmese/English dictation directly into clean, precise, professional English technical specifications",
 			);
-			expect(instructions).toContain("Cursor / Antigravity / Claude / Copilot");
+			expect(instructions).toContain("Pi / Cursor / Antigravity / Claude Code / Copilot");
+			expect(instructions).toContain("AI AGENT PROMPT STRUCTURING");
+			expect(instructions).toContain("INTENT KEYWORD MAPPING");
+			expect(instructions).toContain("CONCISE TECHNICAL IMPERATIVES & FILLER STRIPPING");
+			expect(instructions).toContain('"refactor", "fix bug", "add test", "clean up", "why is this failing", "optimize"');
 			expect(instructions).toContain(
 				"FAITHFUL TRANSLATION & ZERO IMPROVISATION",
 			);
