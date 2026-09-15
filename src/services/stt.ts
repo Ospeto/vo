@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import type { SpeechProvider, DictationPreset } from "./config.js";
+import type { SpeechProvider, DictationPreset, PiVoiceConfig } from "./config.js";
+import { loadConfig } from "./config.js";
 import type { DictionaryEntry, GeminiModelChoice } from "../shared/types.js";
 import { applyDictionary } from "./dictionary-engine.js";
 import {
@@ -869,6 +870,8 @@ export interface TranscribeOptions {
 	selectedText?: string;
 	abortSignal?: AbortSignal;
 	activeApp?: string;
+	appPresetMappings?: Record<string, DictationPreset>;
+	configSnapshot?: PiVoiceConfig;
 }
 
 export function getPresetTemperature(_preset?: DictationPreset): number {
@@ -910,35 +913,40 @@ async function transcribeGemini(
 	targetLanguage?: string,
 	selectedText?: string,
 	abortSignal?: AbortSignal,
+	passedAppMappings?: Record<string, DictationPreset>,
+	configSnapshot?: PiVoiceConfig,
 ): Promise<{ rawText: string; activeApp: string; usedPaidKey?: boolean }> {
 	if (abortSignal?.aborted) {
 		throw new Error("Transcription aborted");
 	}
-	const client = getGeminiClient();
+	const client = getGeminiClient(configSnapshot);
 	const base64Audio = audioBuffer.toString("base64");
 
 	const activeApp = await getActiveAppName();
 	const appContextHint = getAppContextPromptHint(activeApp);
 
-	let appMappings: Record<string, DictationPreset> | undefined;
+	let appMappings: Record<string, DictationPreset> | undefined = passedAppMappings;
 	let isTranslationActive = translateEnabled;
 	let resolvedTargetLang = targetLanguage;
 
-	try {
-		const { loadConfig } = await import("./config.js");
-		const cfg = loadConfig();
-		appMappings = cfg.appPresetMappings;
-		if (isTranslationActive === undefined) {
-			isTranslationActive = cfg.translateEnabled ?? false;
+	if (appMappings === undefined || isTranslationActive === undefined || !resolvedTargetLang) {
+		try {
+			const cfg = configSnapshot || loadConfig(workspacePath);
+			if (appMappings === undefined) {
+				appMappings = cfg.appPresetMappings;
+			}
+			if (isTranslationActive === undefined) {
+				isTranslationActive = cfg.translateEnabled ?? false;
+			}
+			if (!resolvedTargetLang) {
+				resolvedTargetLang = cfg.targetLanguage || "English";
+			}
+		} catch (err) {
+			logger.debug(
+				{ err: String(err) },
+				"Failed to load config for Gemini STT translation check",
+			);
 		}
-		if (!resolvedTargetLang) {
-			resolvedTargetLang = cfg.targetLanguage || "English";
-		}
-	} catch (err) {
-		logger.debug(
-			{ err: String(err) },
-			"Failed to load config for Gemini STT translation check",
-		);
 	}
 	if (!resolvedTargetLang) {
 		resolvedTargetLang = "English";
@@ -1040,16 +1048,22 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 	const { getGeminiFallbackClient, isFallbackClient } = await import(
 		"./gemini-client.js"
 	);
-	const fallbackClient = getGeminiFallbackClient();
-	const isPaidClient = isFallbackClient(client);
+	const fallbackClient = getGeminiFallbackClient(configSnapshot);
+	const isPaidClient = isFallbackClient(client, configSnapshot);
 
 	let hasPaidConfig = false;
 	try {
-		const { loadConfig } = await import("./config.js");
-		const cfg = loadConfig();
-		hasPaidConfig = Boolean(
-			cfg.geminiFallbackApiKey && cfg.geminiFallbackApiKey.trim(),
-		);
+		if (configSnapshot) {
+			hasPaidConfig = Boolean(
+				configSnapshot.geminiFallbackApiKey &&
+					configSnapshot.geminiFallbackApiKey.trim(),
+			);
+		} else {
+			const cfg = loadConfig(workspacePath);
+			hasPaidConfig = Boolean(
+				cfg.geminiFallbackApiKey && cfg.geminiFallbackApiKey.trim(),
+			);
+		}
 	} catch (err) {
 		logger.debug(
 			{ err: String(err) },
@@ -1433,24 +1447,35 @@ export async function transcribeDetailed(
 					loadUserDictionary(),
 				);
 
+	const configSnapshot =
+		typeof providerOrOptions === "object"
+			? providerOrOptions.configSnapshot
+			: undefined;
+
 	let isTranslationActive = translateEnabled;
-	let appPresetMappings: Record<string, DictationPreset> | undefined;
-	try {
-		const { loadConfig } = await import("./config.js");
-		const cfg = loadConfig();
-		appPresetMappings = cfg.appPresetMappings;
-		if (isTranslationActive === undefined) {
-			isTranslationActive = cfg.translateEnabled ?? false;
+	let appPresetMappings: Record<string, DictationPreset> | undefined =
+		typeof providerOrOptions === "object"
+			? providerOrOptions.appPresetMappings
+			: undefined;
+
+	if (appPresetMappings === undefined || isTranslationActive === undefined) {
+		try {
+			const cfg = configSnapshot || loadConfig(workspacePath);
+			if (appPresetMappings === undefined) {
+				appPresetMappings = cfg.appPresetMappings;
+			}
+			if (isTranslationActive === undefined) {
+				isTranslationActive = cfg.translateEnabled ?? false;
+			}
+		} catch {
+			isTranslationActive = isTranslationActive ?? false;
 		}
-	} catch {
-		isTranslationActive = isTranslationActive ?? false;
 	}
 
 	let effectiveTargetLang = targetLanguage;
 	if (!effectiveTargetLang) {
 		try {
-			const { loadConfig } = await import("./config.js");
-			const cfg = loadConfig();
+			const cfg = configSnapshot || loadConfig(workspacePath);
 			effectiveTargetLang = cfg.targetLanguage;
 		} catch {
 			effectiveTargetLang = undefined;
@@ -1489,6 +1514,8 @@ export async function transcribeDetailed(
 			selectedText,
 			abortSignal,
 			activeApp,
+			appPresetMappings,
+			configSnapshot,
 		});
 
 		if (result.success && result.finalText) {
@@ -1555,6 +1582,8 @@ export async function transcribeDetailed(
 				targetLanguage,
 				selectedText,
 				abortSignal,
+				appPresetMappings,
+				configSnapshot,
 			);
 			rawText = res.rawText;
 			usedPaidKey = res.usedPaidKey ?? false;

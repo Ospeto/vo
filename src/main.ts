@@ -197,6 +197,7 @@ dictationCoordinator = new DictationControlCoordinator(
 );
 const addonPath = resolveNativePastePath(projectRoot);
 const addon = loadNativePasteAddon(addonPath);
+// SAFETY: Electron clipboard module satisfies the generic ClipboardAdapter interface at runtime
 const safePasteService = createMacSafePasteService(
 	addon,
 	clipboard as unknown as ClipboardAdapter<any>,
@@ -292,7 +293,7 @@ export function sendToCaptureWindow(channel: string, ...args: any[]) {
 let currentState: AppState = "idle";
 let sequenceId = 0;
 let lastPastedText = "";
-let lastPasteTime = 0;
+let _lastPasteTime = 0;
 
 let activeSelectionText = "";
 
@@ -782,7 +783,7 @@ function togglePopover(focus = false) {
 		if (tray) {
 			try {
 				trayBounds = tray.getBounds();
-			} catch (_err) {
+			} catch {
 				// Tray bounds unavailable
 			}
 		}
@@ -1021,7 +1022,7 @@ function setupIpcHandlers() {
 			} else {
 				throw new Error("Invalid payload type");
 			}
-		} catch (_err) {
+		} catch {
 			logger.warn("Failed to convert recording payload to ArrayBuffer");
 			sendToCaptureWindow(IPC.CANCEL_RECORDING);
 			captureOrchestrator.markCaptureInactive(currentSeq);
@@ -1086,6 +1087,9 @@ function setupIpcHandlers() {
 					presetVocabulary: currentConfig.presetVocabulary,
 					dictionaryEntries: currentConfig.dictionaryEntries,
 					symbolScannerEnabled: currentConfig.symbolScannerEnabled,
+					appPresetMappings: currentConfig.appPresetMappings,
+					workspacePath: workingCwd,
+					configSnapshot: currentConfig,
 					selectedText: activeSelectionText,
 					abortSignal: sttAbortController.signal,
 				},
@@ -1197,7 +1201,7 @@ function setupIpcHandlers() {
 					usedPaidKey,
 				);
 				lastPastedText = text;
-				lastPasteTime = Date.now();
+				_lastPasteTime = Date.now();
 				playSuccessChime();
 				setState("idle", "Dictation successful", { usedPaidKey });
 			} else {
@@ -1678,12 +1682,12 @@ export function gracefulShutdown(): Promise<void> {
 		try {
 			try {
 				pasteCoordinator.invalidate();
-			} catch (_err) {
+			} catch {
 				// ignore
 			}
 			try {
 				abortSelectionCapture();
-			} catch (_err) {
+			} catch {
 				// ignore
 			}
 
@@ -1698,7 +1702,7 @@ export function gracefulShutdown(): Promise<void> {
 
 			try {
 				dictationCoordinator?.reset();
-			} catch (_err) {
+			} catch {
 				// Ignore reset errors during shutdown
 			}
 
@@ -1746,21 +1750,27 @@ export function gracefulShutdown(): Promise<void> {
 			if (hudWindow && !hudWindow.isDestroyed()) {
 				try {
 					hudWindow.destroy();
-				} catch (_err) {}
+				} catch {
+					logger.debug("HUD window already destroyed during shutdown");
+				}
 				hudWindow = null;
 			}
 
 			if (popoverWindow && !popoverWindow.isDestroyed()) {
 				try {
 					popoverWindow.destroy();
-				} catch (_err) {}
+				} catch {
+					logger.debug("Popover window already destroyed during shutdown");
+				}
 				popoverWindow = null;
 			}
 
 			if (tray) {
 				try {
 					tray.destroy();
-				} catch (_err) {}
+				} catch {
+					logger.debug("Tray already destroyed during shutdown");
+				}
 				tray = null;
 			}
 

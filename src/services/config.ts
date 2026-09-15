@@ -1,5 +1,5 @@
-import { join, dirname, basename } from "node:path";
-import fs, { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, chmodSync, unlinkSync } from "node:fs";
+import { join, dirname, basename, resolve } from "node:path";
+import fs, { readFileSync, renameSync, mkdirSync, existsSync, chmodSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
@@ -480,7 +480,9 @@ function getSafeStorage(): SafeStorageProvider | null {
     if (electron?.safeStorage) {
       return electron.safeStorage;
     }
-  } catch {}
+  } catch {
+    logger.debug("SafeStorage unavailable outside Electron main process");
+  }
   return null;
 }
 
@@ -533,6 +535,7 @@ export function resolveSecretState(raw?: unknown): SecretState {
       const decrypted = ss!.decryptString(buf);
       return { status: "available", value: decrypted, ciphertext: str };
     } catch (err: any) {
+      logger.debug({ err: String(err) }, "Failed to decrypt API key");
       return { status: "decrypt-error", error: "Failed to decrypt API key", rawCiphertext: str };
     }
   } else {
@@ -598,7 +601,11 @@ type LockHelper = Pick<ReturnType<typeof spawn>, "stdin" | "pid" | "kill">;
 export function terminateLockHelper(locker: LockHelper): void {
   locker.stdin?.destroy();
   if (locker.pid) {
-    try { process.kill(-locker.pid, "SIGTERM"); } catch {}
+    try {
+      process.kill(-locker.pid, "SIGTERM");
+    } catch {
+      logger.debug("Lock helper process already terminated");
+    }
   }
   locker.kill();
 }
@@ -632,7 +639,30 @@ function withFileLock<T>(lockPath: string, action: () => T): T {
   }
 }
 
+let configCacheHits = 0;
+let configCacheMisses = 0;
+let configLockAcquisitions = 0;
+
+export function getConfigAccessStats(): {
+  cacheHits: number;
+  cacheMisses: number;
+  lockCount: number;
+} {
+  return {
+    cacheHits: configCacheHits,
+    cacheMisses: configCacheMisses,
+    lockCount: configLockAcquisitions,
+  };
+}
+
+export function resetConfigAccessStats(): void {
+  configCacheHits = 0;
+  configCacheMisses = 0;
+  configLockAcquisitions = 0;
+}
+
 function withConfigLock<T>(action: () => T): T {
+  configLockAcquisitions++;
   return withFileLock(`${getUserConfigPath()}.lock`, action);
 }
 
@@ -654,9 +684,17 @@ function backupCorruptConfig(filePath: string, rawBytes: Buffer, _mode: number):
     return backupPath;
   } catch (err) {
     if (fd !== undefined) {
-      try { fs.closeSync(fd); } catch {}
+      try {
+        fs.closeSync(fd);
+      } catch {
+        logger.debug("Failed to close fd during backup failure cleanup");
+      }
     }
-    try { unlinkSync(backupPath); } catch {}
+    try {
+      unlinkSync(backupPath);
+    } catch {
+      logger.debug("Failed to unlink corrupt backup during failure cleanup");
+    }
     throw err;
   }
 }
@@ -783,7 +821,11 @@ function recoverConfig(result: ReadConfigResult, userScope: boolean): ReadConfig
 
 export function readAndRepairConfig(filePath: string): ReadConfigResult {
   const userScope = filePath === getUserConfigPath() || filePath === getLegacyUserConfigPath();
-  return withConfigLock(() => recoverConfig(inspectConfig(filePath), userScope));
+  const res = withConfigLock(() => recoverConfig(inspectConfig(filePath), userScope));
+  if (res.repaired || res.backupPath) {
+    configCache.clear();
+  }
+  return res;
 }
 
 function loadConfigUnlocked(cwd: string = process.cwd()): PiVoiceConfig {
@@ -950,7 +992,9 @@ function loadConfigUnlocked(cwd: string = process.cwd()): PiVoiceConfig {
       try {
         globalJson.geminiApiKey = encryptSecret(geminiState.value);
         atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
-      } catch {}
+      } catch {
+        logger.debug("Failed to persist migrated geminiApiKey to disk");
+      }
     }
   } else if (geminiState.status === "decrypt-error") {
     geminiKeyError = geminiState.error;
@@ -966,7 +1010,9 @@ function loadConfigUnlocked(cwd: string = process.cwd()): PiVoiceConfig {
       try {
         globalJson.geminiFallbackApiKey = encryptSecret(fallbackState.value);
         atomicWriteJson(userConfigPath, globalJson, { mode: 0o600 });
-      } catch {}
+      } catch {
+        logger.debug("Failed to persist migrated geminiFallbackApiKey to disk");
+      }
     }
   } else if (fallbackState.status === "decrypt-error") {
     geminiFallbackKeyError = fallbackState.error;
@@ -1072,8 +1118,113 @@ function loadConfigUnlocked(cwd: string = process.cwd()): PiVoiceConfig {
   };
 }
 
+interface FileFingerprint {
+  exists: boolean;
+  mtimeMs: number;
+  size: number;
+  ino: number;
+  ctimeMs: number;
+}
+
+interface ConfigCacheEntry {
+  cwd: string;
+  userConfigPath: string;
+  legacyUserConfigPath: string;
+  projConfigPath?: string | null;
+  userFp: FileFingerprint;
+  legacyUserFp: FileFingerprint;
+  projFp?: FileFingerprint;
+  config: PiVoiceConfig;
+}
+
+const configCache = new Map<string, ConfigCacheEntry>();
+
+export function clearConfigCache(): void {
+  configCache.clear();
+}
+
+export function invalidateConfigCache(): void {
+  configCache.clear();
+}
+
+function getFileFingerprint(filePath: string): FileFingerprint {
+  try {
+    const stat = fs.statSync(filePath);
+    return {
+      exists: true,
+      mtimeMs: stat.mtimeMs,
+      size: stat.size,
+      ino: stat.ino,
+      ctimeMs: stat.ctimeMs,
+    };
+  } catch {
+    return {
+      exists: false,
+      mtimeMs: 0,
+      size: 0,
+      ino: 0,
+      ctimeMs: 0,
+    };
+  }
+}
+
+function fingerprintsEqual(a: FileFingerprint, b: FileFingerprint): boolean {
+  return (
+    a.exists === b.exists &&
+    a.mtimeMs === b.mtimeMs &&
+    a.size === b.size &&
+    a.ino === b.ino &&
+    a.ctimeMs === b.ctimeMs
+  );
+}
+
 export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
-  return withConfigLock(() => loadConfigUnlocked(cwd));
+  const resolvedCwd = resolve(cwd);
+  const canonicalUserConfigPath = getUserConfigPath();
+  const legacyUserConfigPath = getLegacyUserConfigPath();
+  const projConfigPath = getProjConfigPath(resolvedCwd);
+
+  const cached = configCache.get(resolvedCwd);
+  if (cached) {
+    if (
+      cached.userConfigPath === canonicalUserConfigPath &&
+      cached.legacyUserConfigPath === legacyUserConfigPath &&
+      cached.projConfigPath === projConfigPath
+    ) {
+      const currentUserFp = getFileFingerprint(canonicalUserConfigPath);
+      const currentLegacyUserFp = getFileFingerprint(legacyUserConfigPath);
+      const currentProjFp = projConfigPath ? getFileFingerprint(projConfigPath) : undefined;
+
+      if (
+        fingerprintsEqual(cached.userFp, currentUserFp) &&
+        fingerprintsEqual(cached.legacyUserFp, currentLegacyUserFp) &&
+        (!projConfigPath || (cached.projFp && currentProjFp && fingerprintsEqual(cached.projFp, currentProjFp)))
+      ) {
+        configCacheHits++;
+        return structuredClone(cached.config);
+      }
+    }
+  }
+
+  configCacheMisses++;
+  const loaded = withConfigLock(() => loadConfigUnlocked(resolvedCwd));
+
+  const newUserFp = getFileFingerprint(canonicalUserConfigPath);
+  const newLegacyUserFp = getFileFingerprint(legacyUserConfigPath);
+  const newProjFp = projConfigPath ? getFileFingerprint(projConfigPath) : undefined;
+
+  configCache.set(resolvedCwd, {
+    cwd: resolvedCwd,
+    userConfigPath: canonicalUserConfigPath,
+    legacyUserConfigPath,
+    projConfigPath,
+    userFp: newUserFp,
+    legacyUserFp: newLegacyUserFp,
+    projFp: newProjFp,
+    config: loaded,
+  });
+
+  return structuredClone(loaded);
 }
 
 function atomicWriteJson(filePath: string, data: unknown, options: { mode?: number } = {}): void {
@@ -1092,12 +1243,24 @@ function atomicWriteJson(filePath: string, data: unknown, options: { mode?: numb
     fd = undefined;
     chmodSync(tmpPath, mode);
     renameSync(tmpPath, filePath);
-    try { chmodSync(filePath, mode); } catch {}
+    try {
+      chmodSync(filePath, mode);
+    } catch {
+      logger.debug("Failed to chmod destination file after atomic rename");
+    }
   } finally {
     if (fd !== undefined) {
-      try { fs.closeSync(fd); } catch {}
+      try {
+        fs.closeSync(fd);
+      } catch {
+        logger.debug("Failed to close fd in atomicWriteJson cleanup");
+      }
     }
-    try { unlinkSync(tmpPath); } catch {}
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      logger.debug("Failed to unlink tmpPath in atomicWriteJson cleanup");
+    }
   }
 }
 
@@ -1344,5 +1507,9 @@ function updateConfigUnlocked(cwd: string, patch: PiVoiceConfigPatch): PiVoiceCo
 }
 
 export function updateConfig(cwd: string = process.cwd(), patch: PiVoiceConfigPatch): PiVoiceConfig {
-  return withConfigLock(() => updateConfigUnlocked(cwd, patch));
+  return withConfigLock(() => {
+    const updated = updateConfigUnlocked(cwd, patch);
+    configCache.clear();
+    return updated;
+  });
 }
