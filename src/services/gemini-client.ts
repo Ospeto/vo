@@ -37,7 +37,11 @@ export function resolveApiKeys(configSnapshot?: PiVoiceConfig): string[] {
   // 1. Prioritize explicit user UI setting in config.json
   try {
     const config = configSnapshot || loadConfig();
-    if (config.geminiApiKey && config.geminiApiKey.trim() && !config.geminiApiKey.includes("your_")) {
+    if (
+      config.geminiApiKey &&
+      config.geminiApiKey.trim() &&
+      !config.geminiApiKey.includes("your_")
+    ) {
       rawKeysString = config.geminiApiKey.trim();
     }
   } catch {
@@ -46,9 +50,15 @@ export function resolveApiKeys(configSnapshot?: PiVoiceConfig): string[] {
 
   // 2. Process environment variables if no config key
   if (!rawKeysString) {
-    if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("your_")) {
+    if (
+      process.env.GEMINI_API_KEY &&
+      !process.env.GEMINI_API_KEY.includes("your_")
+    ) {
       rawKeysString = process.env.GEMINI_API_KEY;
-    } else if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_API_KEY.includes("your_")) {
+    } else if (
+      process.env.GOOGLE_API_KEY &&
+      !process.env.GOOGLE_API_KEY.includes("your_")
+    ) {
       rawKeysString = process.env.GOOGLE_API_KEY;
     }
   }
@@ -70,11 +80,21 @@ export function resolveApiKeys(configSnapshot?: PiVoiceConfig): string[] {
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed.startsWith("#")) continue;
-            const match = trimmed.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY)=(.+)/);
+            const match = trimmed.match(
+              /(?:GEMINI_API_KEY|GOOGLE_API_KEY)=(.+)/,
+            );
             if (match && match[1]) {
               const val = match[1];
-              const key = val.trim().replace(/^["']|["']$/g, "").split("#")[0]?.trim();
-              if (key && !key.includes("your_") && !key.includes("your_gemini_key_here")) {
+              const key = val
+                .trim()
+                .replace(/^["']|["']$/g, "")
+                .split("#")[0]
+                ?.trim();
+              if (
+                key &&
+                !key.includes("your_") &&
+                !key.includes("your_gemini_key_here")
+              ) {
                 rawKeysString = key;
                 break;
               }
@@ -122,13 +142,23 @@ export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
   const apiKeys = resolveApiKeys(configSnapshot);
 
   if (project && !forceVertexOff) {
-    logger.info({ project, location }, "Initializing Gemini client (Vertex AI)");
+    logger.info(
+      { project, location },
+      "Initializing Gemini client (Vertex AI)",
+    );
     const client = new GoogleGenAI({ vertexai: true, project, location });
     geminiClients = [client];
   } else if (apiKeys.length > 0) {
-    logger.info({ keyCount: apiKeys.length }, "Initializing Gemini client(s) (Multi-Key Round-Robin Active)");
+    logger.info(
+      { keyCount: apiKeys.length },
+      "Initializing Gemini client(s) (Multi-Key Round-Robin Active)",
+    );
     geminiClients = apiKeys.map(
-      (apiKey) => new GoogleGenAI({ apiKey, httpOptions: { headers: { Connection: "keep-alive" } } }),
+      (apiKey) =>
+        new GoogleGenAI({
+          apiKey,
+          httpOptions: { headers: { Connection: "keep-alive" } },
+        }),
     );
   } else {
     // Try fallback key before throwing
@@ -149,7 +179,9 @@ export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
   return client;
 }
 
-export function getGeminiFallbackClient(configSnapshot?: PiVoiceConfig): GoogleGenAI | null {
+export function getGeminiFallbackClient(
+  configSnapshot?: PiVoiceConfig,
+): GoogleGenAI | null {
   if (customTestFallbackClient) {
     return customTestFallbackClient;
   }
@@ -171,7 +203,10 @@ export function getGeminiFallbackClient(configSnapshot?: PiVoiceConfig): GoogleG
   return null;
 }
 
-export function isFallbackClient(client: GoogleGenAI | null, configSnapshot?: PiVoiceConfig): boolean {
+export function isFallbackClient(
+  client: GoogleGenAI | null,
+  configSnapshot?: PiVoiceConfig,
+): boolean {
   if (!client) return false;
   const fbClient = getGeminiFallbackClient(configSnapshot);
   return Boolean(fbClient && client === fbClient);
@@ -179,7 +214,9 @@ export function isFallbackClient(client: GoogleGenAI | null, configSnapshot?: Pi
 
 export function prewarmConnection(): void {
   try {
-    const req = fetch("https://generativelanguage.googleapis.com", { method: "HEAD" });
+    const req = fetch("https://generativelanguage.googleapis.com", {
+      method: "HEAD",
+    });
     req.catch(() => {});
   } catch {
     logger.debug("Failed to prewarm Gemini connection");

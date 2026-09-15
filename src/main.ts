@@ -228,9 +228,7 @@ export const captureOrchestrator = new CaptureOrchestrator<
 				focusable: false,
 				skipTaskbar: true,
 				webPreferences: {
-					preload: fileURLToPath(
-						new URL("../preload/capture.cjs", import.meta.url),
-					),
+					preload: fileURLToPath(new URL("../preload/capture.cjs", import.meta.url)),
 					contextIsolation: true,
 					nodeIntegration: false,
 					backgroundThrottling: false,
@@ -241,8 +239,7 @@ export const captureOrchestrator = new CaptureOrchestrator<
 		destroyWindow: (win) => win.destroy(),
 		onRenderProcessGone: (sender, handler) =>
 			sender.on("render-process-gone", handler),
-		onDidFinishLoad: (sender, handler) =>
-			sender.once("did-finish-load", handler),
+		onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
 		onClosed: (win, handler) => win.on("closed", handler),
 		sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
 		setState: (state, msg, options) => setState(state, msg, options),
@@ -310,9 +307,7 @@ function restoreCapturedSelection(sequenceId?: number) {
 
 function isCurrentTranscription(sequenceId: number): boolean {
 	const snapshot = recordingLifecycle.snapshot();
-	return (
-		snapshot.sequenceId === sequenceId && snapshot.state === "transcribing"
-	);
+	return snapshot.sequenceId === sequenceId && snapshot.state === "transcribing";
 }
 
 let activeSelectionAbortController: AbortController | null = null;
@@ -697,9 +692,7 @@ function createPopoverWindow() {
 		vibrancy: "popover",
 		visualEffectState: "active",
 		webPreferences: {
-			preload: fileURLToPath(
-				new URL("../preload/settings.cjs", import.meta.url),
-			),
+			preload: fileURLToPath(new URL("../preload/settings.cjs", import.meta.url)),
 			contextIsolation: true,
 			nodeIntegration: false,
 		},
@@ -723,9 +716,7 @@ function createHudWindow() {
 	const screenBounds = primaryDisplay.workArea;
 	const width = 280;
 	const height = 36;
-	const defaultX = Math.round(
-		screenBounds.x + (screenBounds.width - width) / 2,
-	);
+	const defaultX = Math.round(screenBounds.x + (screenBounds.width - width) / 2);
 	const defaultY = screenBounds.y + 6;
 
 	const x = customHudPosition ? customHudPosition.x : defaultX;
@@ -800,11 +791,7 @@ function togglePopover(focus = false) {
 			};
 		}
 
-		const pos = calculatePopoverPosition(
-			trayBounds,
-			POPOVER_SIZE,
-			screenBounds,
-		);
+		const pos = calculatePopoverPosition(trayBounds, POPOVER_SIZE, screenBounds);
 
 		popoverWindow.setPosition(pos.x, pos.y);
 		if (focus) {
@@ -846,8 +833,7 @@ function buildTrayContextMenu(): Menu {
 			enabled: false,
 		},
 		{
-			label:
-				currentState === "recording" ? "Stop Recording" : "Start Dictation",
+			label: currentState === "recording" ? "Stop Recording" : "Start Dictation",
 			click: async () => {
 				const cmd =
 					currentState === "recording" || currentState === "starting"
@@ -951,10 +937,7 @@ function validateIpcSender(
 	try {
 		return enforceIpcSender(event, channel);
 	} catch (err: any) {
-		logger.warn(
-			{ channel, err: err?.message },
-			"Denied unauthorized IPC sender",
-		);
+		logger.warn({ channel, err: err?.message }, "Denied unauthorized IPC sender");
 		return null;
 	}
 }
@@ -1013,11 +996,7 @@ function setupIpcHandlers() {
 			if (data instanceof ArrayBuffer) {
 				arrayBuffer = data;
 			} else if (ArrayBuffer.isView(data)) {
-				const view = new Uint8Array(
-					data.buffer,
-					data.byteOffset,
-					data.byteLength,
-				);
+				const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 				arrayBuffer = new Uint8Array(view).buffer as ArrayBuffer;
 			} else {
 				throw new Error("Invalid payload type");
@@ -1123,7 +1102,8 @@ function setupIpcHandlers() {
 					if (Notification.isSupported()) {
 						new Notification({
 							title: "💳 Paid Gemini Key Used",
-							body: "Primary free keys were rate-limited or exhausted. Fallback paid key was used.",
+							body:
+								"Primary free keys were rate-limited or exhausted. Fallback paid key was used.",
 						}).show();
 					}
 				} catch {}
@@ -1152,9 +1132,7 @@ function setupIpcHandlers() {
 			}
 
 			const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
-			const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(
-				text,
-			);
+			const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
 			const isEnglish = !isBurmeseText;
 			const cost = calculateDictationCost(
 				audioDurationSec,
@@ -1178,14 +1156,8 @@ function setupIpcHandlers() {
 				() => restoreCapturedSelection(currentSeq),
 			);
 
-			if (
-				!isCurrentTranscription(currentSeq) ||
-				pasteResult.status === "stale"
-			) {
-				logger.warn(
-					{ currentSeq, pasteResult },
-					"Discarding stale paste result",
-				);
+			if (!isCurrentTranscription(currentSeq) || pasteResult.status === "stale") {
+				logger.warn({ currentSeq, pasteResult }, "Discarding stale paste result");
 				return;
 			}
 
@@ -1342,13 +1314,10 @@ function setupIpcHandlers() {
 		},
 	);
 
-	ipcMain.on(
-		IPC.RECORDING_STOPPED,
-		(event, payload: { sequenceId: number }) => {
-			if (!validateIpcSender(event, IPC.RECORDING_STOPPED)) return;
-			captureOrchestrator.markCaptureInactive(payload?.sequenceId);
-		},
-	);
+	ipcMain.on(IPC.RECORDING_STOPPED, (event, payload: { sequenceId: number }) => {
+		if (!validateIpcSender(event, IPC.RECORDING_STOPPED)) return;
+		captureOrchestrator.markCaptureInactive(payload?.sequenceId);
+	});
 
 	ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
 		if (!validateIpcSender(event, IPC.AUDIO_LEVEL_UPDATE)) return;
@@ -1460,12 +1429,7 @@ function setupIpcHandlers() {
 	ipcMain.handle(IPC.TEST_API_KEY, async (event, keyToTest?: string) => {
 		enforceIpcSender(event, IPC.TEST_API_KEY);
 		try {
-			const validatedKey = z
-				.string()
-				.min(1)
-				.max(256)
-				.optional()
-				.parse(keyToTest);
+			const validatedKey = z.string().min(1).max(256).optional().parse(keyToTest);
 			const targetKey =
 				validatedKey ||
 				currentConfig.geminiApiKey ||
@@ -1563,8 +1527,7 @@ export function handleHotkeyDown(
 	const dictMode = dictationCoordinator.getDictationMode();
 	const currentState = dictationCoordinator.snapshot().state;
 	const isHoldModeInitial =
-		dictMode === "hold" &&
-		(currentState === "idle" || currentState === "error");
+		dictMode === "hold" && (currentState === "idle" || currentState === "error");
 
 	if (!isHoldModeInitial && now - lastHotkeyDownTime < 350) {
 		logger.warn(
@@ -1710,10 +1673,7 @@ export function gracefulShutdown(): Promise<void> {
 			recordingLifecycle.reset();
 
 			try {
-				await withBoundedWait(
-					captureOrchestrator.teardownCaptureWindow(),
-					2000,
-				);
+				await withBoundedWait(captureOrchestrator.teardownCaptureWindow(), 2000);
 			} catch (err: any) {
 				logger.warn(
 					{ err: err?.message || String(err) },

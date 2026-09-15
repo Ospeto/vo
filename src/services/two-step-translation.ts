@@ -49,15 +49,15 @@ export interface TwoStepTranslationResult {
 }
 
 export interface TextTranslatorOptions {
-  targetLanguage: string;
-  dictationPreset?: DictationPreset;
-  activeApp?: string;
-  workspacePath?: string;
-  fileExtension?: string;
-  workspaceSymbols?: string[];
-  geminiModel?: GeminiModelChoice;
-  abortSignal?: AbortSignal;
-  configSnapshot?: PiVoiceConfig;
+	targetLanguage: string;
+	dictationPreset?: DictationPreset;
+	activeApp?: string;
+	workspacePath?: string;
+	fileExtension?: string;
+	workspaceSymbols?: string[];
+	geminiModel?: GeminiModelChoice;
+	abortSignal?: AbortSignal;
+	configSnapshot?: PiVoiceConfig;
 }
 
 export interface TwoStepTranslationOptions {
@@ -259,7 +259,8 @@ export async function defaultTextTranslator(
 				configSnapshot?: PiVoiceConfig;
 		  },
 ): Promise<{ text: string; modelUsed?: string; usedPaidKey?: boolean }> {
-	const configSnapshot = "configSnapshot" in options ? options.configSnapshot : undefined;
+	const configSnapshot =
+		"configSnapshot" in options ? options.configSnapshot : undefined;
 	const client = getGeminiClient(configSnapshot);
 	const model = options.geminiModel || "gemini-3.1-flash-lite";
 	const prompt = buildTextTranslatorPrompt(sourceText, options);
@@ -579,9 +580,7 @@ export function extractTechnicalTokens(text: string): string[] {
 			if (!isSingleCapitalizedWord(id)) tokens.add(id);
 		}
 	}
-	const acronymPascalMatches = text.match(
-		/\b[A-Z]{2,}[a-z0-9]+[a-zA-Z0-9]*\b/g,
-	);
+	const acronymPascalMatches = text.match(/\b[A-Z]{2,}[a-z0-9]+[a-zA-Z0-9]*\b/g);
 	if (acronymPascalMatches) {
 		for (const id of acronymPascalMatches) {
 			if (!isSingleCapitalizedWord(id)) tokens.add(id);
