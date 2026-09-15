@@ -6,6 +6,14 @@ import type { DictionaryEntry, VocabularyCategory } from "../shared/types.js";
 import logger from "./logger.js";
 import { ensureOwnerOnlyPermissions } from "../shared/permission-utils.js";
 
+type VocabChangeListener = () => void;
+const vocabChangeListeners = new Set<VocabChangeListener>();
+
+export function onVocabularyChanged(listener: VocabChangeListener): () => void {
+  vocabChangeListeners.add(listener);
+  return () => vocabChangeListeners.delete(listener);
+}
+
 export interface PersistedVocabulary {
   version?: 2;
   /** Legacy fields remain as a lossless compatibility mirror. */
@@ -137,7 +145,7 @@ function mergeLegacyEntries(entries: DictionaryEntry[], legacyEntries: Dictionar
     if (existing) {
       existing.spokenAliases = Array.from(new Set([...existing.spokenAliases, ...legacy.spokenAliases]));
     } else {
-      const { preset, ...rest } = legacy as any;
+      const { preset: _preset, ...rest } = legacy as any;
       entries.push(rest);
     }
   }
@@ -178,7 +186,7 @@ export function migrateVocabulary(
   }
   const userDictEntries = userDictionary.map((term) => dictionaryEntryFromTerm(term, "general")).filter((e): e is DictionaryEntry => Boolean(e));
   const cleanedExisting = existingEntries.map((e) => {
-    const { preset, ...rest } = e as any;
+    const { preset: _preset, ...rest } = e as any;
     return rest as DictionaryEntry;
   });
   return mergeLegacyEntries(mergeEntries([...seededEntries(), ...cleanedExisting]), [...customEntries, ...presetEntries, ...userDictEntries]);
@@ -263,6 +271,13 @@ export function savePersistedVocabulary(vocab: PersistedVocabulary, customPath?:
     renameSync(tmp, filePath);
     ensureOwnerOnlyPermissions(filePath);
     logger.info({ vocabPath: filePath }, "Persisted custom vocabulary dictionary cleanly");
+    for (const listener of vocabChangeListeners) {
+      try {
+        listener();
+      } catch {
+        // ignore listener error
+      }
+    }
   } catch (err: any) {
     logger.error({ err: err?.message }, "Failed to save vocabulary.json");
   }

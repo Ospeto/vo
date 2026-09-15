@@ -10,6 +10,8 @@ let fallbackClient: GoogleGenAI | null = null;
 let currentKeyIndex = 0;
 let customTestClient: GoogleGenAI | null = null;
 let customTestFallbackClient: GoogleGenAI | null = null;
+let cachedSnapshotKey: string | undefined = undefined;
+let cachedFallbackKey: string | null = null;
 
 export function setGeminiClientForTests(client: any): void {
   customTestClient = client;
@@ -25,6 +27,8 @@ export function _resetGeminiClient(): void {
   currentKeyIndex = 0;
   customTestClient = null;
   customTestFallbackClient = null;
+  cachedSnapshotKey = undefined;
+  cachedFallbackKey = null;
 }
 
 export function resetClientCache(): void {
@@ -128,6 +132,15 @@ export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
     return customTestClient;
   }
 
+  if (configSnapshot && configSnapshot.geminiApiKey !== undefined) {
+    const snapKey = (configSnapshot.geminiApiKey || "").trim();
+    if (snapKey !== cachedSnapshotKey) {
+      cachedSnapshotKey = snapKey;
+      geminiClients = [];
+      currentKeyIndex = 0;
+    }
+  }
+
   if (geminiClients.length > 0) {
     const client = geminiClients[currentKeyIndex];
     if (client) {
@@ -186,20 +199,31 @@ export function getGeminiFallbackClient(
     return customTestFallbackClient;
   }
 
-  if (fallbackClient) return fallbackClient;
+  let resolvedFallbackKey: string | null = null;
   try {
     const config = configSnapshot || loadConfig();
     if (config.geminiFallbackApiKey && config.geminiFallbackApiKey.trim()) {
-      logger.info("Initializing Fallback Paid Gemini API Key Client");
-      fallbackClient = new GoogleGenAI({
-        apiKey: config.geminiFallbackApiKey.trim(),
-        httpOptions: { headers: { Connection: "keep-alive" } },
-      });
-      return fallbackClient;
+      resolvedFallbackKey = config.geminiFallbackApiKey.trim();
     }
   } catch {
     logger.debug("Failed to read fallback Gemini API key from config");
   }
+
+  if (fallbackClient && resolvedFallbackKey === cachedFallbackKey) {
+    return fallbackClient;
+  }
+
+  cachedFallbackKey = resolvedFallbackKey;
+  if (resolvedFallbackKey) {
+    logger.info("Initializing Fallback Paid Gemini API Key Client");
+    fallbackClient = new GoogleGenAI({
+      apiKey: resolvedFallbackKey,
+      httpOptions: { headers: { Connection: "keep-alive" } },
+    });
+    return fallbackClient;
+  }
+
+  fallbackClient = null;
   return null;
 }
 

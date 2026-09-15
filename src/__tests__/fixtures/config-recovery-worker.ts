@@ -11,6 +11,8 @@ mock.module("../../services/vocabulary-service.js", () => ({
   savePersistedVocabulary: () => {},
   migrateVocabulary: (_custom: string[], _preset: Record<string, string[]>, entries: unknown[] = []) => entries,
   backfillLegacyWhitespace: (entries: unknown[]) => entries,
+  resolveVocabularyPath: () => "/dev/null/vocab.json",
+  onVocabularyChanged: () => () => {},
 }));
 
 const [id, root] = process.argv.slice(2);

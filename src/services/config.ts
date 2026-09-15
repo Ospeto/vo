@@ -19,6 +19,8 @@ import {
   savePersistedVocabulary,
   migrateVocabulary,
   backfillLegacyWhitespace,
+  resolveVocabularyPath,
+  onVocabularyChanged,
 } from "./vocabulary-service.js";
 import { validateDictionaryEntries } from "./dictionary-engine.js";
 import type {
@@ -1485,9 +1487,11 @@ interface ConfigCacheEntry {
   userConfigPath: string;
   legacyUserConfigPath: string;
   projConfigPath?: string | null;
+  vocabPath: string;
   userFp: FileFingerprint;
   legacyUserFp: FileFingerprint;
   projFp?: FileFingerprint;
+  vocabFp: FileFingerprint;
   config: PiVoiceConfig;
 }
 
@@ -1500,6 +1504,8 @@ export function clearConfigCache(): void {
 export function invalidateConfigCache(): void {
   configCache.clear();
 }
+
+onVocabularyChanged(() => invalidateConfigCache());
 
 function getFileFingerprint(filePath: string): FileFingerprint {
   try {
@@ -1532,24 +1538,32 @@ function fingerprintsEqual(a: FileFingerprint, b: FileFingerprint): boolean {
   );
 }
 
+/**
+ * Cache freshness is an optimistic point-in-time check comparing filesystem
+ * metadata (mtimeMs, size, inode, and ctimeMs) across the canonical user configuration,
+ * legacy fallback configuration, project override, and resolved vocabulary paths.
+ */
 export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const resolvedCwd = resolve(cwd);
   const canonicalUserConfigPath = getUserConfigPath();
   const legacyUserConfigPath = getLegacyUserConfigPath();
   const projConfigPath = getProjConfigPath(resolvedCwd);
+  const vocabPath = resolveVocabularyPath();
 
   const cached = configCache.get(resolvedCwd);
   if (cached) {
     if (
       cached.userConfigPath === canonicalUserConfigPath &&
       cached.legacyUserConfigPath === legacyUserConfigPath &&
-      cached.projConfigPath === projConfigPath
+      cached.projConfigPath === projConfigPath &&
+      cached.vocabPath === vocabPath
     ) {
       const currentUserFp = getFileFingerprint(canonicalUserConfigPath);
       const currentLegacyUserFp = getFileFingerprint(legacyUserConfigPath);
       const currentProjFp = projConfigPath
         ? getFileFingerprint(projConfigPath)
         : undefined;
+      const currentVocabFp = getFileFingerprint(vocabPath);
 
       if (
         fingerprintsEqual(cached.userFp, currentUserFp) &&
@@ -1557,7 +1571,8 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
         (!projConfigPath ||
           (cached.projFp &&
             currentProjFp &&
-            fingerprintsEqual(cached.projFp, currentProjFp)))
+            fingerprintsEqual(cached.projFp, currentProjFp))) &&
+        fingerprintsEqual(cached.vocabFp, currentVocabFp)
       ) {
         configCacheHits++;
         return structuredClone(cached.config);
@@ -1573,15 +1588,18 @@ export function loadConfig(cwd: string = process.cwd()): PiVoiceConfig {
   const newProjFp = projConfigPath
     ? getFileFingerprint(projConfigPath)
     : undefined;
+  const newVocabFp = getFileFingerprint(vocabPath);
 
   configCache.set(resolvedCwd, {
     cwd: resolvedCwd,
     userConfigPath: canonicalUserConfigPath,
     legacyUserConfigPath,
     projConfigPath,
+    vocabPath,
     userFp: newUserFp,
     legacyUserFp: newLegacyUserFp,
     projFp: newProjFp,
+    vocabFp: newVocabFp,
     config: loaded,
   });
 

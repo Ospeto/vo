@@ -290,7 +290,6 @@ export function sendToCaptureWindow(channel: string, ...args: any[]) {
 let currentState: AppState = "idle";
 let sequenceId = 0;
 let lastPastedText = "";
-let _lastPasteTime = 0;
 
 let activeSelectionText = "";
 
@@ -1106,7 +1105,9 @@ function setupIpcHandlers() {
 								"Primary free keys were rate-limited or exhausted. Fallback paid key was used.",
 						}).show();
 					}
-				} catch {}
+				} catch {
+					logger.debug("Failed to display paid key notification");
+				}
 			}
 
 			logger.info(
@@ -1161,7 +1162,7 @@ function setupIpcHandlers() {
 				return;
 			}
 
-			if (pasteResult.status === "submitted") {
+				if (pasteResult.status === "submitted") {
 				recordingLifecycle.finishTranscription(currentSeq, true);
 				restoreCapturedSelection(currentSeq);
 				addHistoryEntry(
@@ -1173,7 +1174,6 @@ function setupIpcHandlers() {
 					usedPaidKey,
 				);
 				lastPastedText = text;
-				_lastPasteTime = Date.now();
 				playSuccessChime();
 				setState("idle", "Dictation successful", { usedPaidKey });
 			} else {
@@ -1387,7 +1387,10 @@ function setupIpcHandlers() {
 				);
 			}
 		}
-		if (validatedPatch.geminiApiKey !== undefined) {
+		if (
+			validatedPatch.geminiApiKey !== undefined ||
+			validatedPatch.geminiFallbackApiKey !== undefined
+		) {
 			process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
 			_resetGeminiClient();
 		}

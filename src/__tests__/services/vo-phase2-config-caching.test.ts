@@ -5,9 +5,10 @@ import {
 	writeFileSync,
 	mkdirSync,
 	existsSync,
+	statSync,
 } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import {
 	loadConfig,
 	updateConfig,
@@ -21,8 +22,12 @@ import { transcribeDetailed } from "../../services/stt.js";
 import { executeTwoStepTranslation } from "../../services/two-step-translation.js";
 import {
 	setGeminiClientForTests,
+	getGeminiFallbackClient,
 	_resetGeminiClient,
 } from "../../services/gemini-client.js";
+import {
+	setVocabularyPathForTests,
+} from "../../services/vocabulary-service.js";
 
 describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () => {
 	let testRoot: string;
@@ -30,12 +35,16 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 	let xdgConfig: string;
 	let origHome: string | undefined;
 	let origXdg: string | undefined;
+	let testVocabPath: string;
 
 	beforeEach(() => {
 		testRoot = mkdtempSync(join(tmpdir(), "vo-phase2-test-"));
 		userHome = join(testRoot, "home");
 		xdgConfig = join(userHome, ".config");
 		mkdirSync(xdgConfig, { recursive: true });
+
+		testVocabPath = join(testRoot, "vocabulary.json");
+		setVocabularyPathForTests(testVocabPath);
 
 		origHome = process.env.HOME;
 		origXdg = process.env.XDG_CONFIG_HOME;
@@ -49,6 +58,7 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 	});
 
 	afterEach(() => {
+		setVocabularyPathForTests(null);
 		clearConfigCache();
 		resetConfigAccessStats();
 		_resetGeminiClient();
@@ -95,6 +105,27 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 			expect(reloaded.dictationPreset).toBe("code_comment");
 		});
 
+		test("tests do not touch or mutate the real user vocabulary file", () => {
+			const realVocabPath = join(homedir(), ".config", "pi-voice", "vocabulary.json");
+			const realExistedBefore = existsSync(realVocabPath);
+			const realMtimeBefore = realExistedBefore ? statSync(realVocabPath).mtimeMs : 0;
+
+			// Perform updateConfig with custom vocabulary
+			updateConfig(testRoot, {
+				customVocabulary: ["TestTermOne", "TestTermTwo"],
+			});
+
+			// Verify test wrote strictly to testVocabPath
+			expect(existsSync(testVocabPath)).toBe(true);
+
+			// Verify real user vocabulary file was NOT touched
+			const realExistedAfter = existsSync(realVocabPath);
+			expect(realExistedAfter).toBe(realExistedBefore);
+			if (realExistedBefore) {
+				expect(statSync(realVocabPath).mtimeMs).toBe(realMtimeBefore);
+			}
+		});
+
 		test("external file write to config.json is immediately detected via file fingerprint and invalidates cache", async () => {
 			const configDir = join(xdgConfig, "pi-voice");
 			mkdirSync(configDir, { recursive: true });
@@ -126,6 +157,62 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 			// Fingerprint invalidation detects modification on disk immediately
 			const loaded2 = loadConfig(testRoot);
 			expect(loaded2.targetLanguage).toBe("Burmese");
+		});
+
+		test("direct external edits to vocabulary.json invalidate config cache and reflect updated vocabulary", async () => {
+			const configDir = join(xdgConfig, "pi-voice");
+			mkdirSync(configDir, { recursive: true });
+			writeFileSync(join(configDir, "config.json"), JSON.stringify({ provider: "gemini" }));
+
+			writeFileSync(
+				testVocabPath,
+				JSON.stringify({
+					version: 2,
+					customVocabulary: ["InitialTerm"],
+					presetVocabulary: {},
+					entries: [
+						{
+							id: "term-1",
+							phrase: "InitialTerm",
+							spokenAliases: ["InitialTerm"],
+							enabled: true,
+						},
+					],
+				}),
+			);
+
+			const loaded1 = loadConfig(testRoot);
+			expect(loaded1.customVocabulary).toContain("InitialTerm");
+			expect(loaded1.customVocabulary).not.toContain("ExternalTerm");
+
+			// Simulate external edit to vocabulary.json
+			await Bun.sleep(10);
+			writeFileSync(
+				testVocabPath,
+				JSON.stringify({
+					version: 2,
+					customVocabulary: ["InitialTerm", "ExternalTerm"],
+					presetVocabulary: {},
+					entries: [
+						{
+							id: "term-1",
+							phrase: "InitialTerm",
+							spokenAliases: ["InitialTerm"],
+							enabled: true,
+						},
+						{
+							id: "term-2",
+							phrase: "ExternalTerm",
+							spokenAliases: ["ExternalTerm"],
+							enabled: true,
+						},
+					],
+				}),
+			);
+
+			// Cache fingerprint check on vocabulary.json triggers optimistic point-in-time invalidation
+			const loaded2 = loadConfig(testRoot);
+			expect(loaded2.customVocabulary).toContain("ExternalTerm");
 		});
 
 		test("workspace-specific configuration and isolation across distinct workspace paths", () => {
@@ -174,9 +261,42 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 	});
 
 	// =========================================================================
-	// 2. Transcription Pipeline Zero / Single loadConfig() Invocation Suite
+	// 2. Snapshot-Safe Gemini Client Caching Suite
 	// =========================================================================
-	describe("2. Transcription Pipeline Zero loadConfig() Invocation with Snapshot Threading", () => {
+	describe("2. Snapshot-Safe Gemini Client Caching", () => {
+		test("getGeminiFallbackClient returns cached client when key matches and recreates on rotation", () => {
+			_resetGeminiClient();
+
+			const snapshotA = defaultConfig();
+			snapshotA.geminiFallbackApiKey = "key-alpha-123";
+
+			const client1 = getGeminiFallbackClient(snapshotA);
+			expect(client1).not.toBeNull();
+
+			// Calling again with same key returns the exact cached client instance
+			const client2 = getGeminiFallbackClient(snapshotA);
+			expect(client2).toBe(client1);
+
+			// Rotating the key in snapshot triggers client recreation
+			const snapshotB = defaultConfig();
+			snapshotB.geminiFallbackApiKey = "key-beta-456";
+
+			const client3 = getGeminiFallbackClient(snapshotB);
+			expect(client3).not.toBeNull();
+			expect(client3).not.toBe(client1);
+
+			// Clearing the key sets fallbackClient to null
+			const snapshotC = defaultConfig();
+			snapshotC.geminiFallbackApiKey = "";
+			const client4 = getGeminiFallbackClient(snapshotC);
+			expect(client4).toBeNull();
+		});
+	});
+
+	// =========================================================================
+	// 3. Transcription Pipeline Zero / Single loadConfig() Invocation Suite
+	// =========================================================================
+	describe("3. Transcription Pipeline Zero loadConfig() Invocation with Snapshot Threading", () => {
 		test("transcribeDetailed with threaded configSnapshot executes 0 loadConfig calls in normal STT", async () => {
 			// Mock Gemini client to avoid external network calls
 			const mockClient = {
@@ -291,9 +411,9 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 	});
 
 	// =========================================================================
-	// 3. Performance, Call-Count & Timing Optimization Suite
+	// 4. Performance, Call-Count & Timing Optimization Suite
 	// =========================================================================
-	describe("3. Performance, Call-Count & Timing Optimization", () => {
+	describe("4. Performance, Call-Count & Timing Optimization", () => {
 		test("warm loadConfig calls execute in sub-millisecond time and avoid lockf subprocess spawning", () => {
 			// First call (cold): establishes cache
 			resetConfigAccessStats();
