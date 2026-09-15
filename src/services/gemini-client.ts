@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { GoogleGenAI } from "@google/genai";
-import { loadConfig } from "./config.js";
+import { loadConfig, type PiVoiceConfig } from "./config.js";
 import logger from "./logger.js";
 
 let geminiClients: GoogleGenAI[] = [];
@@ -10,6 +10,8 @@ let fallbackClient: GoogleGenAI | null = null;
 let currentKeyIndex = 0;
 let customTestClient: GoogleGenAI | null = null;
 let customTestFallbackClient: GoogleGenAI | null = null;
+let cachedPrimaryKeysSignature = "";
+let cachedFallbackKey: string | null = null;
 
 export function setGeminiClientForTests(client: any): void {
   customTestClient = client;
@@ -25,28 +27,42 @@ export function _resetGeminiClient(): void {
   currentKeyIndex = 0;
   customTestClient = null;
   customTestFallbackClient = null;
+  cachedPrimaryKeysSignature = "";
+  cachedFallbackKey = null;
 }
 
 export function resetClientCache(): void {
   _resetGeminiClient();
 }
 
-export function resolveApiKeys(): string[] {
+export function resolveApiKeys(configSnapshot?: PiVoiceConfig): string[] {
   let rawKeysString: string | undefined;
 
   // 1. Prioritize explicit user UI setting in config.json
   try {
-    const config = loadConfig();
-    if (config.geminiApiKey && config.geminiApiKey.trim() && !config.geminiApiKey.includes("your_")) {
+    const config = configSnapshot || loadConfig();
+    if (
+      config.geminiApiKey &&
+      config.geminiApiKey.trim() &&
+      !config.geminiApiKey.includes("your_")
+    ) {
       rawKeysString = config.geminiApiKey.trim();
     }
-  } catch {}
+  } catch {
+    logger.debug("Failed to resolve Gemini API key from config");
+  }
 
   // 2. Process environment variables if no config key
   if (!rawKeysString) {
-    if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("your_")) {
+    if (
+      process.env.GEMINI_API_KEY &&
+      !process.env.GEMINI_API_KEY.includes("your_")
+    ) {
       rawKeysString = process.env.GEMINI_API_KEY;
-    } else if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_API_KEY.includes("your_")) {
+    } else if (
+      process.env.GOOGLE_API_KEY &&
+      !process.env.GOOGLE_API_KEY.includes("your_")
+    ) {
       rawKeysString = process.env.GOOGLE_API_KEY;
     }
   }
@@ -68,18 +84,30 @@ export function resolveApiKeys(): string[] {
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed.startsWith("#")) continue;
-            const match = trimmed.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY)=(.+)/);
+            const match = trimmed.match(
+              /(?:GEMINI_API_KEY|GOOGLE_API_KEY)=(.+)/,
+            );
             if (match && match[1]) {
               const val = match[1];
-              const key = val.trim().replace(/^["']|["']$/g, "").split("#")[0]?.trim();
-              if (key && !key.includes("your_") && !key.includes("your_gemini_key_here")) {
+              const key = val
+                .trim()
+                .replace(/^["']|["']$/g, "")
+                .split("#")[0]
+                ?.trim();
+              if (
+                key &&
+                !key.includes("your_") &&
+                !key.includes("your_gemini_key_here")
+              ) {
                 rawKeysString = key;
                 break;
               }
             }
           }
         }
-      } catch {}
+      } catch {
+        logger.debug({ envPath }, "Failed to read candidate .env file");
+      }
       if (rawKeysString) break;
     }
   }
@@ -92,19 +120,29 @@ export function resolveApiKeys(): string[] {
     .map((k) => k.trim())
     .filter((k) => k.length > 0 && !k.includes("your_"));
 
-  if (keys.length > 0) {
-    process.env.GEMINI_API_KEY = keys[0];
-  }
-
   return keys;
 }
 
-export function getGeminiClient(): GoogleGenAI {
+export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
   if (customTestClient) {
     return customTestClient;
   }
 
-  if (geminiClients.length > 0) {
+  const forceVertexOff = process.env.GOOGLE_GENAI_USE_VERTEXAI === "false";
+  const project = process.env.GOOGLE_CLOUD_PROJECT || "";
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
+  const apiKeys = resolveApiKeys(configSnapshot);
+  const currentKeySignature = JSON.stringify({
+    keys: apiKeys,
+    project,
+    location,
+    forceVertexOff,
+  });
+
+  if (
+    geminiClients.length > 0 &&
+    currentKeySignature === cachedPrimaryKeysSignature
+  ) {
     const client = geminiClients[currentKeyIndex];
     if (client) {
       currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;
@@ -112,23 +150,32 @@ export function getGeminiClient(): GoogleGenAI {
     }
   }
 
-  const forceVertexOff = process.env.GOOGLE_GENAI_USE_VERTEXAI === "false";
-  const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
-  const apiKeys = resolveApiKeys();
+  cachedPrimaryKeysSignature = currentKeySignature;
+  currentKeyIndex = 0;
+  geminiClients = [];
 
   if (project && !forceVertexOff) {
-    logger.info({ project, location }, "Initializing Gemini client (Vertex AI)");
+    logger.info(
+      { project, location },
+      "Initializing Gemini client (Vertex AI)",
+    );
     const client = new GoogleGenAI({ vertexai: true, project, location });
     geminiClients = [client];
   } else if (apiKeys.length > 0) {
-    logger.info({ keyCount: apiKeys.length }, "Initializing Gemini client(s) (Multi-Key Round-Robin Active)");
+    logger.info(
+      { keyCount: apiKeys.length },
+      "Initializing Gemini client(s) (Multi-Key Round-Robin Active)",
+    );
     geminiClients = apiKeys.map(
-      (apiKey) => new GoogleGenAI({ apiKey, httpOptions: { headers: { Connection: "keep-alive" } } }),
+      (apiKey) =>
+        new GoogleGenAI({
+          apiKey,
+          httpOptions: { headers: { Connection: "keep-alive" } },
+        }),
     );
   } else {
     // Try fallback key before throwing
-    const fbClient = getGeminiFallbackClient();
+    const fbClient = getGeminiFallbackClient(configSnapshot);
     if (fbClient) return fbClient;
 
     throw new Error(
@@ -145,35 +192,57 @@ export function getGeminiClient(): GoogleGenAI {
   return client;
 }
 
-export function getGeminiFallbackClient(): GoogleGenAI | null {
+export function getGeminiFallbackClient(
+  configSnapshot?: PiVoiceConfig,
+): GoogleGenAI | null {
   if (customTestFallbackClient) {
     return customTestFallbackClient;
   }
 
-  if (fallbackClient) return fallbackClient;
+  let resolvedFallbackKey: string | null = null;
   try {
-    const config = loadConfig();
+    const config = configSnapshot || loadConfig();
     if (config.geminiFallbackApiKey && config.geminiFallbackApiKey.trim()) {
-      logger.info("Initializing Fallback Paid Gemini API Key Client");
-      fallbackClient = new GoogleGenAI({
-        apiKey: config.geminiFallbackApiKey.trim(),
-        httpOptions: { headers: { Connection: "keep-alive" } },
-      });
-      return fallbackClient;
+      resolvedFallbackKey = config.geminiFallbackApiKey.trim();
     }
-  } catch {}
+  } catch {
+    logger.debug("Failed to read fallback Gemini API key from config");
+  }
+
+  if (fallbackClient && resolvedFallbackKey === cachedFallbackKey) {
+    return fallbackClient;
+  }
+
+  cachedFallbackKey = resolvedFallbackKey;
+  if (resolvedFallbackKey) {
+    logger.info("Initializing Fallback Paid Gemini API Key Client");
+    fallbackClient = new GoogleGenAI({
+      apiKey: resolvedFallbackKey,
+      httpOptions: { headers: { Connection: "keep-alive" } },
+    });
+    return fallbackClient;
+  }
+
+  fallbackClient = null;
   return null;
 }
 
-export function isFallbackClient(client: GoogleGenAI | null): boolean {
+export function isFallbackClient(
+  client: GoogleGenAI | null,
+  configSnapshot?: PiVoiceConfig,
+): boolean {
   if (!client) return false;
-  const fbClient = getGeminiFallbackClient();
+  const fbClient = getGeminiFallbackClient(configSnapshot);
   return Boolean(fbClient && client === fbClient);
 }
 
 export function prewarmConnection(): void {
   try {
-    const req = fetch("https://generativelanguage.googleapis.com", { method: "HEAD" });
+    const req = fetch("https://generativelanguage.googleapis.com", {
+      method: "HEAD",
+    });
     req.catch(() => {});
-  } catch {}
+  } catch {
+    logger.debug("Failed to prewarm Gemini connection");
+  }
 }

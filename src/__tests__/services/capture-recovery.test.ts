@@ -30,7 +30,12 @@ function createMockWindow(role: "capture" | "settings" | "hud" = "capture") {
   const handlers: Record<string, Function[]> = {};
   let destroyed = false;
   const webContents = createMockWebContents();
-  const page = role === "capture" ? "capture.html" : role === "settings" ? "index.html" : "hud.html";
+  const page =
+    role === "capture"
+      ? "capture.html"
+      : role === "settings"
+        ? "index.html"
+        : "hud.html";
   const url = `file:///app/out/renderer/${page}`;
 
   (webContents as any).getURL = () => url;
@@ -65,11 +70,66 @@ mock.module("uiohook-napi", () => ({
     stop: () => {},
   },
   UiohookKey: {
-    A: 30, a: 30, B: 48, b: 48, C: 46, c: 46, D: 32, d: 32, E: 18, e: 18, F: 33, f: 33, G: 34, g: 34, H: 35, h: 35,
-    I: 23, i: 23, J: 36, j: 36, K: 37, k: 37, L: 38, l: 38, M: 50, m: 50, N: 49, n: 49, O: 24, o: 24, P: 25, p: 25,
-    Q: 16, q: 16, R: 19, r: 19, S: 31, s: 31, T: 20, t: 20, U: 22, u: 22, V: 47, v: 47, W: 17, w: 17, X: 45, x: 45,
-    Y: 21, y: 21, Z: 44, z: 44,
-    Space: 57, space: 57, Enter: 28, enter: 28, Escape: 1, escape: 1, Tab: 15, tab: 15,
+    A: 30,
+    a: 30,
+    B: 48,
+    b: 48,
+    C: 46,
+    c: 46,
+    D: 32,
+    d: 32,
+    E: 18,
+    e: 18,
+    F: 33,
+    f: 33,
+    G: 34,
+    g: 34,
+    H: 35,
+    h: 35,
+    I: 23,
+    i: 23,
+    J: 36,
+    j: 36,
+    K: 37,
+    k: 37,
+    L: 38,
+    l: 38,
+    M: 50,
+    m: 50,
+    N: 49,
+    n: 49,
+    O: 24,
+    o: 24,
+    P: 25,
+    p: 25,
+    Q: 16,
+    q: 16,
+    R: 19,
+    r: 19,
+    S: 31,
+    s: 31,
+    T: 20,
+    t: 20,
+    U: 22,
+    u: 22,
+    V: 47,
+    v: 47,
+    W: 17,
+    w: 17,
+    X: 45,
+    x: 45,
+    Y: 21,
+    y: 21,
+    Z: 44,
+    z: 44,
+    Space: 57,
+    space: 57,
+    Enter: 28,
+    enter: 28,
+    Escape: 1,
+    escape: 1,
+    Tab: 15,
+    tab: 15,
   },
 }));
 
@@ -88,12 +148,30 @@ mock.module("electron", () => ({
     on: () => {},
     handle: () => {},
   },
-  Tray: class { setToolTip() {} on() {} setImage() {} },
+  Tray: class {
+    setToolTip() {}
+    on() {}
+    setImage() {}
+  },
   Menu: { buildFromTemplate: () => ({}) },
-  screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+  screen: {
+    getPrimaryDisplay: () => ({
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    }),
+  },
   nativeImage: { createFromPath: () => ({ setTemplateImage: () => {} }) },
-  clipboard: { readText: () => "", writeText: () => {}, readBuffer: () => Buffer.from(""), writeBuffer: () => true },
-  Notification: class { static isSupported() { return false; } show() {} },
+  clipboard: {
+    readText: () => "",
+    writeText: () => {},
+    readBuffer: () => Buffer.from(""),
+    writeBuffer: () => true,
+  },
+  Notification: class {
+    static isSupported() {
+      return false;
+    }
+    show() {}
+  },
   systemPreferences: { isTrustedAccessibilityClient: () => true },
   globalShortcut: { register: () => true, unregisterAll: () => {} },
 }));
@@ -107,12 +185,13 @@ import { validateIpcSenderPolicy } from "../../services/ipc-policy.js";
 import { type SafePasteResult } from "../../services/safe-paste.js";
 import { IPC, type AppState } from "../../shared/types.js";
 
+let mainMod: any;
 let captureOrchestrator: any;
 let dictationCoordinator: any;
 let abortActiveFlow: any;
 
 beforeAll(async () => {
-  const mainMod = await import("../../main.js");
+  mainMod = await import("../../main.js");
   captureOrchestrator = mainMod.captureOrchestrator;
   dictationCoordinator = mainMod.dictationCoordinator;
   abortActiveFlow = mainMod.abortActiveFlow;
@@ -120,6 +199,11 @@ beforeAll(async () => {
 
 describe("CaptureOrchestrator & Production Recovery Suite", () => {
   beforeEach(() => {
+    mainMod?._resetShutdownStateForTests?.();
+    dictationCoordinator = mainMod.dictationCoordinator;
+    dictationCoordinator?.getLifecycle()?.reset();
+    dictationCoordinator?.setDictationMode("toggle");
+    captureOrchestrator?.lifecycle?.reset();
     selectionOwnershipManager.resetForTests();
   });
   test("Exported production main.ts captureOrchestrator composition path: renderer-crash on captureWindow triggers abortActiveFlow and aborts active STT controller", () => {
@@ -151,12 +235,16 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     expect(captureOrchestrator.isReady()).toBe(true);
 
     // Spy sentinel verifying main.ts:118 callback invocation specifically
-    const originalAck = dictationCoordinator.acknowledgeStart.bind(dictationCoordinator);
-    let ackCallbackSpyPayload: { seqId: number; success: boolean } | null = null;
-    dictationCoordinator.acknowledgeStart = mock(async (seqId: number, success: boolean) => {
-      ackCallbackSpyPayload = { seqId, success };
-      return await originalAck(seqId, success);
-    });
+    const originalAck =
+      dictationCoordinator.acknowledgeStart.bind(dictationCoordinator);
+    let ackCallbackSpyPayload: { seqId: number; success: boolean } | null =
+      null;
+    dictationCoordinator.acknowledgeStart = mock(
+      async (seqId: number, success: boolean) => {
+        ackCallbackSpyPayload = { seqId, success };
+        return await originalAck(seqId, success);
+      },
+    );
 
     try {
       const startRes = await dictationCoordinator.handleUiCommand("start");
@@ -206,31 +294,46 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
       writeText: (t: string) => {
         restoredText = t;
       },
-      snapshot: () => ({ formats: [{ format: "text/plain", data: Buffer.from(originalText) }], text: originalText }),
+      snapshot: () => ({
+        formats: [{ format: "text/plain", data: Buffer.from(originalText) }],
+        text: originalText,
+      }),
     };
 
-    const pasteCoordinator = new PasteCoordinator(async (): Promise<SafePasteResult> => {
-      pasteExecuted = true;
-      return { ok: true, reason: "injection_requested" };
-    });
+    const pasteCoordinator = new PasteCoordinator(
+      async (): Promise<SafePasteResult> => {
+        pasteExecuted = true;
+        return { ok: true, reason: "injection_requested" };
+      },
+    );
 
-    const orchestrator = new CaptureOrchestrator({
-      createWindow: () => createMockWindow("capture"),
-      getWebContents: (win) => win.webContents,
-      isDestroyed: (win) => win.isDestroyed(),
-      destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
-      onClosed: (win, handler) => win.on("closed", handler),
-      sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
-      setState: () => {},
-      isQuitting: () => false,
-      captureActiveSelection: async () => ({ hasSelection: true, selectedText: "Selected Text", previousClipboard: originalText }),
-      capturePasteTarget: () => {},
-      playStartChime: () => {},
-      getInputGain: () => 1.0,
-      selectionClipboardPort: mockPort,
-    }, undefined, pasteCoordinator);
+    const orchestrator = new CaptureOrchestrator(
+      {
+        createWindow: () => createMockWindow("capture"),
+        getWebContents: (win) => win.webContents,
+        isDestroyed: (win) => win.isDestroyed(),
+        destroyWindow: (win) => win.destroy(),
+        onRenderProcessGone: (sender, handler) =>
+          sender.on("render-process-gone", handler),
+        onDidFinishLoad: (sender, handler) =>
+          sender.once("did-finish-load", handler),
+        onClosed: (win, handler) => win.on("closed", handler),
+        sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
+        setState: () => {},
+        isQuitting: () => false,
+        captureActiveSelection: async () => ({
+          hasSelection: true,
+          selectedText: "Selected Text",
+          previousClipboard: originalText,
+        }),
+        capturePasteTarget: () => {},
+        playStartChime: () => {},
+        getInputGain: () => 1.0,
+        selectionClipboardPort: mockPort,
+      },
+      undefined,
+      pasteCoordinator,
+    );
 
     // Setup window & start recording
     orchestrator.ensureCaptureWindow();
@@ -254,7 +357,10 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
       previousClipboard: originalText,
       hasSelection: true,
       selectedText: "Selected Text",
-      ownershipSnapshot: { formats: [{ format: "text/plain", data: Buffer.from(originalText) }], text: originalText },
+      ownershipSnapshot: {
+        formats: [{ format: "text/plain", data: Buffer.from(originalText) }],
+        text: originalText,
+      },
     });
 
     // Create a real deferred STT promise
@@ -279,7 +385,9 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     // Execute real production STT handler logic
     function isCurrentTranscription(checkSeq: number): boolean {
       const snapshot = orchestrator.lifecycle.snapshot();
-      return snapshot.sequenceId === checkSeq && snapshot.state === "transcribing";
+      return (
+        snapshot.sequenceId === checkSeq && snapshot.state === "transcribing"
+      );
     }
 
     if (isCurrentTranscription(seq)) {
@@ -287,7 +395,7 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
         text,
         seq,
         isCurrentTranscription,
-        () => orchestrator.restoreCapturedSelection(seq)
+        () => orchestrator.restoreCapturedSelection(seq),
       );
       if (pasteRes.status === "submitted") {
         historyAdded = true;
@@ -302,8 +410,6 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     expect(restoredText).toBe(originalText);
   });
 
-
-
   test("START_RECORDING send placed BEFORE captureTarget, starting state, and chime to prevent send race side-effects", async () => {
     let targetCaptured = false;
     let chimePlayed = false;
@@ -314,8 +420,10 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
       getWebContents: (win) => win.webContents,
       isDestroyed: (win) => win.isDestroyed(),
       destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onRenderProcessGone: (sender, handler) =>
+        sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) =>
+        sender.once("did-finish-load", handler),
       onClosed: (win, handler) => win.on("closed", handler),
       sendIpc: () => {
         // Send fails by throwing
@@ -325,7 +433,11 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
         currentState = s;
       },
       isQuitting: () => false,
-      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
+      captureActiveSelection: async () => ({
+        hasSelection: false,
+        selectedText: "",
+        previousClipboard: "",
+      }),
       capturePasteTarget: () => {
         targetCaptured = true;
       },
@@ -361,8 +473,10 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
       getWebContents: (win) => win.webContents,
       isDestroyed: (win) => win.isDestroyed(),
       destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onRenderProcessGone: (sender, handler) =>
+        sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) =>
+        sender.once("did-finish-load", handler),
       onClosed: (win, handler) => win.on("closed", handler),
       sendIpc: (sender, channel, ...args) => {
         if (channel === IPC.START_RECORDING) {
@@ -374,7 +488,11 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
         currentState = s;
       },
       isQuitting: () => false,
-      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
+      captureActiveSelection: async () => ({
+        hasSelection: false,
+        selectedText: "",
+        previousClipboard: "",
+      }),
       capturePasteTarget: () => {},
       playStartChime: () => {},
       getInputGain: () => 1.0,
@@ -390,7 +508,7 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
         onCancelDictation: () => {},
         playStopChime: () => {},
       },
-      orchestrator.lifecycle
+      orchestrator.lifecycle,
     );
 
     // Attach & ready capture window
@@ -405,8 +523,13 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     expect(currentState).toBe("idle");
 
     // enforceIpcSender security check
-    const mockEvent = { sender: win.webContents, frame: win.webContents.mainFrame };
-    expect(() => orchestrator.enforceIpcSender(mockEvent as any, IPC.RECORDING_DATA)).not.toThrow();
+    const mockEvent = {
+      sender: win.webContents,
+      frame: win.webContents.mainFrame,
+    };
+    expect(() =>
+      orchestrator.enforceIpcSender(mockEvent as any, IPC.RECORDING_DATA),
+    ).not.toThrow();
   });
 
   test("Production BrowserWindow adapter: listener registration order, security guards, loadFile, and exact-once destroy", () => {
@@ -445,7 +568,11 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
       loadFile: () => {
         callOrder.push("loadFile");
       },
-      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
+      captureActiveSelection: async () => ({
+        hasSelection: false,
+        selectedText: "",
+        previousClipboard: "",
+      }),
       capturePasteTarget: () => {},
       playStartChime: () => {},
       getInputGain: () => 1.0,
@@ -484,13 +611,19 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
       getWebContents: (win) => win.webContents,
       isDestroyed: (win) => win.isDestroyed(),
       destroyWindow: (win) => win.destroy(),
-      onRenderProcessGone: (sender, handler) => sender.on("render-process-gone", handler),
-      onDidFinishLoad: (sender, handler) => sender.once("did-finish-load", handler),
+      onRenderProcessGone: (sender, handler) =>
+        sender.on("render-process-gone", handler),
+      onDidFinishLoad: (sender, handler) =>
+        sender.once("did-finish-load", handler),
       onClosed: (win, handler) => win.on("closed", handler),
       sendIpc: (sender, channel, ...args) => sender.send(channel, ...args),
       setState: (state, msg) => stateHistory.push({ state, msg }),
       isQuitting: () => false,
-      captureActiveSelection: async () => ({ hasSelection: false, selectedText: "", previousClipboard: "" }),
+      captureActiveSelection: async () => ({
+        hasSelection: false,
+        selectedText: "",
+        previousClipboard: "",
+      }),
       capturePasteTarget: () => {},
       playStartChime: () => {},
       getInputGain: () => 1.0,
@@ -505,7 +638,9 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
     win1.emit("closed");
 
     // Immediately after loss: "Capture engine recovered" has NOT been published
-    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(false);
+    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(
+      false,
+    );
 
     // Replacement finishes loading
     const win2 = orchestrator.controller.getPendingCaptureWindow()!;
@@ -513,6 +648,8 @@ describe("CaptureOrchestrator & Production Recovery Suite", () => {
 
     // NOW "Capture engine recovered" is published
     expect(orchestrator.isReady()).toBe(true);
-    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(true);
+    expect(stateHistory.some((s) => s.msg === "Capture engine recovered")).toBe(
+      true,
+    );
   });
 });
