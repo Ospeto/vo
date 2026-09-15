@@ -10,7 +10,7 @@ let fallbackClient: GoogleGenAI | null = null;
 let currentKeyIndex = 0;
 let customTestClient: GoogleGenAI | null = null;
 let customTestFallbackClient: GoogleGenAI | null = null;
-let cachedSnapshotKey: string | undefined = undefined;
+let cachedPrimaryKeysSignature = "";
 let cachedFallbackKey: string | null = null;
 
 export function setGeminiClientForTests(client: any): void {
@@ -27,7 +27,7 @@ export function _resetGeminiClient(): void {
   currentKeyIndex = 0;
   customTestClient = null;
   customTestFallbackClient = null;
-  cachedSnapshotKey = undefined;
+  cachedPrimaryKeysSignature = "";
   cachedFallbackKey = null;
 }
 
@@ -120,8 +120,8 @@ export function resolveApiKeys(configSnapshot?: PiVoiceConfig): string[] {
     .map((k) => k.trim())
     .filter((k) => k.length > 0 && !k.includes("your_"));
 
-  if (keys.length > 0) {
-    process.env.GEMINI_API_KEY = keys[0];
+  if (keys.length > 0 && !process.env.GEMINI_API_KEY) {
+    process.env.GEMINI_API_KEY = rawKeysString;
   }
 
   return keys;
@@ -132,16 +132,18 @@ export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
     return customTestClient;
   }
 
-  if (configSnapshot && configSnapshot.geminiApiKey !== undefined) {
-    const snapKey = (configSnapshot.geminiApiKey || "").trim();
-    if (snapKey !== cachedSnapshotKey) {
-      cachedSnapshotKey = snapKey;
-      geminiClients = [];
-      currentKeyIndex = 0;
-    }
-  }
+  const forceVertexOff = process.env.GOOGLE_GENAI_USE_VERTEXAI === "false";
+  const project = process.env.GOOGLE_CLOUD_PROJECT || "";
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
+  const apiKeys = resolveApiKeys(configSnapshot);
+  const currentKeySignature = JSON.stringify({
+    keys: apiKeys,
+    project,
+    location,
+    forceVertexOff,
+  });
 
-  if (geminiClients.length > 0) {
+  if (geminiClients.length > 0 && currentKeySignature === cachedPrimaryKeysSignature) {
     const client = geminiClients[currentKeyIndex];
     if (client) {
       currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;
@@ -149,10 +151,9 @@ export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
     }
   }
 
-  const forceVertexOff = process.env.GOOGLE_GENAI_USE_VERTEXAI === "false";
-  const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
-  const apiKeys = resolveApiKeys(configSnapshot);
+  cachedPrimaryKeysSignature = currentKeySignature;
+  currentKeyIndex = 0;
+  geminiClients = [];
 
   if (project && !forceVertexOff) {
     logger.info(

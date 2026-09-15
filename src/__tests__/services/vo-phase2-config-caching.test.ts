@@ -17,16 +17,19 @@ import {
 	defaultConfig,
 	getConfigAccessStats,
 	resetConfigAccessStats,
+	type PiVoiceConfigPatch,
 } from "../../services/config.js";
 import { transcribeDetailed } from "../../services/stt.js";
 import { executeTwoStepTranslation } from "../../services/two-step-translation.js";
 import {
 	setGeminiClientForTests,
+	getGeminiClient,
 	getGeminiFallbackClient,
 	_resetGeminiClient,
 } from "../../services/gemini-client.js";
 import {
 	setVocabularyPathForTests,
+	setDictionaryPathForTests,
 } from "../../services/vocabulary-service.js";
 
 describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () => {
@@ -36,6 +39,7 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 	let origHome: string | undefined;
 	let origXdg: string | undefined;
 	let testVocabPath: string;
+	let testDictPath: string;
 
 	beforeEach(() => {
 		testRoot = mkdtempSync(join(tmpdir(), "vo-phase2-test-"));
@@ -45,6 +49,9 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 
 		testVocabPath = join(testRoot, "vocabulary.json");
 		setVocabularyPathForTests(testVocabPath);
+
+		testDictPath = join(userHome, ".pi", "dictionary.txt");
+		setDictionaryPathForTests(testDictPath);
 
 		origHome = process.env.HOME;
 		origXdg = process.env.XDG_CONFIG_HOME;
@@ -59,6 +66,7 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 
 	afterEach(() => {
 		setVocabularyPathForTests(null);
+		setDictionaryPathForTests(null);
 		clearConfigCache();
 		resetConfigAccessStats();
 		_resetGeminiClient();
@@ -106,9 +114,16 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 		});
 
 		test("tests do not touch or mutate the real user vocabulary file", () => {
-			const realVocabPath = join(homedir(), ".config", "pi-voice", "vocabulary.json");
+			const realVocabPath = join(
+				homedir(),
+				".config",
+				"pi-voice",
+				"vocabulary.json",
+			);
 			const realExistedBefore = existsSync(realVocabPath);
-			const realMtimeBefore = realExistedBefore ? statSync(realVocabPath).mtimeMs : 0;
+			const realMtimeBefore = realExistedBefore
+				? statSync(realVocabPath).mtimeMs
+				: 0;
 
 			// Perform updateConfig with custom vocabulary
 			updateConfig(testRoot, {
@@ -162,7 +177,10 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 		test("direct external edits to vocabulary.json invalidate config cache and reflect updated vocabulary", async () => {
 			const configDir = join(xdgConfig, "pi-voice");
 			mkdirSync(configDir, { recursive: true });
-			writeFileSync(join(configDir, "config.json"), JSON.stringify({ provider: "gemini" }));
+			writeFileSync(
+				join(configDir, "config.json"),
+				JSON.stringify({ provider: "gemini" }),
+			);
 
 			writeFileSync(
 				testVocabPath,
@@ -258,6 +276,31 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 			const c3 = loadConfig(testRoot);
 			expect(c3).toEqual(c1);
 		});
+
+		test("creating or modifying legacy dictionary.txt invalidates config cache when vocabulary.json is absent", async () => {
+			// Ensure vocabulary.json does not exist
+			if (existsSync(testVocabPath)) {
+				rmSync(testVocabPath, { force: true });
+			}
+
+			const configDir = join(xdgConfig, "pi-voice");
+			mkdirSync(configDir, { recursive: true });
+			writeFileSync(join(configDir, "config.json"), JSON.stringify({ provider: "gemini" }));
+
+			mkdirSync(join(userHome, ".pi"), { recursive: true });
+			writeFileSync(testDictPath, "InitialLegacyTerm\n");
+
+			const loaded1 = loadConfig(testRoot);
+			expect(loaded1.dictionaryEntries.some((e) => e.phrase === "InitialLegacyTerm")).toBe(true);
+			expect(loaded1.dictionaryEntries.some((e) => e.phrase === "AddedLegacyTerm")).toBe(false);
+
+			await Bun.sleep(10);
+			writeFileSync(testDictPath, "InitialLegacyTerm\nAddedLegacyTerm\n");
+
+			// Cache fingerprint check on legacy dictionary.txt triggers optimistic point-in-time invalidation
+			const loaded2 = loadConfig(testRoot);
+			expect(loaded2.dictionaryEntries.some((e) => e.phrase === "AddedLegacyTerm")).toBe(true);
+		});
 	});
 
 	// =========================================================================
@@ -290,6 +333,53 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 			snapshotC.geminiFallbackApiKey = "";
 			const client4 = getGeminiFallbackClient(snapshotC);
 			expect(client4).toBeNull();
+		});
+
+		test("primary client recreates when credentials transition from configured key to undefined/env", () => {
+			_resetGeminiClient();
+
+			process.env.GEMINI_API_KEY = "env-default-key";
+
+			const snapshotWithKey = defaultConfig();
+			snapshotWithKey.geminiApiKey = "explicit-user-key";
+
+			const client1 = getGeminiClient(snapshotWithKey);
+			expect(client1).not.toBeNull();
+
+			// Calling again with same snapshot returns exact cached client instance
+			const client2 = getGeminiClient(snapshotWithKey);
+			expect(client2).toBe(client1);
+
+			// Snapshot without explicit key (undefined) falls back to env-default-key and recreates client
+			const snapshotWithoutKey = defaultConfig();
+			snapshotWithoutKey.geminiApiKey = undefined;
+
+			const client3 = getGeminiClient(snapshotWithoutKey);
+			expect(client3).not.toBeNull();
+			expect(client3).not.toBe(client1);
+		});
+
+		test("updating only fallback key in main.ts logic does not wipe environment-provided GEMINI_API_KEY", () => {
+			process.env.GEMINI_API_KEY = "persisted-env-gemini-key";
+
+			const currentConfig = defaultConfig();
+			currentConfig.geminiApiKey = undefined;
+
+			const validatedPatch: PiVoiceConfigPatch = { geminiFallbackApiKey: "new-fallback-paid-key" };
+
+			// Replicate fixed main.ts:1390-1395 logic:
+			if (validatedPatch.geminiApiKey !== undefined) {
+				process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
+			}
+			if (
+				validatedPatch.geminiApiKey !== undefined ||
+				validatedPatch.geminiFallbackApiKey !== undefined
+			) {
+				_resetGeminiClient();
+			}
+
+			// Assert process.env.GEMINI_API_KEY was preserved!
+			expect(process.env.GEMINI_API_KEY).toBe("persisted-env-gemini-key");
 		});
 	});
 

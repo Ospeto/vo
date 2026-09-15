@@ -1162,7 +1162,7 @@ function setupIpcHandlers() {
 				return;
 			}
 
-				if (pasteResult.status === "submitted") {
+			if (pasteResult.status === "submitted") {
 				recordingLifecycle.finishTranscription(currentSeq, true);
 				restoreCapturedSelection(currentSeq);
 				addHistoryEntry(

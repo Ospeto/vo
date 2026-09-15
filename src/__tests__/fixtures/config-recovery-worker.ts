@@ -7,23 +7,35 @@ mock.module("../../services/logger.js", () => ({
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
 }));
 mock.module("../../services/vocabulary-service.js", () => ({
-  loadPersistedVocabulary: () => ({ customVocabulary: [], presetVocabulary: {}, entries: [] }),
+  loadPersistedVocabulary: () => ({
+    customVocabulary: [],
+    presetVocabulary: {},
+    entries: [],
+  }),
   savePersistedVocabulary: () => {},
-  migrateVocabulary: (_custom: string[], _preset: Record<string, string[]>, entries: unknown[] = []) => entries,
+  migrateVocabulary: (
+    _custom: string[],
+    _preset: Record<string, string[]>,
+    entries: unknown[] = [],
+  ) => entries,
   backfillLegacyWhitespace: (entries: unknown[]) => entries,
   resolveVocabularyPath: () => "/dev/null/vocab.json",
+  resolveLegacyDictionaryPath: () => "/dev/null/dict.txt",
   onVocabularyChanged: () => () => {},
 }));
 
 const [id, root] = process.argv.slice(2);
-if (!id || !root) throw new Error("usage: config-recovery-worker <A|B|timeout> <root>");
+if (!id || !root)
+  throw new Error("usage: config-recovery-worker <A|B|timeout> <root>");
 
 if (id === "timeout") {
   const realSpawn = childProcess.spawn;
   let helper: childProcess.ChildProcess | undefined;
   let exited = false;
   let resolveExit: (() => void) | undefined;
-  const helperExited = new Promise<void>((resolve) => { resolveExit = resolve; });
+  const helperExited = new Promise<void>((resolve) => {
+    resolveExit = resolve;
+  });
 
   mock.module("node:child_process", () => ({
     ...childProcess,
@@ -38,7 +50,11 @@ if (id === "timeout") {
       });
       fs.writeFileSync(join(root, "helper-pid"), String(helper.pid));
       const confirmedPath = join(root, "cat-confirmed");
-      for (let attempt = 0; attempt < 200 && !fs.existsSync(confirmedPath); attempt++) {
+      for (
+        let attempt = 0;
+        attempt < 200 && !fs.existsSync(confirmedPath);
+        attempt++
+      ) {
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
       }
       return helper;
@@ -50,7 +66,8 @@ if (id === "timeout") {
   try {
     loadConfig(join(root, "project"));
   } catch (error) {
-    timedOut = error instanceof ConfigError && error.message.includes("Timed out");
+    timedOut =
+      error instanceof ConfigError && error.message.includes("Timed out");
   }
 
   if (!exited) await helperExited;
@@ -65,23 +82,32 @@ if (id === "timeout") {
     }
     await Bun.sleep(5);
   }
-  console.log(JSON.stringify({
-    timedOut,
-    stdinDestroyed: helper?.stdin?.destroyed === true,
-    reaped: exited && (helper?.exitCode ?? helper?.signalCode) !== null,
-    groupGone,
-  }));
+  console.log(
+    JSON.stringify({
+      timedOut,
+      stdinDestroyed: helper?.stdin?.destroyed === true,
+      reaped: exited && (helper?.exitCode ?? helper?.signalCode) !== null,
+      groupGone,
+    }),
+  );
   process.exit(0);
 }
 
 const markers = join(root, "markers");
 fs.writeFileSync(join(markers, `ready-${id}`), "");
 const other = join(markers, `ready-${id === "A" ? "B" : "A"}`);
-while (!fs.existsSync(other)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+while (!fs.existsSync(other))
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
 
 const { updateConfig } = await import("../../services/config.js");
 const result = updateConfig(
   join(root, "project"),
   id === "A" ? { inputGain: 1.1 } : { targetLanguage: "French" },
 );
-console.log(JSON.stringify({ id, inputGain: result.inputGain, targetLanguage: result.targetLanguage }));
+console.log(
+  JSON.stringify({
+    id,
+    inputGain: result.inputGain,
+    targetLanguage: result.targetLanguage,
+  }),
+);

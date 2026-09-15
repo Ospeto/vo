@@ -1,4 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, chmodSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  renameSync,
+  chmodSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
@@ -26,31 +33,55 @@ const TRUSTED_SEEDS: Array<[string, string[], VocabularyCategory?]> = [
   ["MAS 141", ["မက်စ် ၁၄၁", "မက်စ်၁၄၁", "မက်စ်\t၁၄၁", "မက်စ်  ၁၄၁"], "technical"],
   ["MAS 142", ["မက်စ် ၁၄၂", "မက်စ်၁၄၂", "မက်စ်\t၁၄၂", "မက်စ်  ၁၄၂"], "technical"],
   ["MAS 143", ["မက်စ် ၁၄၃", "မက်စ်၁၄၃", "မက်စ်\t၁၄၃", "မက်စ်  ၁၄၃"], "technical"],
-  ["SarYayKaung", ["စာရေးကောင်း", "စာရေး ကောင်း", "စာရေး\tကောင်း", "စာရေး  ကောင်း", "စာရေးကောင်"], "general"],
+  [
+    "SarYayKaung",
+    ["စာရေးကောင်း", "စာရေး ကောင်း", "စာရေး\tကောင်း", "စာရေး  ကောင်း", "စာရေးကောင်"],
+    "general",
+  ],
   ["Ospeto", ["ဩစပေတို", "အိုစပေတို"], "person_name"],
   ["TBH", ["တီဘီအိတ်ချ်", "တီဘီအိတ်"], "technical"],
   ["Engram", ["အင်ဂရမ်", "အန်ဂရမ်"], "technical"],
 ];
 
 let customVocabPath: string | null = null;
+let customDictPath: string | null = null;
 
 export function setVocabularyPathForTests(path: string | null): void {
   customVocabPath = path;
 }
 
+export function setDictionaryPathForTests(path: string | null): void {
+  customDictPath = path;
+}
+
 export function resolveVocabularyPath(customPath?: string): string {
   if (customPath) return customPath;
   if (customVocabPath) return customVocabPath;
-  return join(homedir(), ".config", "pi-voice", "vocabulary.json");
+  const home = process.env.HOME || homedir();
+  return join(home, ".config", "pi-voice", "vocabulary.json");
 }
 
-function stableId(phrase: string, aliases: string[], category?: string): string {
-  return `dict-${createHash("sha256").update(`${phrase}\n${aliases.join("\n")}\n${category || ""}`).digest("hex").slice(0, 16)}`;
+export function resolveLegacyDictionaryPath(customPath?: string): string {
+  if (customPath) return customPath;
+  if (customDictPath) return customDictPath;
+  const home = process.env.HOME || homedir();
+  return join(home, ".pi", "dictionary.txt");
+}
+
+function stableId(
+  phrase: string,
+  aliases: string[],
+  category?: string,
+): string {
+  return `dict-${createHash("sha256")
+    .update(`${phrase}\n${aliases.join("\n")}\n${category || ""}`)
+    .digest("hex")
+    .slice(0, 16)}`;
 }
 
 export function dictionaryEntryFromTerm(
   raw: string,
-  category?: VocabularyCategory
+  category?: VocabularyCategory,
 ): DictionaryEntry | null {
   const value = raw.trim();
   if (!value) return null;
@@ -99,27 +130,45 @@ function seededEntries(): DictionaryEntry[] {
   }));
 }
 
-export function backfillLegacyWhitespace(entries: DictionaryEntry[]): DictionaryEntry[] {
+export function backfillLegacyWhitespace(
+  entries: DictionaryEntry[],
+): DictionaryEntry[] {
   const legacyPhrases = new Set(TRUSTED_SEEDS.map(([phrase]) => phrase));
-  return entries.map((entry) => legacyPhrases.has(entry.phrase) && entry.legacyWhitespace === undefined
-    ? { ...entry, legacyWhitespace: true }
-    : entry);
+  return entries.map((entry) =>
+    legacyPhrases.has(entry.phrase) && entry.legacyWhitespace === undefined
+      ? { ...entry, legacyWhitespace: true }
+      : entry,
+  );
 }
 
 function mergeEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
   const merged: DictionaryEntry[] = [];
   for (const raw of entries) {
-    if (!raw || typeof raw.phrase !== "string" || !Array.isArray(raw.spokenAliases)) continue;
+    if (
+      !raw ||
+      typeof raw.phrase !== "string" ||
+      !Array.isArray(raw.spokenAliases)
+    )
+      continue;
     const phrase = raw.phrase.trim();
-    const aliases = raw.spokenAliases.filter((alias): alias is string => typeof alias === "string").map((alias) => alias.trim()).filter(Boolean);
+    const aliases = raw.spokenAliases
+      .filter((alias): alias is string => typeof alias === "string")
+      .map((alias) => alias.trim())
+      .filter(Boolean);
     if (!phrase) continue;
     let category = raw.category;
-    if (category !== "general" && category !== "person_name" && category !== "technical") {
+    if (
+      category !== "general" &&
+      category !== "person_name" &&
+      category !== "technical"
+    ) {
       category = (raw as any).preset ? "technical" : "general";
     }
     const existing = merged.find((entry) => entry.phrase === phrase);
     if (existing) {
-      existing.spokenAliases = Array.from(new Set([...existing.spokenAliases, ...aliases, phrase]));
+      existing.spokenAliases = Array.from(
+        new Set([...existing.spokenAliases, ...aliases, phrase]),
+      );
       if (!existing.category && category) existing.category = category;
     } else {
       merged.push({
@@ -135,15 +184,25 @@ function mergeEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
   return merged;
 }
 
-function mergeLegacyEntries(entries: DictionaryEntry[], legacyEntries: DictionaryEntry[]): DictionaryEntry[] {
+function mergeLegacyEntries(
+  entries: DictionaryEntry[],
+  legacyEntries: DictionaryEntry[],
+): DictionaryEntry[] {
   for (const legacy of legacyEntries) {
-    const normPhrase = legacy.phrase.trim().normalize("NFKC").toLocaleLowerCase();
+    const normPhrase = legacy.phrase
+      .trim()
+      .normalize("NFKC")
+      .toLocaleLowerCase();
     const existing = entries.find(
       (entry) =>
-        entry.phrase === legacy.phrase || entry.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase
+        entry.phrase === legacy.phrase ||
+        entry.phrase.trim().normalize("NFKC").toLocaleLowerCase() ===
+          normPhrase,
     );
     if (existing) {
-      existing.spokenAliases = Array.from(new Set([...existing.spokenAliases, ...legacy.spokenAliases]));
+      existing.spokenAliases = Array.from(
+        new Set([...existing.spokenAliases, ...legacy.spokenAliases]),
+      );
     } else {
       const { preset: _preset, ...rest } = legacy as any;
       entries.push(rest);
@@ -155,16 +214,51 @@ function mergeLegacyEntries(entries: DictionaryEntry[], legacyEntries: Dictionar
 function readUserDictionary(dictionaryPath: string): string[] {
   try {
     if (!existsSync(dictionaryPath)) return [];
-    return readFileSync(dictionaryPath, "utf8").split("\n").map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+    return readFileSync(dictionaryPath, "utf8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"));
   } catch {
     return [];
   }
 }
 
 function validLegacyShape(parsed: any): boolean {
-  if (parsed.customVocabulary !== undefined && (!Array.isArray(parsed.customVocabulary) || parsed.customVocabulary.some((value: unknown) => typeof value !== "string"))) return false;
-  if (parsed.presetVocabulary !== undefined && (typeof parsed.presetVocabulary !== "object" || parsed.presetVocabulary === null || Object.values(parsed.presetVocabulary).some((values) => !Array.isArray(values) || values.some((value) => typeof value !== "string")))) return false;
-  if (parsed.entries !== undefined && (!Array.isArray(parsed.entries) || parsed.entries.some((entry: any) => !entry || typeof entry.id !== "string" || typeof entry.phrase !== "string" || !Array.isArray(entry.spokenAliases) || entry.spokenAliases.some((alias: unknown) => typeof alias !== "string") || typeof entry.enabled !== "boolean"))) return false;
+  if (
+    parsed.customVocabulary !== undefined &&
+    (!Array.isArray(parsed.customVocabulary) ||
+      parsed.customVocabulary.some(
+        (value: unknown) => typeof value !== "string",
+      ))
+  )
+    return false;
+  if (
+    parsed.presetVocabulary !== undefined &&
+    (typeof parsed.presetVocabulary !== "object" ||
+      parsed.presetVocabulary === null ||
+      Object.values(parsed.presetVocabulary).some(
+        (values) =>
+          !Array.isArray(values) ||
+          values.some((value) => typeof value !== "string"),
+      ))
+  )
+    return false;
+  if (
+    parsed.entries !== undefined &&
+    (!Array.isArray(parsed.entries) ||
+      parsed.entries.some(
+        (entry: any) =>
+          !entry ||
+          typeof entry.id !== "string" ||
+          typeof entry.phrase !== "string" ||
+          !Array.isArray(entry.spokenAliases) ||
+          entry.spokenAliases.some(
+            (alias: unknown) => typeof alias !== "string",
+          ) ||
+          typeof entry.enabled !== "boolean",
+      ))
+  )
+    return false;
   return true;
 }
 
@@ -172,9 +266,11 @@ export function migrateVocabulary(
   customVocabulary: string[] = [],
   presetVocabulary: Record<string, string[]> = {},
   existingEntries: DictionaryEntry[] = [],
-  userDictionary: string[] = []
+  userDictionary: string[] = [],
 ): DictionaryEntry[] {
-  const customEntries = customVocabulary.map((term) => dictionaryEntryFromTerm(term, "person_name")).filter((e): e is DictionaryEntry => Boolean(e));
+  const customEntries = customVocabulary
+    .map((term) => dictionaryEntryFromTerm(term, "person_name"))
+    .filter((e): e is DictionaryEntry => Boolean(e));
   const presetEntries: DictionaryEntry[] = [];
   for (const terms of Object.values(presetVocabulary)) {
     if (Array.isArray(terms)) {
@@ -184,35 +280,69 @@ export function migrateVocabulary(
       }
     }
   }
-  const userDictEntries = userDictionary.map((term) => dictionaryEntryFromTerm(term, "general")).filter((e): e is DictionaryEntry => Boolean(e));
+  const userDictEntries = userDictionary
+    .map((term) => dictionaryEntryFromTerm(term, "general"))
+    .filter((e): e is DictionaryEntry => Boolean(e));
   const cleanedExisting = existingEntries.map((e) => {
     const { preset: _preset, ...rest } = e as any;
     return rest as DictionaryEntry;
   });
-  return mergeLegacyEntries(mergeEntries([...seededEntries(), ...cleanedExisting]), [...customEntries, ...presetEntries, ...userDictEntries]);
+  return mergeLegacyEntries(
+    mergeEntries([...seededEntries(), ...cleanedExisting]),
+    [...customEntries, ...presetEntries, ...userDictEntries],
+  );
 }
 
-export function deriveLegacyCustomVocabulary(entries: DictionaryEntry[]): string[] {
+export function deriveLegacyCustomVocabulary(
+  entries: DictionaryEntry[],
+): string[] {
   const seedPhrases = new Set(TRUSTED_SEEDS.map(([phrase]) => phrase));
-  return Array.from(new Set(entries.filter((e) => e.category === "person_name" || (!e.category && !seedPhrases.has(e.phrase))).map((e) => e.phrase)));
+  return Array.from(
+    new Set(
+      entries
+        .filter(
+          (e) =>
+            e.category === "person_name" ||
+            (!e.category && !seedPhrases.has(e.phrase)),
+        )
+        .map((e) => e.phrase),
+    ),
+  );
 }
 
-export function deriveLegacyPresetVocabulary(_entries: DictionaryEntry[]): Record<string, string[]> {
+export function deriveLegacyPresetVocabulary(
+  _entries: DictionaryEntry[],
+): Record<string, string[]> {
   return {};
 }
 
-export function loadPersistedVocabulary(customPath?: string, customDictionaryPath?: string): PersistedVocabulary {
+export function loadPersistedVocabulary(
+  customPath?: string,
+  customDictionaryPath?: string,
+): PersistedVocabulary {
   const filePath = resolveVocabularyPath(customPath);
   const targetDir = dirname(filePath);
   if (!existsSync(targetDir)) {
-    try { mkdirSync(targetDir, { recursive: true }); } catch {}
+    try {
+      mkdirSync(targetDir, { recursive: true });
+    } catch {}
   }
 
   if (!existsSync(filePath)) {
-    const migrated = migrateVocabulary([], {}, [], readUserDictionary(customDictionaryPath || join(homedir(), ".pi", "dictionary.txt")));
+    const migrated = migrateVocabulary(
+      [],
+      {},
+      [],
+      readUserDictionary(resolveLegacyDictionaryPath(customDictionaryPath)),
+    );
     const customVocabulary = deriveLegacyCustomVocabulary(migrated);
     const presetVocabulary = deriveLegacyPresetVocabulary(migrated);
-    return { version: 2 as const, customVocabulary, presetVocabulary, entries: migrated };
+    return {
+      version: 2 as const,
+      customVocabulary,
+      presetVocabulary,
+      entries: migrated,
+    };
   }
 
   ensureOwnerOnlyPermissions(filePath);
@@ -220,46 +350,81 @@ export function loadPersistedVocabulary(customPath?: string, customDictionaryPat
   try {
     const parsed = JSON.parse(readFileSync(filePath, "utf8"));
     if (!validLegacyShape(parsed)) {
-      logger.warn({ vocabPath: filePath }, "Vocabulary file has malformed fields; leaving it untouched");
+      logger.warn(
+        { vocabPath: filePath },
+        "Vocabulary file has malformed fields; leaving it untouched",
+      );
       return { customVocabulary: [], presetVocabulary: {} };
     }
-    const rawCustom = Array.isArray(parsed.customVocabulary) ? parsed.customVocabulary : [];
-    const rawPreset = parsed.presetVocabulary && typeof parsed.presetVocabulary === "object" ? parsed.presetVocabulary : {};
+    const rawCustom = Array.isArray(parsed.customVocabulary)
+      ? parsed.customVocabulary
+      : [];
+    const rawPreset =
+      parsed.presetVocabulary && typeof parsed.presetVocabulary === "object"
+        ? parsed.presetVocabulary
+        : {};
     const entries = migrateVocabulary(
       rawCustom,
       rawPreset,
       Array.isArray(parsed.entries) ? parsed.entries : [],
-      parsed.entries ? [] : readUserDictionary(customDictionaryPath || join(homedir(), ".pi", "dictionary.txt"))
+      parsed.entries
+        ? []
+        : readUserDictionary(resolveLegacyDictionaryPath(customDictionaryPath)),
     );
-    const customVocabulary = Array.isArray(parsed.customVocabulary) ? parsed.customVocabulary : deriveLegacyCustomVocabulary(entries);
-    const presetVocabulary = parsed.presetVocabulary && typeof parsed.presetVocabulary === "object" ? parsed.presetVocabulary : deriveLegacyPresetVocabulary(entries);
-    const result: PersistedVocabulary = { version: 2, customVocabulary, presetVocabulary, entries };
-    if (parsed.version !== 2 || !Array.isArray(parsed.entries)) savePersistedVocabulary(result, customPath);
+    const customVocabulary = Array.isArray(parsed.customVocabulary)
+      ? parsed.customVocabulary
+      : deriveLegacyCustomVocabulary(entries);
+    const presetVocabulary =
+      parsed.presetVocabulary && typeof parsed.presetVocabulary === "object"
+        ? parsed.presetVocabulary
+        : deriveLegacyPresetVocabulary(entries);
+    const result: PersistedVocabulary = {
+      version: 2,
+      customVocabulary,
+      presetVocabulary,
+      entries,
+    };
+    if (parsed.version !== 2 || !Array.isArray(parsed.entries))
+      savePersistedVocabulary(result, customPath);
     return result;
   } catch (err: any) {
-    logger.error({ err: err?.message }, "Failed to read vocabulary.json; leaving it untouched");
+    logger.error(
+      { err: err?.message },
+      "Failed to read vocabulary.json; leaving it untouched",
+    );
     return { customVocabulary: [], presetVocabulary: {} };
   }
 }
 
-export function savePersistedVocabulary(vocab: PersistedVocabulary, customPath?: string): void {
+export function savePersistedVocabulary(
+  vocab: PersistedVocabulary,
+  customPath?: string,
+): void {
   const filePath = resolveVocabularyPath(customPath);
   const targetDir = dirname(filePath);
   if (!existsSync(targetDir)) {
-    try { mkdirSync(targetDir, { recursive: true }); } catch {}
+    try {
+      mkdirSync(targetDir, { recursive: true });
+    } catch {}
   }
 
   try {
     const tmp = `${filePath}.tmp`;
-    const entries = vocab.entries && vocab.entries.length > 0
-      ? vocab.entries
-      : migrateVocabulary(vocab.customVocabulary || [], vocab.presetVocabulary || []);
-    const derivedCustom = vocab.customVocabulary && vocab.customVocabulary.length > 0
-      ? vocab.customVocabulary
-      : deriveLegacyCustomVocabulary(entries);
-    const derivedPreset = vocab.presetVocabulary && Object.keys(vocab.presetVocabulary).length > 0
-      ? vocab.presetVocabulary
-      : deriveLegacyPresetVocabulary(entries);
+    const entries =
+      vocab.entries && vocab.entries.length > 0
+        ? vocab.entries
+        : migrateVocabulary(
+            vocab.customVocabulary || [],
+            vocab.presetVocabulary || [],
+          );
+    const derivedCustom =
+      vocab.customVocabulary && vocab.customVocabulary.length > 0
+        ? vocab.customVocabulary
+        : deriveLegacyCustomVocabulary(entries);
+    const derivedPreset =
+      vocab.presetVocabulary && Object.keys(vocab.presetVocabulary).length > 0
+        ? vocab.presetVocabulary
+        : deriveLegacyPresetVocabulary(entries);
     const payload = {
       version: 2,
       customVocabulary: derivedCustom,
@@ -270,7 +435,10 @@ export function savePersistedVocabulary(vocab: PersistedVocabulary, customPath?:
     chmodSync(tmp, 0o600);
     renameSync(tmp, filePath);
     ensureOwnerOnlyPermissions(filePath);
-    logger.info({ vocabPath: filePath }, "Persisted custom vocabulary dictionary cleanly");
+    logger.info(
+      { vocabPath: filePath },
+      "Persisted custom vocabulary dictionary cleanly",
+    );
     for (const listener of vocabChangeListeners) {
       try {
         listener();
