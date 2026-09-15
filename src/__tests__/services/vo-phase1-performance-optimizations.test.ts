@@ -6,13 +6,18 @@ import { IPC } from "../../shared/types.js";
 import { isValidWebmHeader } from "../../shared/audio-utils.js";
 import { transcribeDetailed } from "../../services/stt.js";
 
+const appEventHandlers: Record<string, Function[]> = {};
+
 const mockElectronObj = {
   app: {
     name: "vo",
     setName: mock(() => {}),
     dock: { hide: mock(() => {}) },
     requestSingleInstanceLock: mock(() => true),
-    on: mock(() => {}),
+    on: mock((event: string, handler: Function) => {
+      if (!appEventHandlers[event]) appEventHandlers[event] = [];
+      appEventHandlers[event].push(handler);
+    }),
     whenReady: mock(async () => {}),
     quit: mock(() => {}),
     exit: mock(() => {}),
@@ -20,6 +25,8 @@ const mockElectronObj = {
   BrowserWindow: class MockBrowserWindow {
     static getAllWindows() { return []; }
     closedHandler: (() => void) | null = null;
+    visible = false;
+    destroyed = false;
     webContents = {
       send: mock(() => {}),
       on: mock(() => {}),
@@ -28,12 +35,16 @@ const mockElectronObj = {
       getURL: () => "file:///app/out/renderer/index.html",
       mainFrame: { url: "file:///app/out/renderer/index.html", parent: null },
     };
-    isDestroyed() { return false; }
-    destroy() { if (this.closedHandler) this.closedHandler(); }
-    hide() {}
-    show() {}
-    showInactive() {}
-    focus() {}
+    isDestroyed() { return this.destroyed; }
+    destroy() {
+      this.destroyed = true;
+      if (this.closedHandler) this.closedHandler();
+    }
+    hide() { this.visible = false; }
+    show() { this.visible = true; }
+    showInactive() { this.visible = true; }
+    focus = mock(() => {});
+    isVisible() { return this.visible; }
     loadFile() { return Promise.resolve(); }
     setPosition() {}
     on(event: string, handler: () => void) {
@@ -64,6 +75,27 @@ const mockElectronObj = {
 mock.module("electron", () => ({
   ...mockElectronObj,
   default: mockElectronObj,
+}));
+
+let passedWhisperSamples: Float32Array | null = null;
+const mockWhisperFull = mock(async (_params: any, samples: Float32Array) => {
+  passedWhisperSamples = samples;
+  return "whisper transcript";
+});
+
+mock.module("@napi-rs/whisper", () => ({
+  Whisper: class {
+    full = mockWhisperFull;
+  },
+  WhisperFullParams: class {
+    language = "auto";
+    noTimestamps = true;
+  },
+  WhisperSamplingStrategy: { Greedy: 0 },
+}));
+
+mock.module("../../services/whisper-model.js", () => ({
+  resolveModelPath: async () => "/mock/path/whisper.bin",
 }));
 
 const { ensurePopoverWindow, getPopoverWindow } = await import("../../main.js");
@@ -293,6 +325,55 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
       expect(recreated).toBeDefined();
       expect(recreated).not.toBe(win);
     });
+
+    test("popover closed listener identity check prevents nulling replacement window", () => {
+      const win1 = ensurePopoverWindow();
+      expect(win1).toBeDefined();
+
+      // Mark win1 as destroyed so ensurePopoverWindow creates a replacement
+      (win1 as any).destroyed = true;
+      const win2 = ensurePopoverWindow();
+      expect(win2).toBeDefined();
+      expect(win2).not.toBe(win1);
+      expect(getPopoverWindow()).toBe(win2);
+
+      // Trigger stale closed event from old win1
+      (win1 as any).closedHandler?.();
+
+      // Popover window reference must NOT be nulled by the stale win1 closed event
+      expect(getPopoverWindow()).toBe(win2);
+
+      // Triggering closed event from current win2 DOES null the reference
+      (win2 as any).closedHandler?.();
+      expect(getPopoverWindow()).toBeNull();
+    });
+
+    test("second-instance event creates and focuses popover window when initially null", () => {
+      // Ensure popover window is initially null
+      const current = getPopoverWindow();
+      if (current) {
+        (current as any).closedHandler?.();
+      }
+      expect(getPopoverWindow()).toBeNull();
+
+      const handlers = appEventHandlers["second-instance"];
+      expect(handlers).toBeDefined();
+      if (!handlers || handlers.length === 0) {
+        throw new Error("second-instance handler was not registered");
+      }
+
+      const handler = handlers[0];
+      if (!handler) {
+        throw new Error("second-instance handler was not found");
+      }
+
+      // Fire second-instance event
+      handler();
+
+      const win = getPopoverWindow();
+      expect(win).not.toBeNull();
+      expect((win as any).focus).toHaveBeenCalled();
+    });
   });
 
   describe("4. Audio Buffer Zero-Copy Optimization & Format Support", () => {
@@ -349,6 +430,52 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
       // Modifying view mutates underlying buffer
       view[0] = 99;
       expect(original[0]).toBe(99);
+    });
+
+    test("misaligned byteOffset Uint8Array subarrays in local Whisper do not throw RangeError", async () => {
+      passedWhisperSamples = null;
+      const raw = new ArrayBuffer(100);
+      const uint8View = new Uint8Array(raw);
+      for (let i = 0; i < uint8View.length; i++) {
+        uint8View[i] = i & 0xff;
+      }
+
+      // Create a subarray with misaligned byteOffset (byteOffset = 1, not divisible by 4)
+      const misalignedSubarray = new Uint8Array(raw, 1, 64);
+      expect(misalignedSubarray.byteOffset % 4).not.toBe(0);
+
+      // Verify that naive construction WOULD throw RangeError:
+      expect(() => {
+        new Float32Array(misalignedSubarray.buffer, misalignedSubarray.byteOffset, 16);
+      }).toThrow(RangeError);
+
+      // Call transcribeDetailed with provider: "local" and translateEnabled: false
+      const result = await transcribeDetailed(misalignedSubarray, {
+        provider: "local",
+        translateEnabled: false,
+      });
+
+      expect(result.text).toBe("Whisper transcript");
+      const samples: any = passedWhisperSamples;
+      expect(samples).toBeInstanceOf(Float32Array);
+      expect(samples?.length).toBe(16);
+    });
+
+    test("aligned byteOffset Uint8Array subarrays in local Whisper work without copying", async () => {
+      passedWhisperSamples = null;
+      const raw = new ArrayBuffer(100);
+      const alignedSubarray = new Uint8Array(raw, 4, 64);
+      expect(alignedSubarray.byteOffset % 4).toBe(0);
+
+      const result = await transcribeDetailed(alignedSubarray, {
+        provider: "local",
+        translateEnabled: false,
+      });
+
+      expect(result.text).toBe("Whisper transcript");
+      const samples: any = passedWhisperSamples;
+      expect(samples).toBeInstanceOf(Float32Array);
+      expect(samples?.length).toBe(16);
     });
   });
 });
