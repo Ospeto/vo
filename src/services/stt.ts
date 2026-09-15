@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import type { SpeechProvider, DictationPreset } from "./config.js";
+import type {
+	SpeechProvider,
+	DictationPreset,
+	PiVoiceConfig,
+} from "./config.js";
+import { loadConfig } from "./config.js";
 import type { DictionaryEntry, GeminiModelChoice } from "../shared/types.js";
 import { applyDictionary } from "./dictionary-engine.js";
 import {
@@ -132,10 +137,7 @@ export async function getActiveAppName(): Promise<string> {
 		cachedActiveAppName = stdout.trim() || "Unknown";
 		lastActiveAppTime = now;
 	} catch (err) {
-		logger.debug(
-			{ err: String(err) },
-			"Failed to get active app via osascript",
-		);
+		logger.debug({ err: String(err) }, "Failed to get active app via osascript");
 	}
 	return cachedActiveAppName || "Unknown";
 }
@@ -449,30 +451,24 @@ export function sanitizeCodePresetText(text: string): string {
 		let cleaned = segment;
 
 		// 1. Spoken casing commands transformation
-		cleaned = cleaned.replace(
-			/\bcamel case ([a-zA-Z0-9_\- ]+)\b/gi,
-			(_m, p1) => {
-				const { words, rest } = parseCasingWords(p1);
-				const first = words[0];
-				if (!first) return _m;
-				const camel =
-					first +
-					words
-						.slice(1)
-						.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-						.join("");
-				return `\`${camel}\`${rest}`;
-			},
-		);
+		cleaned = cleaned.replace(/\bcamel case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+			const { words, rest } = parseCasingWords(p1);
+			const first = words[0];
+			if (!first) return _m;
+			const camel =
+				first +
+				words
+					.slice(1)
+					.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+					.join("");
+			return `\`${camel}\`${rest}`;
+		});
 
-		cleaned = cleaned.replace(
-			/\bsnake case ([a-zA-Z0-9_\- ]+)\b/gi,
-			(_m, p1) => {
-				const { words, rest } = parseCasingWords(p1);
-				if (words.length === 0) return _m;
-				return `\`${words.join("_")}\`${rest}`;
-			},
-		);
+		cleaned = cleaned.replace(/\bsnake case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+			const { words, rest } = parseCasingWords(p1);
+			if (words.length === 0) return _m;
+			return `\`${words.join("_")}\`${rest}`;
+		});
 
 		cleaned = cleaned.replace(
 			/\bpascal case ([a-zA-Z0-9_\- ]+)\b/gi,
@@ -486,23 +482,17 @@ export function sanitizeCodePresetText(text: string): string {
 			},
 		);
 
-		cleaned = cleaned.replace(
-			/\bupper case ([a-zA-Z0-9_\- ]+)\b/gi,
-			(_m, p1) => {
-				const { words, rest } = parseCasingWords(p1);
-				if (words.length === 0) return _m;
-				return `\`${words.join("_").toUpperCase()}\`${rest}`;
-			},
-		);
+		cleaned = cleaned.replace(/\bupper case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+			const { words, rest } = parseCasingWords(p1);
+			if (words.length === 0) return _m;
+			return `\`${words.join("_").toUpperCase()}\`${rest}`;
+		});
 
-		cleaned = cleaned.replace(
-			/\bkebab case ([a-zA-Z0-9_\- ]+)\b/gi,
-			(_m, p1) => {
-				const { words, rest } = parseCasingWords(p1);
-				if (words.length === 0) return _m;
-				return `\`${words.join("-")}\`${rest}`;
-			},
-		);
+		cleaned = cleaned.replace(/\bkebab case ([a-zA-Z0-9_\- ]+)\b/gi, (_m, p1) => {
+			const { words, rest } = parseCasingWords(p1);
+			if (words.length === 0) return _m;
+			return `\`${words.join("-")}\`${rest}`;
+		});
 
 		// 2. Strip conversational intro preambles
 		cleaned = cleaned.replace(
@@ -715,10 +705,7 @@ export function prepareHintEntries(
 	// 2. Identify conflicting aliases (alias mapping to multiple distinct canonical phrases)
 	const aliasToPhrases = new Map<string, Set<string>>();
 	for (const entry of enabled) {
-		const normPhrase = entry.phrase
-			.trim()
-			.normalize("NFKC")
-			.toLocaleLowerCase();
+		const normPhrase = entry.phrase.trim().normalize("NFKC").toLocaleLowerCase();
 		const aliases = [entry.phrase, ...(entry.spokenAliases || [])];
 		for (const rawAlias of aliases) {
 			if (typeof rawAlias !== "string") continue;
@@ -770,8 +757,7 @@ export function prepareHintEntries(
 
 		if (seenPhrases.has(normPhrase)) {
 			const existing = prepared.find(
-				(e) =>
-					e.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase,
+				(e) => e.phrase.trim().normalize("NFKC").toLocaleLowerCase() === normPhrase,
 			);
 			if (existing) {
 				for (const alias of validAliases) {
@@ -819,9 +805,7 @@ export function buildDictionaryPromptPart(entries: DictionaryEntry[]): string {
 	const lines = prepared.map((entry) => {
 		const aliases = Array.from(
 			new Set(
-				[entry.phrase, ...entry.spokenAliases]
-					.map((s) => s.trim())
-					.filter(Boolean),
+				[entry.phrase, ...entry.spokenAliases].map((s) => s.trim()).filter(Boolean),
 			),
 		);
 		if (aliases.length > 1) {
@@ -869,6 +853,8 @@ export interface TranscribeOptions {
 	selectedText?: string;
 	abortSignal?: AbortSignal;
 	activeApp?: string;
+	appPresetMappings?: Record<string, DictationPreset>;
+	configSnapshot?: PiVoiceConfig;
 }
 
 export function getPresetTemperature(_preset?: DictationPreset): number {
@@ -890,10 +876,7 @@ export function getFallbackModelChain(
 }
 
 export function formatSelectedTextForPrompt(text: string): string {
-	const safeText = text.replace(
-		/<\/selected_text>/gi,
-		"&lt;/selected_text&gt;",
-	);
+	const safeText = text.replace(/<\/selected_text>/gi, "&lt;/selected_text&gt;");
 	return `<selected_text>\n${safeText}\n</selected_text>`;
 }
 
@@ -910,35 +893,45 @@ async function transcribeGemini(
 	targetLanguage?: string,
 	selectedText?: string,
 	abortSignal?: AbortSignal,
+	passedAppMappings?: Record<string, DictationPreset>,
+	configSnapshot?: PiVoiceConfig,
 ): Promise<{ rawText: string; activeApp: string; usedPaidKey?: boolean }> {
 	if (abortSignal?.aborted) {
 		throw new Error("Transcription aborted");
 	}
-	const client = getGeminiClient();
+	const client = getGeminiClient(configSnapshot);
 	const base64Audio = audioBuffer.toString("base64");
 
 	const activeApp = await getActiveAppName();
 	const appContextHint = getAppContextPromptHint(activeApp);
 
-	let appMappings: Record<string, DictationPreset> | undefined;
+	let appMappings: Record<string, DictationPreset> | undefined =
+		passedAppMappings;
 	let isTranslationActive = translateEnabled;
 	let resolvedTargetLang = targetLanguage;
 
-	try {
-		const { loadConfig } = await import("./config.js");
-		const cfg = loadConfig();
-		appMappings = cfg.appPresetMappings;
-		if (isTranslationActive === undefined) {
-			isTranslationActive = cfg.translateEnabled ?? false;
+	if (
+		appMappings === undefined ||
+		isTranslationActive === undefined ||
+		!resolvedTargetLang
+	) {
+		try {
+			const cfg = configSnapshot || loadConfig(workspacePath);
+			if (appMappings === undefined) {
+				appMappings = cfg.appPresetMappings;
+			}
+			if (isTranslationActive === undefined) {
+				isTranslationActive = cfg.translateEnabled ?? false;
+			}
+			if (!resolvedTargetLang) {
+				resolvedTargetLang = cfg.targetLanguage || "English";
+			}
+		} catch (err) {
+			logger.debug(
+				{ err: String(err) },
+				"Failed to load config for Gemini STT translation check",
+			);
 		}
-		if (!resolvedTargetLang) {
-			resolvedTargetLang = cfg.targetLanguage || "English";
-		}
-	} catch (err) {
-		logger.debug(
-			{ err: String(err) },
-			"Failed to load config for Gemini STT translation check",
-		);
 	}
 	if (!resolvedTargetLang) {
 		resolvedTargetLang = "English";
@@ -1040,16 +1033,22 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 	const { getGeminiFallbackClient, isFallbackClient } = await import(
 		"./gemini-client.js"
 	);
-	const fallbackClient = getGeminiFallbackClient();
-	const isPaidClient = isFallbackClient(client);
+	const fallbackClient = getGeminiFallbackClient(configSnapshot);
+	const isPaidClient = isFallbackClient(client, configSnapshot);
 
 	let hasPaidConfig = false;
 	try {
-		const { loadConfig } = await import("./config.js");
-		const cfg = loadConfig();
-		hasPaidConfig = Boolean(
-			cfg.geminiFallbackApiKey && cfg.geminiFallbackApiKey.trim(),
-		);
+		if (configSnapshot) {
+			hasPaidConfig = Boolean(
+				configSnapshot.geminiFallbackApiKey &&
+					configSnapshot.geminiFallbackApiKey.trim(),
+			);
+		} else {
+			const cfg = loadConfig(workspacePath);
+			hasPaidConfig = Boolean(
+				cfg.geminiFallbackApiKey && cfg.geminiFallbackApiKey.trim(),
+			);
+		}
 	} catch (err) {
 		logger.debug(
 			{ err: String(err) },
@@ -1193,9 +1192,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 			const timeoutPromise = new Promise<never>((_, reject) => {
 				timeoutTimerId = setTimeout(
 					() =>
-						reject(
-							new Error(`Model ${model} timed out after ${dynamicTimeoutMs}ms`),
-						),
+						reject(new Error(`Model ${model} timed out after ${dynamicTimeoutMs}ms`)),
 					dynamicTimeoutMs,
 				);
 				if (
@@ -1335,8 +1332,9 @@ async function transcribeLocal(
 ): Promise<string> {
 	if (abortSignal?.aborted) throw new Error("Transcription aborted");
 	try {
-		const { Whisper, WhisperFullParams, WhisperSamplingStrategy } =
-			await import("@napi-rs/whisper");
+		const { Whisper, WhisperFullParams, WhisperSamplingStrategy } = await import(
+			"@napi-rs/whisper"
+		);
 		const { resolveModelPath } = await import("./whisper-model.js");
 		const modelPath = await resolveModelPath();
 		const whisper = new Whisper(modelPath);
@@ -1433,24 +1431,35 @@ export async function transcribeDetailed(
 					loadUserDictionary(),
 				);
 
+	const configSnapshot =
+		typeof providerOrOptions === "object"
+			? providerOrOptions.configSnapshot
+			: undefined;
+
 	let isTranslationActive = translateEnabled;
-	let appPresetMappings: Record<string, DictationPreset> | undefined;
-	try {
-		const { loadConfig } = await import("./config.js");
-		const cfg = loadConfig();
-		appPresetMappings = cfg.appPresetMappings;
-		if (isTranslationActive === undefined) {
-			isTranslationActive = cfg.translateEnabled ?? false;
+	let appPresetMappings: Record<string, DictationPreset> | undefined =
+		typeof providerOrOptions === "object"
+			? providerOrOptions.appPresetMappings
+			: undefined;
+
+	if (appPresetMappings === undefined || isTranslationActive === undefined) {
+		try {
+			const cfg = configSnapshot || loadConfig(workspacePath);
+			if (appPresetMappings === undefined) {
+				appPresetMappings = cfg.appPresetMappings;
+			}
+			if (isTranslationActive === undefined) {
+				isTranslationActive = cfg.translateEnabled ?? false;
+			}
+		} catch {
+			isTranslationActive = isTranslationActive ?? false;
 		}
-	} catch {
-		isTranslationActive = isTranslationActive ?? false;
 	}
 
 	let effectiveTargetLang = targetLanguage;
 	if (!effectiveTargetLang) {
 		try {
-			const { loadConfig } = await import("./config.js");
-			const cfg = loadConfig();
+			const cfg = configSnapshot || loadConfig(workspacePath);
 			effectiveTargetLang = cfg.targetLanguage;
 		} catch {
 			effectiveTargetLang = undefined;
@@ -1489,6 +1498,8 @@ export async function transcribeDetailed(
 			selectedText,
 			abortSignal,
 			activeApp,
+			appPresetMappings,
+			configSnapshot,
 		});
 
 		if (result.success && result.finalText) {
@@ -1555,6 +1566,8 @@ export async function transcribeDetailed(
 				targetLanguage,
 				selectedText,
 				abortSignal,
+				appPresetMappings,
+				configSnapshot,
 			);
 			rawText = res.rawText;
 			usedPaidKey = res.usedPaidKey ?? false;

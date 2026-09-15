@@ -16,7 +16,7 @@ import {
 	getGeminiFallbackClient,
 	isFallbackClient,
 } from "./gemini-client.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, type PiVoiceConfig } from "./config.js";
 import logger from "./logger.js";
 
 export type StageStatus =
@@ -49,14 +49,15 @@ export interface TwoStepTranslationResult {
 }
 
 export interface TextTranslatorOptions {
-  targetLanguage: string;
-  dictationPreset?: DictationPreset;
-  activeApp?: string;
-  workspacePath?: string;
-  fileExtension?: string;
-  workspaceSymbols?: string[];
-  geminiModel?: GeminiModelChoice;
-  abortSignal?: AbortSignal;
+	targetLanguage: string;
+	dictationPreset?: DictationPreset;
+	activeApp?: string;
+	workspacePath?: string;
+	fileExtension?: string;
+	workspaceSymbols?: string[];
+	geminiModel?: GeminiModelChoice;
+	abortSignal?: AbortSignal;
+	configSnapshot?: PiVoiceConfig;
 }
 
 export interface TwoStepTranslationOptions {
@@ -75,6 +76,8 @@ export interface TwoStepTranslationOptions {
 	abortSignal?: AbortSignal;
 	activeApp?: string;
 	selectedText?: string;
+	appPresetMappings?: Record<string, DictationPreset>;
+	configSnapshot?: PiVoiceConfig;
 
 	// Dependency injection hooks for deterministic testing without network calls:
 	sourceTranscriber?: (
@@ -253,13 +256,16 @@ export async function defaultTextTranslator(
 				workspaceSymbols?: string[];
 				geminiModel?: GeminiModelChoice;
 				abortSignal?: AbortSignal;
+				configSnapshot?: PiVoiceConfig;
 		  },
 ): Promise<{ text: string; modelUsed?: string; usedPaidKey?: boolean }> {
-	const client = getGeminiClient();
+	const configSnapshot =
+		"configSnapshot" in options ? options.configSnapshot : undefined;
+	const client = getGeminiClient(configSnapshot);
 	const model = options.geminiModel || "gemini-3.1-flash-lite";
 	const prompt = buildTextTranslatorPrompt(sourceText, options);
 
-	const usedPaidKey = isFallbackClient(client);
+	const usedPaidKey = isFallbackClient(client, configSnapshot);
 	try {
 		const res = await client.models.generateContent({
 			model,
@@ -279,7 +285,7 @@ export async function defaultTextTranslator(
 		if (options.abortSignal?.aborted || primaryErr?.name === "AbortError") {
 			throw primaryErr;
 		}
-		const fallbackClient = getGeminiFallbackClient();
+		const fallbackClient = getGeminiFallbackClient(configSnapshot);
 		if (fallbackClient && fallbackClient !== client) {
 			const res = await fallbackClient.models.generateContent({
 				model,
@@ -574,9 +580,7 @@ export function extractTechnicalTokens(text: string): string[] {
 			if (!isSingleCapitalizedWord(id)) tokens.add(id);
 		}
 	}
-	const acronymPascalMatches = text.match(
-		/\b[A-Z]{2,}[a-z0-9]+[a-zA-Z0-9]*\b/g,
-	);
+	const acronymPascalMatches = text.match(/\b[A-Z]{2,}[a-z0-9]+[a-zA-Z0-9]*\b/g);
 	if (acronymPascalMatches) {
 		for (const id of acronymPascalMatches) {
 			if (!isSingleCapitalizedWord(id)) tokens.add(id);
@@ -622,8 +626,7 @@ export async function executeTwoStepTranslation(
 	let rawTargetLang = options.targetLanguage;
 	if (!rawTargetLang) {
 		try {
-			const { loadConfig } = await import("./config.js");
-			const cfg = loadConfig();
+			const cfg = options.configSnapshot || loadConfig(options.workspacePath);
 			rawTargetLang = cfg.targetLanguage;
 		} catch {
 			rawTargetLang = undefined;
@@ -636,11 +639,15 @@ export async function executeTwoStepTranslation(
 	const callerSignal = options.abortSignal;
 
 	// Resolve effective preset for two-step translation
-	let appPresetMappings: Record<string, DictationPreset> | undefined;
-	try {
-		appPresetMappings = loadConfig(options.workspacePath).appPresetMappings;
-	} catch {
-		// ignore
+	let appPresetMappings: Record<string, DictationPreset> | undefined =
+		options.appPresetMappings;
+	if (!appPresetMappings) {
+		try {
+			const cfg = options.configSnapshot || loadConfig(options.workspacePath);
+			appPresetMappings = cfg.appPresetMappings;
+		} catch {
+			// ignore
+		}
 	}
 
 	const effectivePreset = resolveEffectivePreset(
@@ -697,6 +704,8 @@ export async function executeTwoStepTranslation(
 			targetLanguage: targetLanguage,
 			activeApp: options.activeApp,
 			selectedText: options.selectedText,
+			appPresetMappings,
+			configSnapshot: options.configSnapshot,
 		};
 
 		const transcriber =
@@ -864,6 +873,7 @@ export async function executeTwoStepTranslation(
 					fileExtension: options.fileExtension,
 					workspaceSymbols,
 					abortSignal: stage2Controller.signal,
+					configSnapshot: options.configSnapshot,
 				}),
 			stage2Controller,
 			options.translationTimeoutMs,

@@ -1,4 +1,12 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
+import {
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+  afterAll,
+  mock,
+} from "bun:test";
 
 // Mock uiohook-napi native event source
 type KeyCallback = (event: any) => void;
@@ -27,15 +35,57 @@ const mockUIOhook = {
 mock.module("uiohook-napi", () => ({
   uIOhook: mockUIOhook,
   UiohookKey: {
-    A: 30, B: 48, C: 46, D: 32, E: 18, F: 33, G: 34, H: 35,
-    I: 23, J: 36, K: 37, L: 38, M: 50, N: 49, O: 24, P: 25,
-    Q: 16, R: 19, S: 31, T: 20, U: 22, V: 47, W: 17, X: 45,
-    Y: 21, Z: 44,
-    "0": 11, "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
-    Space: 57, Enter: 28, Escape: 1, Tab: 15,
-    Backspace: 14, Delete: 111, Insert: 110,
-    Ctrl: 29, CtrlRight: 97, Shift: 42, ShiftRight: 54,
-    Alt: 56, AltRight: 100, Meta: 125, MetaRight: 126,
+    A: 30,
+    B: 48,
+    C: 46,
+    D: 32,
+    E: 18,
+    F: 33,
+    G: 34,
+    H: 35,
+    I: 23,
+    J: 36,
+    K: 37,
+    L: 38,
+    M: 50,
+    N: 49,
+    O: 24,
+    P: 25,
+    Q: 16,
+    R: 19,
+    S: 31,
+    T: 20,
+    U: 22,
+    V: 47,
+    W: 17,
+    X: 45,
+    Y: 21,
+    Z: 44,
+    "0": 11,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5,
+    "5": 6,
+    "6": 7,
+    "7": 8,
+    "8": 9,
+    "9": 10,
+    Space: 57,
+    Enter: 28,
+    Escape: 1,
+    Tab: 15,
+    Backspace: 14,
+    Delete: 111,
+    Insert: 110,
+    Ctrl: 29,
+    CtrlRight: 97,
+    Shift: 42,
+    ShiftRight: 54,
+    Alt: 56,
+    AltRight: 100,
+    Meta: 125,
+    MetaRight: 126,
   },
 }));
 
@@ -62,9 +112,18 @@ const mockElectronObj = {
     exit: () => {},
   },
   BrowserWindow: class MockBrowserWindow {
-    static getAllWindows() { return []; }
-    webContents = { send: () => {}, on: () => {}, once: () => {}, setWindowOpenHandler: () => {} };
-    isDestroyed() { return false; }
+    static getAllWindows() {
+      return [];
+    }
+    webContents = {
+      send: () => {},
+      on: () => {},
+      once: () => {},
+      setWindowOpenHandler: () => {},
+    };
+    isDestroyed() {
+      return false;
+    }
     destroy() {}
     hide() {}
     showInactive() {}
@@ -82,10 +141,19 @@ const mockElectronObj = {
     destroy() {}
   },
   Menu: { buildFromTemplate: () => ({}) },
-  screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
+  screen: {
+    getPrimaryDisplay: () => ({
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    }),
+  },
   nativeImage: { createFromPath: () => ({ setTemplateImage: () => {} }) },
   clipboard: { readText: () => "", writeText: () => {} },
-  Notification: class { static isSupported() { return false; } show() {} },
+  Notification: class {
+    static isSupported() {
+      return false;
+    }
+    show() {}
+  },
   systemPreferences: { isTrustedAccessibilityClient: () => true },
   globalShortcut: { register: () => true, unregisterAll: () => {} },
 };
@@ -95,7 +163,15 @@ mock.module("electron", () => ({
   default: mockElectronObj,
 }));
 
-function simulateKeyDown(keycode: number, modifiers: { ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean; metaKey?: boolean } = {}) {
+function simulateKeyDown(
+  keycode: number,
+  modifiers: {
+    ctrlKey?: boolean;
+    shiftKey?: boolean;
+    altKey?: boolean;
+    metaKey?: boolean;
+  } = {},
+) {
   for (const cb of [...keydownCallbacks]) {
     cb({
       keycode,
@@ -107,7 +183,15 @@ function simulateKeyDown(keycode: number, modifiers: { ctrlKey?: boolean; shiftK
   }
 }
 
-function simulateKeyUp(keycode: number, modifiers: { ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean; metaKey?: boolean } = {}) {
+function simulateKeyUp(
+  keycode: number,
+  modifiers: {
+    ctrlKey?: boolean;
+    shiftKey?: boolean;
+    altKey?: boolean;
+    metaKey?: boolean;
+  } = {},
+) {
   for (const cb of [...keyupCallbacks]) {
     cb({
       keycode,
@@ -120,8 +204,12 @@ function simulateKeyUp(keycode: number, modifiers: { ctrlKey?: boolean; shiftKey
 }
 
 // Imports after mocks
-const { DictationControlCoordinator } = await import("../../services/dictation-control-coordinator.js");
-const { RecordingLifecycle } = await import("../../services/recording-lifecycle.js");
+const { DictationControlCoordinator } = await import(
+  "../../services/dictation-control-coordinator.js"
+);
+const { RecordingLifecycle } = await import(
+  "../../services/recording-lifecycle.js"
+);
 const { HotkeyService } = await import("../../services/hotkey-service.js");
 const { parseKeyBinding } = await import("../../services/config.js");
 const mainModule = await import("../../main.js");
@@ -133,6 +221,7 @@ describe("Production-Path Hold & Toggle Mode Integration Test Suite", () => {
   let startCalls: number;
   let stopCalls: boolean[];
   let cancelCalls: string[];
+  const originalMainCoordinator = mainModule.dictationCoordinator;
 
   // Meta+Shift+I binding: keycode 23 (I), meta=true, shift=true
   const testBinding = parseKeyBinding("meta+shift+i");
@@ -165,7 +254,7 @@ describe("Production-Path Hold & Toggle Mode Integration Test Suite", () => {
           cancelCalls.push(reason);
         },
       },
-      lifecycle
+      lifecycle,
     );
 
     // Wire main.ts export seam dictationCoordinator to test coordinator
@@ -179,6 +268,12 @@ describe("Production-Path Hold & Toggle Mode Integration Test Suite", () => {
   afterEach(async () => {
     await hotkeyService.stop();
     coordinator.reset();
+    lifecycle.reset();
+    mainModule.setDictationCoordinatorForTests(originalMainCoordinator);
+  });
+
+  afterAll(() => {
+    mainModule.setDictationCoordinatorForTests(originalMainCoordinator);
   });
 
   describe("1. Hold Mode Production Path & Sustained Hold", () => {
@@ -371,7 +466,12 @@ describe("Production-Path Hold & Toggle Mode Integration Test Suite", () => {
     beforeEach(async () => {
       coordinator.setDictationMode("toggle");
       await hotkeyService.stop();
-      await hotkeyService.start(testBinding, mainModule.createMainHotkeyCallbacks(), undefined, "toggle");
+      await hotkeyService.start(
+        testBinding,
+        mainModule.createMainHotkeyCallbacks(),
+        undefined,
+        "toggle",
+      );
     });
 
     test("Toggle Mode ignores keyup events and stops ONLY on second toggle keydown or command", async () => {
