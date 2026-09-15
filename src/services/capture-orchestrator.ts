@@ -286,50 +286,58 @@ export class CaptureOrchestrator<TWindow = any, TSender = any> {
 		this.options.setState("starting", "Starting...");
 		this.options.playStartChime();
 
-		const selectionAbortController = new AbortController();
-		this.activeSelectionAbortController = selectionAbortController;
 		let selection: Awaited<
 			ReturnType<typeof this.options.captureActiveSelection>
 		>;
-		try {
-			selection = await this.options.captureActiveSelection(350, {
-				signal: selectionAbortController.signal,
-				port: this.options.selectionClipboardPort ?? undefined,
-			});
-		} catch (err: any) {
+		if (this.currentTriggerMode === "edit") {
+			const selectionAbortController = new AbortController();
+			this.activeSelectionAbortController = selectionAbortController;
+			try {
+				selection = await this.options.captureActiveSelection(350, {
+					signal: selectionAbortController.signal,
+					port: this.options.selectionClipboardPort ?? undefined,
+				});
+			} catch (err: any) {
+				if (this.activeSelectionAbortController === selectionAbortController)
+					this.activeSelectionAbortController = null;
+				const snapshot = this.lifecycle.snapshot();
+				this.markCaptureInactive(reqRes.sequenceId);
+				if (
+					snapshot.sequenceId !== reqRes.sequenceId ||
+					!["starting", "recording"].includes(snapshot.state)
+				)
+					return false;
+				this.pasteCoordinator.invalidate();
+				if (snapshot.state === "starting") {
+					this.lifecycle.acknowledgeStart(reqRes.sequenceId, false);
+				} else {
+					this.lifecycle.cancel();
+				}
+				selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
+				if (
+					this.controller.getCaptureWindow() &&
+					this.options.getWebContents(this.controller.getCaptureWindow()!) ===
+						targetSender &&
+					this.session.isAvailable(targetSender)
+				) {
+					this.sendToCaptureWindow(IPC.CANCEL_RECORDING);
+				}
+				logger.error(
+					{ err: err?.message || String(err) },
+					"Selection capture failed",
+				);
+				this.options.setState("error", "Selection capture failed");
+				return false;
+			}
 			if (this.activeSelectionAbortController === selectionAbortController)
 				this.activeSelectionAbortController = null;
-			const snapshot = this.lifecycle.snapshot();
-			this.markCaptureInactive(reqRes.sequenceId);
-			if (
-				snapshot.sequenceId !== reqRes.sequenceId ||
-				!["starting", "recording"].includes(snapshot.state)
-			)
-				return false;
-			this.pasteCoordinator.invalidate();
-			if (snapshot.state === "starting") {
-				this.lifecycle.acknowledgeStart(reqRes.sequenceId, false);
-			} else {
-				this.lifecycle.cancel();
-			}
-			selectionOwnershipManager.clearOwnership(reqRes.sequenceId);
-			if (
-				this.controller.getCaptureWindow() &&
-				this.options.getWebContents(this.controller.getCaptureWindow()!) ===
-					targetSender &&
-				this.session.isAvailable(targetSender)
-			) {
-				this.sendToCaptureWindow(IPC.CANCEL_RECORDING);
-			}
-			logger.error(
-				{ err: err?.message || String(err) },
-				"Selection capture failed",
-			);
-			this.options.setState("error", "Selection capture failed");
-			return false;
+		} else {
+			selection = {
+				hasSelection: false,
+				selectedText: "",
+				previousClipboard: "",
+			};
 		}
-		if (this.activeSelectionAbortController === selectionAbortController)
-			this.activeSelectionAbortController = null;
 		const lifecycleSnapshot = this.lifecycle.snapshot();
 		if (
 			lifecycleSnapshot.sequenceId !== reqRes.sequenceId ||

@@ -280,6 +280,9 @@ const {
   getPresetVocabMapForTest,
   initUI,
   enableControls,
+  updateAudioWaveLevel,
+  stopSpectrumVisualizer,
+  isWaveAnimatingForTest,
 } = await import("../../renderer/renderer.js");
 
 describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
@@ -520,5 +523,16 @@ describe("PR-01 Untrusted Rendering & CSP Security Remediation", () => {
 
     enableControls(true);
     expect(modeSelect.disabled).toBe(false);
+  });
+
+  test("8. Hidden Popover Wave Visualizer Gating: suppresses animation loop when document is hidden", () => {
+    // When document is hidden
+    (globalThis as any).document.visibilityState = "hidden";
+    updateAudioWaveLevel(75);
+    expect(isWaveAnimatingForTest()).toBe(false);
+
+    // Stop visualizer explicitly resets target amplitude and cancels frame
+    stopSpectrumVisualizer();
+    expect(isWaveAnimatingForTest()).toBe(false);
   });
 });
