@@ -1817,6 +1817,16 @@ export function _resetShutdownStateForTests(): void {
 
 const gotSingleInstanceLock =
 	process.argv.includes("--headless") || app.requestSingleInstanceLock();
+export function handleSecondInstance(): void {
+	logger.info("Second instance launched, focusing popover window");
+	const win = ensurePopoverWindow();
+	if (win.isVisible()) {
+		win.focus();
+	} else {
+		togglePopover(true);
+	}
+}
+
 if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
 	logger.info(
 		"Another instance of vo is already running, quitting second instance",
@@ -1824,13 +1834,7 @@ if (!gotSingleInstanceLock && !process.argv.includes("--headless")) {
 	app.quit();
 } else {
 	app.on("second-instance", () => {
-		logger.info("Second instance launched, focusing popover window");
-		const win = ensurePopoverWindow();
-		if (win.isVisible()) {
-			win.focus();
-		} else {
-			togglePopover(true);
-		}
+		handleSecondInstance();
 	});
 }
 

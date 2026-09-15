@@ -1,4 +1,7 @@
 import { test, expect, describe, beforeEach, mock } from "bun:test";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { writeFileSync, unlinkSync } from "node:fs";
 import { CaptureOrchestrator } from "../../services/capture-orchestrator.js";
 import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
 import { PasteCoordinator } from "../../services/paste-flow.js";
@@ -94,11 +97,7 @@ mock.module("@napi-rs/whisper", () => ({
   WhisperSamplingStrategy: { Greedy: 0 },
 }));
 
-mock.module("../../services/whisper-model.js", () => ({
-  resolveModelPath: async () => "/mock/path/whisper.bin",
-}));
-
-const { ensurePopoverWindow, getPopoverWindow } = await import("../../main.js");
+const { ensurePopoverWindow, getPopoverWindow, handleSecondInstance } = await import("../../main.js");
 
 function createMockWebContents() {
   const handlers: Record<string, Function[]> = {};
@@ -356,19 +355,7 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
       }
       expect(getPopoverWindow()).toBeNull();
 
-      const handlers = appEventHandlers["second-instance"];
-      expect(handlers).toBeDefined();
-      if (!handlers || handlers.length === 0) {
-        throw new Error("second-instance handler was not registered");
-      }
-
-      const handler = handlers[0];
-      if (!handler) {
-        throw new Error("second-instance handler was not found");
-      }
-
-      // Fire second-instance event
-      handler();
+      handleSecondInstance();
 
       const win = getPopoverWindow();
       expect(win).not.toBeNull();
@@ -433,49 +420,75 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
     });
 
     test("misaligned byteOffset Uint8Array subarrays in local Whisper do not throw RangeError", async () => {
-      passedWhisperSamples = null;
-      const raw = new ArrayBuffer(100);
-      const uint8View = new Uint8Array(raw);
-      for (let i = 0; i < uint8View.length; i++) {
-        uint8View[i] = i & 0xff;
+      const prevModelPath = process.env.WHISPER_MODEL_PATH;
+      const tmp = join(tmpdir(), `dummy-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
+      writeFileSync(tmp, "model");
+      process.env.WHISPER_MODEL_PATH = tmp;
+      try {
+        passedWhisperSamples = null;
+        const raw = new ArrayBuffer(100);
+        const uint8View = new Uint8Array(raw);
+        for (let i = 0; i < uint8View.length; i++) {
+          uint8View[i] = i & 0xff;
+        }
+
+        // Create a subarray with misaligned byteOffset (byteOffset = 1, not divisible by 4)
+        const misalignedSubarray = new Uint8Array(raw, 1, 64);
+        expect(misalignedSubarray.byteOffset % 4).not.toBe(0);
+
+        // Verify that naive construction WOULD throw RangeError:
+        expect(() => {
+          new Float32Array(misalignedSubarray.buffer, misalignedSubarray.byteOffset, 16);
+        }).toThrow(RangeError);
+
+        // Call transcribeDetailed with provider: "local" and translateEnabled: false
+        const result = await transcribeDetailed(misalignedSubarray, {
+          provider: "local",
+          translateEnabled: false,
+        });
+
+        expect(result.text).toBe("Whisper transcript");
+        const samples: any = passedWhisperSamples;
+        expect(samples).toBeInstanceOf(Float32Array);
+        expect(samples?.length).toBe(16);
+      } finally {
+        try { unlinkSync(tmp); } catch {}
+        if (prevModelPath === undefined) {
+          delete process.env.WHISPER_MODEL_PATH;
+        } else {
+          process.env.WHISPER_MODEL_PATH = prevModelPath;
+        }
       }
-
-      // Create a subarray with misaligned byteOffset (byteOffset = 1, not divisible by 4)
-      const misalignedSubarray = new Uint8Array(raw, 1, 64);
-      expect(misalignedSubarray.byteOffset % 4).not.toBe(0);
-
-      // Verify that naive construction WOULD throw RangeError:
-      expect(() => {
-        new Float32Array(misalignedSubarray.buffer, misalignedSubarray.byteOffset, 16);
-      }).toThrow(RangeError);
-
-      // Call transcribeDetailed with provider: "local" and translateEnabled: false
-      const result = await transcribeDetailed(misalignedSubarray, {
-        provider: "local",
-        translateEnabled: false,
-      });
-
-      expect(result.text).toBe("Whisper transcript");
-      const samples: any = passedWhisperSamples;
-      expect(samples).toBeInstanceOf(Float32Array);
-      expect(samples?.length).toBe(16);
     });
 
     test("aligned byteOffset Uint8Array subarrays in local Whisper work without copying", async () => {
-      passedWhisperSamples = null;
-      const raw = new ArrayBuffer(100);
-      const alignedSubarray = new Uint8Array(raw, 4, 64);
-      expect(alignedSubarray.byteOffset % 4).toBe(0);
+      const prevModelPath = process.env.WHISPER_MODEL_PATH;
+      const tmp = join(tmpdir(), `dummy-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
+      writeFileSync(tmp, "model");
+      process.env.WHISPER_MODEL_PATH = tmp;
+      try {
+        passedWhisperSamples = null;
+        const raw = new ArrayBuffer(100);
+        const alignedSubarray = new Uint8Array(raw, 4, 64);
+        expect(alignedSubarray.byteOffset % 4).toBe(0);
 
-      const result = await transcribeDetailed(alignedSubarray, {
-        provider: "local",
-        translateEnabled: false,
-      });
+        const result = await transcribeDetailed(alignedSubarray, {
+          provider: "local",
+          translateEnabled: false,
+        });
 
-      expect(result.text).toBe("Whisper transcript");
-      const samples: any = passedWhisperSamples;
-      expect(samples).toBeInstanceOf(Float32Array);
-      expect(samples?.length).toBe(16);
+        expect(result.text).toBe("Whisper transcript");
+        const samples: any = passedWhisperSamples;
+        expect(samples).toBeInstanceOf(Float32Array);
+        expect(samples?.length).toBe(16);
+      } finally {
+        try { unlinkSync(tmp); } catch {}
+        if (prevModelPath === undefined) {
+          delete process.env.WHISPER_MODEL_PATH;
+        } else {
+          process.env.WHISPER_MODEL_PATH = prevModelPath;
+        }
+      }
     });
   });
 });
