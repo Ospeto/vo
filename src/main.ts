@@ -1387,11 +1387,13 @@ function setupIpcHandlers() {
 				);
 			}
 		}
+		if (validatedPatch.geminiApiKey !== undefined) {
+			process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
+		}
 		if (
 			validatedPatch.geminiApiKey !== undefined ||
 			validatedPatch.geminiFallbackApiKey !== undefined
 		) {
-			process.env.GEMINI_API_KEY = (currentConfig.geminiApiKey || "").trim();
 			_resetGeminiClient();
 		}
 		if (validatedPatch.inputGain !== undefined) {

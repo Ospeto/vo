@@ -120,10 +120,6 @@ export function resolveApiKeys(configSnapshot?: PiVoiceConfig): string[] {
     .map((k) => k.trim())
     .filter((k) => k.length > 0 && !k.includes("your_"));
 
-  if (keys.length > 0 && !process.env.GEMINI_API_KEY) {
-    process.env.GEMINI_API_KEY = rawKeysString;
-  }
-
   return keys;
 }
 
@@ -143,7 +139,10 @@ export function getGeminiClient(configSnapshot?: PiVoiceConfig): GoogleGenAI {
     forceVertexOff,
   });
 
-  if (geminiClients.length > 0 && currentKeySignature === cachedPrimaryKeysSignature) {
+  if (
+    geminiClients.length > 0 &&
+    currentKeySignature === cachedPrimaryKeysSignature
+  ) {
     const client = geminiClients[currentKeyIndex];
     if (client) {
       currentKeyIndex = (currentKeyIndex + 1) % geminiClients.length;

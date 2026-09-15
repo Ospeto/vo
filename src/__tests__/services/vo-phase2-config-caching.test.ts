@@ -285,21 +285,30 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 
 			const configDir = join(xdgConfig, "pi-voice");
 			mkdirSync(configDir, { recursive: true });
-			writeFileSync(join(configDir, "config.json"), JSON.stringify({ provider: "gemini" }));
+			writeFileSync(
+				join(configDir, "config.json"),
+				JSON.stringify({ provider: "gemini" }),
+			);
 
 			mkdirSync(join(userHome, ".pi"), { recursive: true });
 			writeFileSync(testDictPath, "InitialLegacyTerm\n");
 
 			const loaded1 = loadConfig(testRoot);
-			expect(loaded1.dictionaryEntries.some((e) => e.phrase === "InitialLegacyTerm")).toBe(true);
-			expect(loaded1.dictionaryEntries.some((e) => e.phrase === "AddedLegacyTerm")).toBe(false);
+			expect(
+				loaded1.dictionaryEntries.some((e) => e.phrase === "InitialLegacyTerm"),
+			).toBe(true);
+			expect(
+				loaded1.dictionaryEntries.some((e) => e.phrase === "AddedLegacyTerm"),
+			).toBe(false);
 
 			await Bun.sleep(10);
 			writeFileSync(testDictPath, "InitialLegacyTerm\nAddedLegacyTerm\n");
 
 			// Cache fingerprint check on legacy dictionary.txt triggers optimistic point-in-time invalidation
 			const loaded2 = loadConfig(testRoot);
-			expect(loaded2.dictionaryEntries.some((e) => e.phrase === "AddedLegacyTerm")).toBe(true);
+			expect(
+				loaded2.dictionaryEntries.some((e) => e.phrase === "AddedLegacyTerm"),
+			).toBe(true);
 		});
 	});
 
@@ -359,13 +368,46 @@ describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () =
 			expect(client3).not.toBe(client1);
 		});
 
+		test("passing a snapshot key does not contaminate process.env.GEMINI_API_KEY and rotates away on undefined", () => {
+			_resetGeminiClient();
+			const originalEnv = process.env.GEMINI_API_KEY;
+			try {
+				process.env.GEMINI_API_KEY = "env-fallback-key";
+
+				const snapshotWithKey = defaultConfig();
+				snapshotWithKey.geminiApiKey = "snap-key-1";
+
+				const client1 = getGeminiClient(snapshotWithKey);
+				expect(client1).not.toBeNull();
+
+				// Assert process.env.GEMINI_API_KEY was NOT contaminated with snap-key-1
+				expect(process.env.GEMINI_API_KEY).toBe("env-fallback-key");
+
+				// Subsequent call with undefined snapshot key rotates away from snap-key-1 to env-fallback-key
+				const snapshotWithoutKey = defaultConfig();
+				snapshotWithoutKey.geminiApiKey = undefined;
+
+				const client2 = getGeminiClient(snapshotWithoutKey);
+				expect(client2).not.toBeNull();
+				expect(client2).not.toBe(client1);
+			} finally {
+				if (originalEnv !== undefined) {
+					process.env.GEMINI_API_KEY = originalEnv;
+				} else {
+					delete process.env.GEMINI_API_KEY;
+				}
+			}
+		});
+
 		test("updating only fallback key in main.ts logic does not wipe environment-provided GEMINI_API_KEY", () => {
 			process.env.GEMINI_API_KEY = "persisted-env-gemini-key";
 
 			const currentConfig = defaultConfig();
 			currentConfig.geminiApiKey = undefined;
 
-			const validatedPatch: PiVoiceConfigPatch = { geminiFallbackApiKey: "new-fallback-paid-key" };
+			const validatedPatch: PiVoiceConfigPatch = {
+				geminiFallbackApiKey: "new-fallback-paid-key",
+			};
 
 			// Replicate fixed main.ts:1390-1395 logic:
 			if (validatedPatch.geminiApiKey !== undefined) {
