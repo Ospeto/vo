@@ -1,5 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+	mkdirSync,
+	existsSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -13,7 +19,10 @@ import {
 } from "../../services/config.js";
 import { transcribeDetailed } from "../../services/stt.js";
 import { executeTwoStepTranslation } from "../../services/two-step-translation.js";
-import { setGeminiClientForTests, _resetGeminiClient } from "../../services/gemini-client.js";
+import {
+	setGeminiClientForTests,
+	_resetGeminiClient,
+} from "../../services/gemini-client.js";
 
 describe("VO Phase 2: In-Memory Config Caching & Snapshot Threading Suite", () => {
 	let testRoot: string;
