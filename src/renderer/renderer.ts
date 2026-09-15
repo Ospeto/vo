@@ -453,12 +453,27 @@ function startWaveAnimationLoop() {
 	animationFrameId = requestAnimationFrame(renderWave);
 }
 
-function updateAudioWaveLevel(level: number) {
+function isDocumentVisible(): boolean {
+	if (typeof document === "undefined") return false;
+	return document.visibilityState === "visible";
+}
+
+export function isWaveAnimatingForTest(): boolean {
+	return animationFrameId !== null;
+}
+
+export function updateAudioWaveLevel(level: number) {
+	if (!isDocumentVisible()) {
+		if (animationFrameId !== null) {
+			stopSpectrumVisualizer();
+		}
+		return;
+	}
 	currentTargetAmp = level;
 	startWaveAnimationLoop();
 }
 
-function stopSpectrumVisualizer() {
+export function stopSpectrumVisualizer() {
 	currentTargetAmp = 0;
 	if (animationFrameId !== null) {
 		cancelAnimationFrame(animationFrameId);
@@ -467,6 +482,14 @@ function stopSpectrumVisualizer() {
 	if (spectrumCanvas && spectrumCtx) {
 		spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
 	}
+}
+
+if (typeof document !== "undefined") {
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState !== "visible") {
+			stopSpectrumVisualizer();
+		}
+	});
 }
 
 function updatePresetPills(selectedPreset: string) {

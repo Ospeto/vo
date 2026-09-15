@@ -915,7 +915,13 @@ async function transcribeGemini(
 		throw new Error("Transcription aborted");
 	}
 	const client = getGeminiClient();
-	const base64Audio = audioBuffer.toString("base64");
+	let cachedBase64Audio: string | null = null;
+	const getBase64Audio = () => {
+		if (!cachedBase64Audio) {
+			cachedBase64Audio = audioBuffer.toString("base64");
+		}
+		return cachedBase64Audio;
+	};
 
 	const activeApp = await getActiveAppName();
 	const appContextHint = getAppContextPromptHint(activeApp);
@@ -1089,7 +1095,12 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 						{
 							role: "user",
 							parts: [
-								{ inlineData: { mimeType: "audio/webm", data: base64Audio } },
+								{
+									inlineData: {
+										mimeType: "audio/webm",
+										data: getBase64Audio(),
+									},
+								},
 								{ text: userPromptText },
 							],
 						},
@@ -1142,7 +1153,7 @@ OUTPUT FORMAT: Return ONLY the final result text without any quotes, introductor
 											{
 												inlineData: {
 													mimeType: "audio/webm",
-													data: base64Audio,
+													data: getBase64Audio(),
 												},
 											},
 											{ text: userPromptText },
@@ -1330,7 +1341,7 @@ async function transcribeElevenLabs(
 }
 
 async function transcribeLocal(
-	audioData: ArrayBuffer,
+	audioData: ArrayBuffer | Uint8Array,
 	abortSignal?: AbortSignal,
 ): Promise<string> {
 	if (abortSignal?.aborted) throw new Error("Transcription aborted");
@@ -1344,7 +1355,14 @@ async function transcribeLocal(
 		params.language = "auto";
 		params.noTimestamps = true;
 
-		const float32Samples = new Float32Array(audioData);
+		const float32Samples =
+			audioData instanceof ArrayBuffer
+				? new Float32Array(audioData)
+				: new Float32Array(
+						audioData.buffer,
+						audioData.byteOffset,
+						Math.floor(audioData.byteLength / 4),
+					);
 		const result = await whisper.full(params, float32Samples);
 		return typeof result === "string" ? result.trim() : "";
 	} catch (err: any) {
@@ -1363,7 +1381,7 @@ export interface TranscriptionResult {
 }
 
 export async function transcribeDetailed(
-	audioData: ArrayBuffer,
+	audioData: ArrayBuffer | Uint8Array,
 	providerOrOptions: SpeechProvider | TranscribeOptions = "gemini",
 ): Promise<TranscriptionResult> {
 	let rawText = "";
@@ -1475,7 +1493,17 @@ export async function transcribeDetailed(
 		const { executeTwoStepTranslation } = await import(
 			"./two-step-translation.js"
 		);
-		const result = await executeTwoStepTranslation(audioData, {
+		const arrayBufferForTranslation =
+			audioData instanceof ArrayBuffer
+				? audioData
+				: audioData.byteOffset === 0 &&
+					  audioData.byteLength === audioData.buffer.byteLength
+					? (audioData.buffer as ArrayBuffer)
+					: (audioData.buffer.slice(
+							audioData.byteOffset,
+							audioData.byteOffset + audioData.byteLength,
+						) as ArrayBuffer);
+		const result = await executeTwoStepTranslation(arrayBufferForTranslation, {
 			sourceProvider: provider,
 			geminiModel,
 			dictationPreset: dictationPreset ?? effectivePreset,
@@ -1522,6 +1550,16 @@ export async function transcribeDetailed(
 		}
 	}
 
+	const audioBuffer = Buffer.isBuffer(audioData)
+		? audioData
+		: ArrayBuffer.isView(audioData)
+			? Buffer.from(
+					audioData.buffer,
+					audioData.byteOffset,
+					audioData.byteLength,
+				)
+			: Buffer.from(audioData);
+
 	switch (provider) {
 		case "local":
 			rawText = await transcribeLocal(audioData, abortSignal);
@@ -1529,7 +1567,7 @@ export async function transcribeDetailed(
 		case "openai": {
 			const openaiPrompt = buildOpenAIVocabularyPrompt(dictionaryEntries);
 			rawText = await transcribeOpenAI(
-				Buffer.from(audioData),
+				audioBuffer,
 				openaiPrompt,
 				abortSignal,
 			);
@@ -1537,13 +1575,13 @@ export async function transcribeDetailed(
 			break;
 		}
 		case "elevenlabs":
-			rawText = await transcribeElevenLabs(Buffer.from(audioData), abortSignal);
+			rawText = await transcribeElevenLabs(audioBuffer, abortSignal);
 			usedPaidKey = true;
 			break;
 		case "gemini":
 		default: {
 			const res = await transcribeGemini(
-				Buffer.from(audioData),
+				audioBuffer,
 				geminiModel,
 				dictationPreset,
 				customVocabulary,
@@ -1599,7 +1637,7 @@ export async function transcribeDetailed(
 }
 
 export async function transcribe(
-	audioData: ArrayBuffer,
+	audioData: ArrayBuffer | Uint8Array,
 	providerOrOptions: SpeechProvider | TranscribeOptions = "gemini",
 ): Promise<string> {
 	const res = await transcribeDetailed(audioData, providerOrOptions);

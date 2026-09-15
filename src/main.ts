@@ -197,6 +197,7 @@ dictationCoordinator = new DictationControlCoordinator(
 );
 const addonPath = resolveNativePastePath(projectRoot);
 const addon = loadNativePasteAddon(addonPath);
+// SAFETY: Electron clipboard module implements the ClipboardAdapter shape at runtime
 const safePasteService = createMacSafePasteService(
 	addon,
 	clipboard as unknown as ClipboardAdapter<any>,
@@ -682,7 +683,7 @@ function handleVoiceUndoCheck(text: string): boolean {
 
 const POPOVER_SIZE = { width: 340, height: 520 } as const;
 
-function createPopoverWindow() {
+function createPopoverWindow(): BrowserWindow {
 	popoverWindow = new BrowserWindow({
 		width: POPOVER_SIZE.width,
 		height: POPOVER_SIZE.height,
@@ -713,6 +714,19 @@ function createPopoverWindow() {
 	popoverWindow.on("closed", () => {
 		popoverWindow = null;
 	});
+
+	return popoverWindow;
+}
+
+export function ensurePopoverWindow(): BrowserWindow {
+	if (!popoverWindow || popoverWindow.isDestroyed()) {
+		return createPopoverWindow();
+	}
+	return popoverWindow;
+}
+
+export function getPopoverWindow(): BrowserWindow | null {
+	return popoverWindow;
 }
 
 let customHudPosition: { x: number; y: number } | null = null;
@@ -773,10 +787,10 @@ function createHudWindow() {
 }
 
 function togglePopover(focus = false) {
-	if (!popoverWindow) return;
+	const win = ensurePopoverWindow();
 
-	if (popoverWindow.isVisible()) {
-		popoverWindow.hide();
+	if (win.isVisible()) {
+		win.hide();
 	} else {
 		let trayBounds = { x: 0, y: 0, width: 0, height: 0 };
 		if (tray) {
@@ -805,12 +819,12 @@ function togglePopover(focus = false) {
 			screenBounds,
 		);
 
-		popoverWindow.setPosition(pos.x, pos.y);
+		win.setPosition(pos.x, pos.y);
 		if (focus) {
-			popoverWindow.show();
-			popoverWindow.focus();
+			win.show();
+			win.focus();
 		} else {
-			popoverWindow.showInactive();
+			win.showInactive();
 		}
 	}
 }
@@ -890,7 +904,11 @@ function buildTrayContextMenu(): Menu {
 		{
 			label: "Open Settings...",
 			click: () => {
-				if (!popoverWindow?.isVisible()) {
+				if (
+					!popoverWindow ||
+					popoverWindow.isDestroyed() ||
+					!popoverWindow.isVisible()
+				) {
 					togglePopover();
 				}
 			},
@@ -1007,22 +1025,19 @@ function setupIpcHandlers() {
 			return;
 		}
 
-		let arrayBuffer: ArrayBuffer;
+		let audioBuffer: Buffer;
 		try {
 			if (data instanceof ArrayBuffer) {
-				arrayBuffer = data;
+				audioBuffer = Buffer.from(data);
 			} else if (ArrayBuffer.isView(data)) {
-				const view = new Uint8Array(
-					data.buffer,
-					data.byteOffset,
-					data.byteLength,
-				);
-				arrayBuffer = new Uint8Array(view).buffer as ArrayBuffer;
+				audioBuffer = Buffer.isBuffer(data)
+					? data
+					: Buffer.from(data.buffer, data.byteOffset, data.byteLength);
 			} else {
 				throw new Error("Invalid payload type");
 			}
 		} catch (_err) {
-			logger.warn("Failed to convert recording payload to ArrayBuffer");
+			logger.warn("Failed to convert recording payload to Buffer");
 			sendToCaptureWindow(IPC.CANCEL_RECORDING);
 			captureOrchestrator.markCaptureInactive(currentSeq);
 			pasteCoordinator.invalidate();
@@ -1032,7 +1047,7 @@ function setupIpcHandlers() {
 			return;
 		}
 
-		if (arrayBuffer.byteLength < MIN_STT_PAYLOAD_BYTES) {
+		if (audioBuffer.byteLength < MIN_STT_PAYLOAD_BYTES) {
 			sendToCaptureWindow(IPC.CANCEL_RECORDING);
 			captureOrchestrator.markCaptureInactive(currentSeq);
 			pasteCoordinator.invalidate();
@@ -1042,7 +1057,7 @@ function setupIpcHandlers() {
 			return;
 		}
 
-		if (arrayBuffer.byteLength > MAX_STT_PAYLOAD_BYTES) {
+		if (audioBuffer.byteLength > MAX_STT_PAYLOAD_BYTES) {
 			sendToCaptureWindow(IPC.CANCEL_RECORDING);
 			captureOrchestrator.markCaptureInactive(currentSeq);
 			pasteCoordinator.invalidate();
@@ -1052,7 +1067,7 @@ function setupIpcHandlers() {
 			return;
 		}
 
-		if (!isValidWebmHeader(arrayBuffer)) {
+		if (!isValidWebmHeader(audioBuffer)) {
 			sendToCaptureWindow(IPC.CANCEL_RECORDING);
 			captureOrchestrator.markCaptureInactive(currentSeq);
 			pasteCoordinator.invalidate();
@@ -1075,7 +1090,7 @@ function setupIpcHandlers() {
 				usedPaidKey: activeUsedPaidKey,
 			});
 			const { text, usedPaidKey, modelUsed } = await transcribeDetailed(
-				arrayBuffer,
+				audioBuffer,
 				{
 					provider: currentConfig.provider,
 					geminiModel: currentConfig.geminiModel,
@@ -1147,7 +1162,10 @@ function setupIpcHandlers() {
 				return;
 			}
 
-			const audioDurationSec = Math.max(1, Math.round(data.byteLength / 4000));
+			const audioDurationSec = Math.max(
+				1,
+				Math.round(audioBuffer.byteLength / 4000),
+			);
 			const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(
 				text,
 			);
@@ -1348,7 +1366,13 @@ function setupIpcHandlers() {
 
 	ipcMain.on(IPC.AUDIO_LEVEL_UPDATE, (event, level: number) => {
 		if (!validateIpcSender(event, IPC.AUDIO_LEVEL_UPDATE)) return;
-		popoverWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
+		if (
+			popoverWindow &&
+			!popoverWindow.isDestroyed() &&
+			popoverWindow.isVisible()
+		) {
+			popoverWindow.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
+		}
 		hudWindow?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
 	});
 
@@ -1753,14 +1777,24 @@ export function gracefulShutdown(): Promise<void> {
 			if (popoverWindow && !popoverWindow.isDestroyed()) {
 				try {
 					popoverWindow.destroy();
-				} catch (_err) {}
+				} catch (err) {
+					logger.debug(
+						{ err: String(err) },
+						"Failed destroying popoverWindow during shutdown",
+					);
+				}
 				popoverWindow = null;
 			}
 
 			if (tray) {
 				try {
 					tray.destroy();
-				} catch (_err) {}
+				} catch (err) {
+					logger.debug(
+						{ err: String(err) },
+						"Failed destroying tray during shutdown",
+					);
+				}
 				tray = null;
 			}
 
@@ -1865,7 +1899,6 @@ export async function runStartupSequence(
 		saveRuntimeState(cwd);
 
 		ensureCaptureWindow();
-		createPopoverWindow();
 		createHudWindow();
 		createTray();
 

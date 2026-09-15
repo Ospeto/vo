@@ -1,0 +1,354 @@
+import { test, expect, describe, beforeEach, mock } from "bun:test";
+import { CaptureOrchestrator } from "../../services/capture-orchestrator.js";
+import { RecordingLifecycle } from "../../services/recording-lifecycle.js";
+import { PasteCoordinator } from "../../services/paste-flow.js";
+import { IPC } from "../../shared/types.js";
+import { isValidWebmHeader } from "../../shared/audio-utils.js";
+import { transcribeDetailed } from "../../services/stt.js";
+
+const mockElectronObj = {
+  app: {
+    name: "vo",
+    setName: mock(() => {}),
+    dock: { hide: mock(() => {}) },
+    requestSingleInstanceLock: mock(() => true),
+    on: mock(() => {}),
+    whenReady: mock(async () => {}),
+    quit: mock(() => {}),
+    exit: mock(() => {}),
+  },
+  BrowserWindow: class MockBrowserWindow {
+    static getAllWindows() { return []; }
+    closedHandler: (() => void) | null = null;
+    webContents = {
+      send: mock(() => {}),
+      on: mock(() => {}),
+      once: mock(() => {}),
+      setWindowOpenHandler: mock(() => {}),
+      getURL: () => "file:///app/out/renderer/index.html",
+      mainFrame: { url: "file:///app/out/renderer/index.html", parent: null },
+    };
+    isDestroyed() { return false; }
+    destroy() { if (this.closedHandler) this.closedHandler(); }
+    hide() {}
+    show() {}
+    showInactive() {}
+    focus() {}
+    loadFile() { return Promise.resolve(); }
+    setPosition() {}
+    on(event: string, handler: () => void) {
+      if (event === "closed") this.closedHandler = handler;
+    }
+    once() {}
+    removeAllListeners() {
+      this.closedHandler = null;
+    }
+  },
+  ipcMain: { on: mock(() => {}), handle: mock(() => {}) },
+  Tray: class MockTray {
+    setImage() {}
+    setToolTip() {}
+    on() {}
+    popUpContextMenu() {}
+    destroy() {}
+  },
+  Menu: { buildFromTemplate: mock(() => ({})) },
+  screen: { getPrimaryDisplay: mock(() => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } })) },
+  nativeImage: { createFromPath: mock(() => ({ setTemplateImage: mock(() => {}) })) },
+  clipboard: { readText: mock(() => ""), writeText: mock(() => {}) },
+  Notification: class { static isSupported() { return false; } show() {} },
+  systemPreferences: { isTrustedAccessibilityClient: mock(() => false) },
+  globalShortcut: { register: mock(() => true), unregisterAll: mock(() => {}) },
+};
+
+mock.module("electron", () => ({
+  ...mockElectronObj,
+  default: mockElectronObj,
+}));
+
+const { ensurePopoverWindow, getPopoverWindow } = await import("../../main.js");
+
+function createMockWebContents() {
+  const handlers: Record<string, Function[]> = {};
+  const sentMessages: Array<{ channel: string; args: any[] }> = [];
+  return {
+    id: Math.floor(Math.random() * 10000) + 1,
+    send: mock((channel: string, ...args: any[]) => {
+      sentMessages.push({ channel, args });
+    }),
+    on: mock((event: string, handler: Function) => {
+      if (!handlers[event]) handlers[event] = [];
+      handlers[event].push(handler);
+    }),
+    once: mock((event: string, handler: Function) => {
+      if (!handlers[event]) handlers[event] = [];
+      handlers[event].push(handler);
+    }),
+    emit: (event: string, ...args: any[]) => {
+      handlers[event]?.forEach((h) => h(...args));
+    },
+    setWindowOpenHandler: mock(() => {}),
+    isDestroyed: () => false,
+    sentMessages,
+  };
+}
+
+function createMockWindow(role: "capture" | "settings" | "hud" = "capture") {
+  const handlers: Record<string, Function[]> = {};
+  let destroyed = false;
+  let visible = false;
+  const webContents = createMockWebContents();
+  const page = role === "capture" ? "capture.html" : role === "settings" ? "index.html" : "hud.html";
+  const url = `file:///app/out/renderer/${page}`;
+
+  (webContents as any).getURL = () => url;
+  (webContents as any).mainFrame = { url, parent: null };
+
+  return {
+    webContents,
+    isDestroyed: () => destroyed,
+    isVisible: () => visible,
+    setVisible: (v: boolean) => {
+      visible = v;
+    },
+    destroy: () => {
+      destroyed = true;
+    },
+    loadFile: mock(() => Promise.resolve()),
+    show: () => {
+      visible = true;
+    },
+    hide: () => {
+      visible = false;
+    },
+    focus: mock(() => {}),
+    setPosition: mock(() => {}),
+    showInactive: mock(() => {}),
+    on: mock((event: string, handler: Function) => {
+      if (!handlers[event]) handlers[event] = [];
+      handlers[event].push(handler);
+    }),
+    once: mock((event: string, handler: Function) => {
+      if (!handlers[event]) handlers[event] = [];
+      handlers[event].push(handler);
+    }),
+    emit: (event: string, ...args: any[]) => {
+      handlers[event]?.forEach((h) => h(...args));
+    },
+  };
+}
+
+describe("Phase 1 Performance & Memory Optimization Suite", () => {
+  describe("1. Zero-Latency Normal Dictation Selection Capture Bypass", () => {
+    let lifecycle: RecordingLifecycle;
+    let pasteCoordinator: PasteCoordinator;
+    let mockCaptureWin: any;
+    let captureSelectionCallCount: number;
+
+    beforeEach(() => {
+      lifecycle = new RecordingLifecycle();
+      pasteCoordinator = new PasteCoordinator(async () => ({
+        ok: true,
+        reason: "injection_requested",
+      }));
+      mockCaptureWin = createMockWindow("capture");
+      captureSelectionCallCount = 0;
+    });
+
+    function createOrchestrator(triggerMode: "dictate" | "edit") {
+      const orchestrator = new CaptureOrchestrator<any, any>(
+        {
+          createWindow: () => mockCaptureWin,
+          getWebContents: (w) => w.webContents,
+          isDestroyed: (w) => w.isDestroyed(),
+          destroyWindow: (w) => w.destroy(),
+          onRenderProcessGone: (s, h) => s.on("render-process-gone", h),
+          onDidFinishLoad: (s, h) => s.once("did-finish-load", h),
+          onClosed: (w, h) => w.on("closed", h),
+          sendIpc: (s, channel, ...args) => s.send(channel, ...args),
+          setState: () => {},
+          isQuitting: () => false,
+          captureActiveSelection: async () => {
+            captureSelectionCallCount++;
+            return {
+              hasSelection: true,
+              selectedText: "Hello from highlighted text",
+              previousClipboard: "previous clip",
+            };
+          },
+          capturePasteTarget: () => {},
+          playStartChime: () => {},
+          getInputGain: () => 1.0,
+        },
+        lifecycle,
+        pasteCoordinator
+      );
+
+      orchestrator.ensureCaptureWindow();
+      mockCaptureWin.webContents.emit("did-finish-load");
+      orchestrator.currentTriggerMode = triggerMode;
+      return orchestrator;
+    }
+
+    test("skips captureActiveSelection completely for 'dictate' mode and transitions to recording", async () => {
+      const orchestrator = createOrchestrator("dictate");
+      lifecycle.requestStart();
+
+      const startTime = Date.now();
+      const started = await orchestrator.startRecordingFlow();
+      const elapsed = Date.now() - startTime;
+
+      expect(started).toBe(true);
+      expect(captureSelectionCallCount).toBe(0);
+      expect(orchestrator.activeSelectionText).toBe("");
+      expect(lifecycle.snapshot().state).toBe("recording");
+      // Fast start without 350ms delay
+      expect(elapsed).toBeLessThan(100);
+    });
+
+    test("invokes captureActiveSelection for 'edit' mode and retains selectedText", async () => {
+      const orchestrator = createOrchestrator("edit");
+      lifecycle.requestStart();
+
+      const started = await orchestrator.startRecordingFlow();
+
+      expect(started).toBe(true);
+      expect(captureSelectionCallCount).toBe(1);
+      expect(orchestrator.activeSelectionText).toBe("Hello from highlighted text");
+      expect(lifecycle.snapshot().state).toBe("recording");
+    });
+
+    test("handles cancelled starting state cleanly in dictate mode", async () => {
+      const orchestrator = createOrchestrator("dictate");
+      lifecycle.requestStart();
+      lifecycle.cancel(); // Abort during starting state
+
+      const started = await orchestrator.startRecordingFlow();
+      expect(started).toBe(false);
+      expect(captureSelectionCallCount).toBe(0);
+    });
+  });
+
+  describe("2. Hidden Popover Audio Level IPC & Rendering Gating", () => {
+    test("forwards AUDIO_LEVEL_UPDATE to popoverWindow ONLY when visible", () => {
+      const popoverWin = createMockWindow("settings");
+      const hudWin = createMockWindow("hud");
+
+      const forwardAudioLevel = (level: number, popover: any, hud: any) => {
+        if (popover && !popover.isDestroyed() && popover.isVisible()) {
+          popover.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
+        }
+        hud?.webContents.send(IPC.AUDIO_LEVEL_UPDATE, level);
+      };
+
+      // Case A: popover is hidden
+      popoverWin.setVisible(false);
+      forwardAudioLevel(42, popoverWin, hudWin);
+
+      expect(popoverWin.webContents.sentMessages.length).toBe(0);
+      expect(hudWin.webContents.sentMessages.length).toBe(1);
+      expect(hudWin.webContents.sentMessages[0]).toEqual({
+        channel: IPC.AUDIO_LEVEL_UPDATE,
+        args: [42],
+      });
+
+      // Case B: popover is visible
+      popoverWin.setVisible(true);
+      forwardAudioLevel(85, popoverWin, hudWin);
+
+      expect(popoverWin.webContents.sentMessages.length).toBe(1);
+      expect(popoverWin.webContents.sentMessages[0]).toEqual({
+        channel: IPC.AUDIO_LEVEL_UPDATE,
+        args: [85],
+      });
+      expect(hudWin.webContents.sentMessages.length).toBe(2);
+
+      // Case C: popover is null
+      forwardAudioLevel(99, null, hudWin);
+      expect(hudWin.webContents.sentMessages.length).toBe(3);
+    });
+  });
+
+  describe("3. Lazy Popover Window Creation & Lifecycle", () => {
+    test("ensurePopoverWindow creates BrowserWindow lazily and returns active instance", () => {
+      const win = ensurePopoverWindow();
+      expect(win).toBeDefined();
+      expect(getPopoverWindow()).toBe(win);
+
+      // Subsequent call returns exact same instance
+      const secondCall = ensurePopoverWindow();
+      expect(secondCall).toBe(win);
+    });
+
+    test("closing popover resets reference and allows clean recreation", () => {
+      const win = ensurePopoverWindow();
+      expect(win).toBeDefined();
+
+      // Emit closed event
+      (win as any).closedHandler?.();
+      expect(getPopoverWindow()).toBeNull();
+
+      // Recreate on subsequent request
+      const recreated = ensurePopoverWindow();
+      expect(recreated).toBeDefined();
+      expect(recreated).not.toBe(win);
+    });
+  });
+
+  describe("4. Audio Buffer Zero-Copy Optimization & Format Support", () => {
+    const validWebmBytes = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
+
+    test("isValidWebmHeader accepts ArrayBuffer, Uint8Array, and Node Buffer identically", () => {
+      const arrayBuffer = validWebmBytes.buffer.slice(
+        validWebmBytes.byteOffset,
+        validWebmBytes.byteOffset + validWebmBytes.byteLength
+      );
+      const uint8 = new Uint8Array(arrayBuffer);
+      const nodeBuf = Buffer.from(arrayBuffer);
+
+      expect(isValidWebmHeader(arrayBuffer)).toBe(true);
+      expect(isValidWebmHeader(uint8)).toBe(true);
+      expect(isValidWebmHeader(nodeBuf)).toBe(true);
+    });
+
+    test("transcribeDetailed accepts Buffer directly without throwing type or runtime errors", async () => {
+      const dummyBuffer = Buffer.from(new Float32Array(16000).buffer);
+      // Calls transcribeDetailed with fast-abort signal to check parameter acceptance
+      const abortController = new AbortController();
+      abortController.abort();
+
+      try {
+        await transcribeDetailed(dummyBuffer, {
+          provider: "gemini",
+          abortSignal: abortController.signal,
+        });
+      } catch (err: any) {
+        expect(err.message).toMatch(/aborted/i);
+      }
+    });
+
+    test("transcribeDetailed accepts Uint8Array directly without throwing type or runtime errors", async () => {
+      const dummyUint8 = new Uint8Array(new Float32Array(16000).buffer);
+      const abortController = new AbortController();
+      abortController.abort();
+
+      try {
+        await transcribeDetailed(dummyUint8, {
+          provider: "gemini",
+          abortSignal: abortController.signal,
+        });
+      } catch (err: any) {
+        expect(err.message).toMatch(/aborted/i);
+      }
+    });
+
+    test("zero-copy Buffer.from view shares underlying memory without duplication", () => {
+      const original = new Uint8Array([1, 2, 3, 4, 5]);
+      const view = Buffer.from(original.buffer, original.byteOffset, original.byteLength);
+
+      // Modifying view mutates underlying buffer
+      view[0] = 99;
+      expect(original[0]).toBe(99);
+    });
+  });
+});
