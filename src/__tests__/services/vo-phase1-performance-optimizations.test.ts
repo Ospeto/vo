@@ -26,7 +26,9 @@ const mockElectronObj = {
     exit: mock(() => {}),
   },
   BrowserWindow: class MockBrowserWindow {
-    static getAllWindows() { return []; }
+    static getAllWindows() {
+      return [];
+    }
     closedHandler: (() => void) | null = null;
     visible = false;
     destroyed = false;
@@ -38,17 +40,29 @@ const mockElectronObj = {
       getURL: () => "file:///app/out/renderer/index.html",
       mainFrame: { url: "file:///app/out/renderer/index.html", parent: null },
     };
-    isDestroyed() { return this.destroyed; }
+    isDestroyed() {
+      return this.destroyed;
+    }
     destroy() {
       this.destroyed = true;
       if (this.closedHandler) this.closedHandler();
     }
-    hide() { this.visible = false; }
-    show() { this.visible = true; }
-    showInactive() { this.visible = true; }
+    hide() {
+      this.visible = false;
+    }
+    show() {
+      this.visible = true;
+    }
+    showInactive() {
+      this.visible = true;
+    }
     focus = mock(() => {});
-    isVisible() { return this.visible; }
-    loadFile() { return Promise.resolve(); }
+    isVisible() {
+      return this.visible;
+    }
+    loadFile() {
+      return Promise.resolve();
+    }
     setPosition() {}
     on(event: string, handler: () => void) {
       if (event === "closed") this.closedHandler = handler;
@@ -67,10 +81,21 @@ const mockElectronObj = {
     destroy() {}
   },
   Menu: { buildFromTemplate: mock(() => ({})) },
-  screen: { getPrimaryDisplay: mock(() => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } })) },
-  nativeImage: { createFromPath: mock(() => ({ setTemplateImage: mock(() => {}) })) },
+  screen: {
+    getPrimaryDisplay: mock(() => ({
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    })),
+  },
+  nativeImage: {
+    createFromPath: mock(() => ({ setTemplateImage: mock(() => {}) })),
+  },
   clipboard: { readText: mock(() => ""), writeText: mock(() => {}) },
-  Notification: class { static isSupported() { return false; } show() {} },
+  Notification: class {
+    static isSupported() {
+      return false;
+    }
+    show() {}
+  },
   systemPreferences: { isTrustedAccessibilityClient: mock(() => false) },
   globalShortcut: { register: mock(() => true), unregisterAll: mock(() => {}) },
 };
@@ -97,7 +122,8 @@ mock.module("@napi-rs/whisper", () => ({
   WhisperSamplingStrategy: { Greedy: 0 },
 }));
 
-const { ensurePopoverWindow, getPopoverWindow, handleSecondInstance } = await import("../../main.js");
+const { ensurePopoverWindow, getPopoverWindow, handleSecondInstance } =
+  await import("../../main.js");
 
 function createMockWebContents() {
   const handlers: Record<string, Function[]> = {};
@@ -129,7 +155,12 @@ function createMockWindow(role: "capture" | "settings" | "hud" = "capture") {
   let destroyed = false;
   let visible = false;
   const webContents = createMockWebContents();
-  const page = role === "capture" ? "capture.html" : role === "settings" ? "index.html" : "hud.html";
+  const page =
+    role === "capture"
+      ? "capture.html"
+      : role === "settings"
+        ? "index.html"
+        : "hud.html";
   const url = `file:///app/out/renderer/${page}`;
 
   (webContents as any).getURL = () => url;
@@ -212,7 +243,7 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
           getInputGain: () => 1.0,
         },
         lifecycle,
-        pasteCoordinator
+        pasteCoordinator,
       );
 
       orchestrator.ensureCaptureWindow();
@@ -245,7 +276,9 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
 
       expect(started).toBe(true);
       expect(captureSelectionCallCount).toBe(1);
-      expect(orchestrator.activeSelectionText).toBe("Hello from highlighted text");
+      expect(orchestrator.activeSelectionText).toBe(
+        "Hello from highlighted text",
+      );
       expect(lifecycle.snapshot().state).toBe("recording");
     });
 
@@ -364,12 +397,14 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
   });
 
   describe("4. Audio Buffer Zero-Copy Optimization & Format Support", () => {
-    const validWebmBytes = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
+    const validWebmBytes = new Uint8Array([
+      0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81,
+    ]);
 
     test("isValidWebmHeader accepts ArrayBuffer, Uint8Array, and Node Buffer identically", () => {
       const arrayBuffer = validWebmBytes.buffer.slice(
         validWebmBytes.byteOffset,
-        validWebmBytes.byteOffset + validWebmBytes.byteLength
+        validWebmBytes.byteOffset + validWebmBytes.byteLength,
       );
       const uint8 = new Uint8Array(arrayBuffer);
       const nodeBuf = Buffer.from(arrayBuffer);
@@ -412,7 +447,11 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
 
     test("zero-copy Buffer.from view shares underlying memory without duplication", () => {
       const original = new Uint8Array([1, 2, 3, 4, 5]);
-      const view = Buffer.from(original.buffer, original.byteOffset, original.byteLength);
+      const view = Buffer.from(
+        original.buffer,
+        original.byteOffset,
+        original.byteLength,
+      );
 
       // Modifying view mutates underlying buffer
       view[0] = 99;
@@ -421,7 +460,10 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
 
     test("misaligned byteOffset Uint8Array subarrays in local Whisper do not throw RangeError", async () => {
       const prevModelPath = process.env.WHISPER_MODEL_PATH;
-      const tmp = join(tmpdir(), `dummy-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
+      const tmp = join(
+        tmpdir(),
+        `dummy-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`,
+      );
       writeFileSync(tmp, "model");
       process.env.WHISPER_MODEL_PATH = tmp;
       try {
@@ -438,7 +480,11 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
 
         // Verify that naive construction WOULD throw RangeError:
         expect(() => {
-          new Float32Array(misalignedSubarray.buffer, misalignedSubarray.byteOffset, 16);
+          new Float32Array(
+            misalignedSubarray.buffer,
+            misalignedSubarray.byteOffset,
+            16,
+          );
         }).toThrow(RangeError);
 
         // Call transcribeDetailed with provider: "local" and translateEnabled: false
@@ -452,7 +498,9 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
         expect(samples).toBeInstanceOf(Float32Array);
         expect(samples?.length).toBe(16);
       } finally {
-        try { unlinkSync(tmp); } catch {}
+        try {
+          unlinkSync(tmp);
+        } catch {}
         if (prevModelPath === undefined) {
           delete process.env.WHISPER_MODEL_PATH;
         } else {
@@ -463,7 +511,10 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
 
     test("aligned byteOffset Uint8Array subarrays in local Whisper work without copying", async () => {
       const prevModelPath = process.env.WHISPER_MODEL_PATH;
-      const tmp = join(tmpdir(), `dummy-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
+      const tmp = join(
+        tmpdir(),
+        `dummy-whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`,
+      );
       writeFileSync(tmp, "model");
       process.env.WHISPER_MODEL_PATH = tmp;
       try {
@@ -482,7 +533,9 @@ describe("Phase 1 Performance & Memory Optimization Suite", () => {
         expect(samples).toBeInstanceOf(Float32Array);
         expect(samples?.length).toBe(16);
       } finally {
-        try { unlinkSync(tmp); } catch {}
+        try {
+          unlinkSync(tmp);
+        } catch {}
         if (prevModelPath === undefined) {
           delete process.env.WHISPER_MODEL_PATH;
         } else {

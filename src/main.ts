@@ -1153,9 +1153,7 @@ function setupIpcHandlers() {
 				1,
 				Math.round(audioBuffer.byteLength / 4000),
 			);
-			const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(
-				text,
-			);
+			const isBurmeseText = /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
 			const isEnglish = !isBurmeseText;
 			const cost = calculateDictationCost(
 				audioDurationSec,

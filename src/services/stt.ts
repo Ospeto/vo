@@ -1515,7 +1515,7 @@ export async function transcribeDetailed(
 			audioData instanceof ArrayBuffer
 				? audioData
 				: audioData.byteOffset === 0 &&
-					  audioData.byteLength === audioData.buffer.byteLength
+						audioData.byteLength === audioData.buffer.byteLength
 					? (audioData.buffer as ArrayBuffer)
 					: (audioData.buffer.slice(
 							audioData.byteOffset,
@@ -1573,11 +1573,7 @@ export async function transcribeDetailed(
 	const audioBuffer = Buffer.isBuffer(audioData)
 		? audioData
 		: ArrayBuffer.isView(audioData)
-			? Buffer.from(
-					audioData.buffer,
-					audioData.byteOffset,
-					audioData.byteLength,
-				)
+			? Buffer.from(audioData.buffer, audioData.byteOffset, audioData.byteLength)
 			: Buffer.from(audioData);
 
 	switch (provider) {
@@ -1586,11 +1582,7 @@ export async function transcribeDetailed(
 			break;
 		case "openai": {
 			const openaiPrompt = buildOpenAIVocabularyPrompt(dictionaryEntries);
-			rawText = await transcribeOpenAI(
-				audioBuffer,
-				openaiPrompt,
-				abortSignal,
-			);
+			rawText = await transcribeOpenAI(audioBuffer, openaiPrompt, abortSignal);
 			usedPaidKey = true;
 			break;
 		}
